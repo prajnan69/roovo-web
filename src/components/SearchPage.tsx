@@ -70,7 +70,7 @@ export default function SearchPage() {
     <>
       <div className="h-screen flex flex-col bg-white">
         {/* Header */}
-        <header className="px-4 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-50">
+        <header className="px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-50">
           <button onClick={() => back()} className="p-2 -ml-2 rounded-full hover:bg-slate-100">
              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>

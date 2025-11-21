@@ -19,16 +19,15 @@ interface FilterChipsProps {
 const FilterChips: React.FC<FilterChipsProps> = ({ activeFilter, setActiveFilter }) => {
   return (
     <div className="px-4 pt-4">
-<div className="flex space-x-2 overflow-x-auto py-2  -mx-4 px-4 no-scrollbar">
+      <div className="flex space-x-2 overflow-x-auto py-2  -mx-4 px-4 no-scrollbar">
         {filters.map((filter) => (
           <button
             key={filter.value}
             onClick={() => setActiveFilter(filter.value)}
-            className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl text-xs font-semibold transition-colors ${
-              activeFilter === filter.value
-                ? 'bg-slate-900 text-white'
-                : 'bg-white text-slate-700 border border-slate-200'
-            }`}
+            className={`flex flex-col items-center justify-center w-16 h-16 rounded-2xl text-xs font-semibold transition-all duration-200 ${activeFilter === filter.value
+              ? 'bg-white !text-indigo-600 !border-indigo-600 shadow-md scale-105'
+              : 'bg-white text-slate-700 border border-slate-200 hover:border-indigo-200'
+              }`}
           >
             {filter.icon}
             <span className="mt-1 text-[10px]">{filter.label}</span>

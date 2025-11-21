@@ -91,7 +91,7 @@ const ActionCard: React.FC<ActionCardProps> = ({
       </div>
       <Button
         onClick={handlePress}
-        className="mt-4 w-full bg-slate-900 text-white hover:bg-slate-800 rounded-2xl py-6 flex justify-between group shadow-lg shadow-slate-200"
+        className="mt-4 w-full bg-neutral-900 text-white hover:bg-neutral-800 rounded-2xl py-6 flex justify-between group shadow-lg shadow-slate-200"
       >
         <span className="font-semibold">{buttonText}</span>
         <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

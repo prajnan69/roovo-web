@@ -1,31 +1,36 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Keyboard } from "@capacitor/keyboard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Plus, Image as ImageIcon, Mic } from "lucide-react";
+import { Send } from "lucide-react";
 import supabase from "../services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
 import { triggerHaptic } from "@/lib/haptics";
+import { Keyboard } from "@capacitor/keyboard";
 
 const Chat = ({ conversationId }: { conversationId: string }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [session, setSession] = useState<any>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // --- Keyboard & Auth Setup ---
   useEffect(() => {
     const setupKeyboard = async () => {
       if (typeof window !== 'undefined') {
-          Keyboard.addListener("keyboardWillShow", (info) => setKeyboardHeight(info.keyboardHeight));
-          Keyboard.addListener("keyboardWillHide", () => setKeyboardHeight(0));
+        // Re-enabling manual keyboard handling as native resize wasn't effective
+        Keyboard.addListener("keyboardWillShow", (info) => {
+          setKeyboardHeight(info.keyboardHeight);
+        });
+        Keyboard.addListener("keyboardWillHide", () => {
+          setKeyboardHeight(0);
+        });
       }
     };
     setupKeyboard();
-    
+
     const getSession = async () => {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
@@ -56,7 +61,29 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          const newMsg = payload.new;
+          setMessages((prev) => {
+            // Deduplication logic:
+            // 1. Check if message with same ID exists
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+
+            // 2. Check for optimistic message match (same content, sender, and recent)
+            // We assume if content matches and it's sending, it's the one.
+            const optimisticIndex = prev.findIndex(m =>
+              m.isSending &&
+              m.content === newMsg.content &&
+              m.sender_id === newMsg.sender_id
+            );
+
+            if (optimisticIndex !== -1) {
+              // Replace optimistic message with real one
+              const updated = [...prev];
+              updated[optimisticIndex] = newMsg;
+              return updated;
+            }
+
+            return [...prev, newMsg];
+          });
           triggerHaptic(); // Haptic on receive
         }
       )
@@ -82,12 +109,12 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
 
     const tempId = Date.now().toString();
     const optimisticMsg = {
-        id: tempId,
-        conversation_id: conversationId,
-        sender_id: session.user.id,
-        content: newMessage,
-        created_at: new Date().toISOString(),
-        isSending: true
+      id: tempId,
+      conversation_id: conversationId,
+      sender_id: session.user.id,
+      content: newMessage,
+      created_at: new Date().toISOString(),
+      isSending: true
     };
 
     // Optimistic UI
@@ -95,14 +122,10 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
     setNewMessage("");
 
     await supabase.from("messages").insert([{
-        conversation_id: conversationId,
-        sender_id: session.user.id,
-        content: optimisticMsg.content,
+      conversation_id: conversationId,
+      sender_id: session.user.id,
+      content: optimisticMsg.content,
     }]);
-    
-    // Actual real-time subscription will replace the optimistic ID usually, 
-    // but in simple cases, the duplicate key might be an issue if not handled. 
-    // For this snippet, we assume the sub updates the list correctly.
   };
 
   if (loading) return <div className="flex h-full items-center justify-center"><Spinner /></div>;
@@ -112,29 +135,29 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-1 pb-4">
-           {/* Date Separator (Static Example) */}
-           <div className="flex justify-center py-4">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">
-                Today
-              </span>
-           </div>
+          {/* Date Separator (Static Example) */}
+          <div className="flex justify-center py-4">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">
+              Today
+            </span>
+          </div>
 
-           <AnimatePresence initial={false}>
+          <AnimatePresence initial={false}>
             {messages.map((msg, index) => {
               const isMe = msg.sender_id === session?.user?.id;
-              
+
               // Grouping Logic
               const prevMsg = messages[index - 1];
               const isSequence = prevMsg && prevMsg.sender_id === msg.sender_id;
               const timeGap = prevMsg ? (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) > 60000 * 5 : false; // 5 mins
-              
+
               const showAvatar = !isMe && (!isSequence || timeGap);
-              
+
               // Dynamic border radius
-              const roundedTop = isMe 
+              const roundedTop = isMe
                 ? (isSequence && !timeGap ? 'rounded-tr-md' : 'rounded-tr-2xl')
                 : (isSequence && !timeGap ? 'rounded-tl-md' : 'rounded-tl-2xl');
-                
+
               const marginBottom = isSequence && !timeGap ? 'mb-0.5' : 'mb-3';
 
               return (
@@ -144,27 +167,27 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   className={`flex w-full ${marginBottom} ${isMe ? "justify-end" : "justify-start"}`}
                 >
-                    {!isMe && (
-                        <div className="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
-                             {showAvatar ? (
-                                 <div className="w-8 h-8 rounded-full bg-gray-200 border border-white shadow-sm overflow-hidden">
-                                     <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${msg.sender_id}`} alt="avatar" />
-                                 </div>
-                             ) : <div className="w-8" />}
+                  {!isMe && (
+                    <div className="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
+                      {showAvatar ? (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 border border-white shadow-sm overflow-hidden">
+                          <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${msg.sender_id}`} alt="avatar" />
                         </div>
-                    )}
-
-                    <div className={`relative max-w-[75%] px-4 py-2.5 shadow-sm text-[15px] leading-relaxed
-                        ${isMe 
-                            ? `bg-indigo-500 text-white rounded-l-2xl ${roundedTop} rounded-br-sm` 
-                            : `bg-white text-slate-800 border border-gray-100 rounded-r-2xl ${roundedTop} rounded-bl-sm`
-                        }
-                    `}>
-                        <p>{msg.content}</p>
-                        <div className={`text-[9px] text-right mt-1 font-medium ${isMe ? "text-indigo-100" : "text-gray-300"}`}>
-                            {new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                        </div>
+                      ) : <div className="w-8" />}
                     </div>
+                  )}
+
+                  <div className={`relative max-w-[75%] px-4 py-2.5 shadow-sm text-[15px] leading-relaxed
+                        ${isMe
+                      ? `bg-indigo-500 text-white rounded-l-2xl ${roundedTop} rounded-br-sm`
+                      : `bg-white text-slate-800 border border-gray-100 rounded-r-2xl ${roundedTop} rounded-bl-sm`
+                    }
+                    `}>
+                    <p>{msg.content}</p>
+                    <div className={`text-[9px] text-right mt-1 font-medium ${isMe ? "text-indigo-100" : "text-gray-300"}`}>
+                      {new Date(msg.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </div>
+                  </div>
                 </motion.div>
               );
             })}
@@ -174,38 +197,31 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
       </div>
 
       {/* Input Bar */}
-      <div className="p-3 bg-white border-t border-gray-100 z-20">
+      <div className="p-3 bg-white border-t border-gray-100 z-20 safe-area-bottom">
         <form
           onSubmit={handleSendMessage}
-          className="flex items-end gap-2"
+          className="flex items-center gap-3"
         >
-          {/* Attachment Button (Visual) */}
-          <button type="button" className="p-3 text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors active:scale-95">
-            <Plus className="w-5 h-5" />
-          </button>
-
-          <div className="flex-1 bg-gray-100 rounded-[24px] flex items-center min-h-[44px] px-1 border border-transparent focus-within:border-indigo-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+          <div className="flex-1 bg-gray-100 rounded-[24px] flex items-center min-h-[44px] px-1 border border-transparent focus-within:border-indigo-500 focus-within:bg-white transition-all min-w-0">
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Message..."
-              className="flex-1 bg-transparent border-none focus:ring-0 px-4 py-2 text-slate-800 placeholder:text-gray-500"
+              className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none px-4 py-2 text-slate-800 placeholder:text-gray-500 min-w-0"
             />
           </div>
 
-          {newMessage.trim() ? (
-              <button
-                type="submit"
-                className="p-3 rounded-full bg-indigo-500 text-white shadow-md shadow-indigo-200 active:scale-90 transition-transform"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-          ) : (
-              <button type="button" className="p-3 text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors active:scale-95">
-                 <Mic className="w-5 h-5" />
-              </button>
-          )}
+          <button
+            type="submit"
+            disabled={!newMessage.trim()}
+            className={`p-3 rounded-full shadow-md transition-all duration-200 flex-shrink-0 ${newMessage.trim()
+              ? 'bg-white text-indigo-600 shadow-indigo-200 active:scale-90'
+              : 'bg-gray-100 text-gray-400'
+              }`}
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </form>
       </div>
     </div>

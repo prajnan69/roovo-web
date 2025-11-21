@@ -128,7 +128,7 @@ export default function ManageListings() {
         <div className="h-4" /> {/* Spacer for status bar area if needed, or just padding */}
 
         {/* Segmented Control / Tabs */}
-        <div className="flex p-1 bg-gray-100/80 rounded-xl relative mb-2">
+        <div className="flex p-1 rounded-xl relative mb-2">
           {/* Animated Background for Active Tab */}
           <motion.div
             className="absolute top-1 bottom-1 bg-white rounded-lg shadow-sm z-0"

@@ -104,9 +104,9 @@ button:focus-visible {
   a:hover {
     color: rgb(99 102 241);
   }
-  button {
+  /* button {
     background-color: #f9f9f9;
-  }
+  } */
 }
 
 @theme inline {

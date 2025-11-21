@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { LiveUpdate } from '@capawesome/capacitor-live-update';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { preloadAllGuestChats } from './services/chatService';
 import { preloadProfileData } from './services/profileService';
 import supabase, { fetchConversationsByHostId, fetchConversationsByGuestId } from './services/api';
@@ -73,7 +74,7 @@ function AppContent() {
 
         if (currentId !== bundleId) {
           console.log(`[LiveUpdate] New bundle detected → downloading ${bundleId} ...`);
-          
+
 
           await LiveUpdate.downloadBundle({
             url: bundleUrl,
@@ -97,6 +98,23 @@ function AppContent() {
     };
 
     checkForSelfHostedUpdate();
+  }, []);
+
+  // ✅ Configure Status Bar
+  useEffect(() => {
+    const configureStatusBar = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          await StatusBar.setStyle({ style: Style.Light });
+          if (Capacitor.getPlatform() === 'android') {
+            await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to configure status bar:', e);
+      }
+    };
+    configureStatusBar();
   }, []);
 
   // ✅ Handle Android back button
@@ -203,7 +221,7 @@ function AppContent() {
               setIsSwitchingToHost(false);
               navigate('/hosting');
             }}
-            onTransitionStart={() => {}}
+            onTransitionStart={() => { }}
           />
         ) : (
           <SwitchingToTravelingLoader
@@ -211,7 +229,7 @@ function AppContent() {
               setIsSwitchingToHost(false);
               navigate('/');
             }}
-            onTransitionStart={() => {}}
+            onTransitionStart={() => { }}
           />
         )}
       </div>

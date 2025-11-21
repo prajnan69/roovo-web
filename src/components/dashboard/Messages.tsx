@@ -165,32 +165,31 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
           >
             {/* Chat Header */}
-            <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-safe-top pb-2 px-2 flex items-center justify-between z-20 sticky top-0 shadow-sm">
+            <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-safe-top pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm">
               <button
                 onClick={handleBack}
-                className="p-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
+                className="p-2 -ml-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
               >
-                <ArrowLeft size={24} />
+                <ArrowLeft size={22} />
               </button>
 
-              <div className="flex flex-col items-center cursor-pointer active:opacity-60">
-                <div className="w-8 h-8 rounded-full overflow-hidden border border-gray-100 mb-0.5">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 flex-shrink-0">
                   <img
                     src={selectedConversation.listing.primary_image_url}
                     className="w-full h-full object-cover"
+                    alt="Listing"
                   />
                 </div>
-                <div className="text-center">
-                  <h2 className="text-xs font-bold text-slate-800 truncate max-w-[200px] leading-none">
+                <div className="flex flex-col justify-center min-w-0">
+                  <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">
                     {userType === 'host' ? selectedConversation.guest.name : selectedConversation.host.name}
                   </h2>
-                  <span className="text-[10px] text-gray-500 font-medium">
+                  <span className="text-[11px] text-gray-500 font-medium truncate">
                     {selectedConversation.listing.title}
                   </span>
                 </div>
               </div>
-
-              <div className="w-10" /> {/* Spacer for alignment */}
             </div>
 
             {/* Chat Body */}

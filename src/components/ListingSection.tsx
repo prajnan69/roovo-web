@@ -3,7 +3,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import ListingCard from './ListingCard';
 import { SkeletonCard } from './SkeletonCard';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { ListingData as Listing } from '@/types';
 
 interface ListingSectionProps {
@@ -14,15 +14,12 @@ interface ListingSectionProps {
   size?: 'small' | 'normal';
 }
 
-const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loading, onImageLoad = () => {}, size = 'normal' }) => {
+const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loading, onImageLoad = () => { }, size = 'normal' }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // --- FIX 1: Generate a unique key for the list ---
-  // This string changes whenever the listings array changes.
-  // Passing this to the container's 'key' prop forces Framer Motion to
-  // reset the animation state, ensuring no items get stuck at opacity: 0.
+  // Generate a unique key for the list
   const listUniqueKey = useMemo(() => {
     return listings.map(l => l.id).join('-');
   }, [listings]);
@@ -65,64 +62,60 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
         {loading ? (
           <div className="h-8 bg-slate-200 rounded w-3/4 animate-pulse"></div>
         ) : (
-          <motion.h2
-            className="text-2xl font-bold text-slate-900 tracking-tight"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            {title}
-          </motion.h2>
+          <AnimatePresence mode="wait">
+            <motion.h2
+              key={title}
+              className="text-2xl font-bold text-slate-900 tracking-tight"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              {title}
+            </motion.h2>
+          </AnimatePresence>
         )}
       </div>
 
       <div className="relative">
         <motion.div
           ref={scrollContainerRef}
-          // --- FIX 2: Apply the unique key here ---
-          // When filters change, this key changes, forcing a re-render of this block.
-          // This guarantees the 'initial' -> 'animate' sequence runs again properly.
-          key={loading ? 'loading' : listUniqueKey} 
-          
+          key={loading ? 'loading' : listUniqueKey}
           onScroll={checkScrollability}
           className="flex space-x-4 md:space-x-6 overflow-x-auto pb-4 scrollbar-hide px-4 md:px-0"
-          
           initial="hidden"
           animate="visible"
           variants={{
             visible: {
               transition: {
-                staggerChildren: 0.05, // Reduced slightly for snappier feel on filter change
+                staggerChildren: 0.08,
               },
             },
           }}
         >
           {loading
             ? Array.from({ length: 8 }).map((_, index) => (
-                <div key={`skel-${index}`} className={size === 'small' ? 'w-40' : 'w-56'}>
-                  <SkeletonCard />
-                </div>
-              ))
+              <div key={`skel-${index}`} className={size === 'small' ? 'w-40' : 'w-56'}>
+                <SkeletonCard />
+              </div>
+            ))
             : listings.map((listing) => (
-                <motion.div
-                  key={listing.id}
-                  className={size === 'small' ? 'w-40' : 'w-56'}
-                  // --- FIX 3: Explicitly set layout to true ---
-                  // This helps Framer handle the position changes smoothly
-                  layout 
-                  variants={{
-                    hidden: { opacity: 0, y: 20 },
-                    visible: { opacity: 1, y: 0 },
-                  }}
-                  // Ensure the exit animation is instant so it doesn't linger invisible
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  <ListingCard listing={listing} onImageLoad={onImageLoad} size={size} />
-                </motion.div>
-              ))
+              <motion.div
+                key={listing.id}
+                className={size === 'small' ? 'w-40' : 'w-56'}
+                layout
+                variants={{
+                  hidden: { opacity: 0, y: 20 },
+                  visible: { opacity: 1, y: 0 },
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <ListingCard listing={listing} onImageLoad={onImageLoad} size={size} />
+              </motion.div>
+            ))
           }
         </motion.div>
-        
+
         <button
           onClick={() => handleScroll('left')}
           disabled={!canScrollLeft}
@@ -133,7 +126,7 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        
+
         <button
           onClick={() => handleScroll('right')}
           disabled={!canScrollRight}
