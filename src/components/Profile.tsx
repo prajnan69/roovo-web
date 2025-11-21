@@ -183,7 +183,7 @@ const Profile: FC = () => {
   return (
     <div className="min-h-screen bg-gray-50/50 pb-24">
       {/* Modern Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center justify-between">
         <div className="text-2xl font-bold text-gray-900 tracking-tight">Profile</div>
         <motion.button
           whileTap={{ scale: 0.9 }}

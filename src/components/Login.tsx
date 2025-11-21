@@ -124,7 +124,7 @@ export default function Login({
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="fixed inset-0 z-50 bg-white/95 backdrop-blur-xl text-neutral-900 flex flex-col"
+          className="fixed inset-0 z-50 bg-white/95 backdrop-blur-xl text-neutral-900 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           initial="hidden"
           animate="visible"
           exit="exit"
