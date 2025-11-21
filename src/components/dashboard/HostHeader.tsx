@@ -47,7 +47,7 @@ const HostHeader: React.FC<HostHeaderProps> = ({ initialScroll = 0, onScroll }) 
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 pt-safe-top">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
       <div
         ref={scrollRef}
         onScroll={handleScroll}

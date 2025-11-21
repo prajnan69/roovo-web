@@ -124,7 +124,7 @@ export default function ManageListings() {
     <div className="relative w-full h-screen bg-gray-50 text-gray-900 overflow-hidden flex flex-col">
 
       {/* --- Modern Header with Tabs --- */}
-      <header className="pt-safe-top px-4 pb-2 bg-white/80 backdrop-blur-xl sticky top-0 z-20 border-b border-gray-200 shadow-sm">
+      <header className="pt-[calc(env(safe-area-inset-top)+0.5rem)] px-4 pb-2 bg-white/80 backdrop-blur-xl sticky top-0 z-20 border-b border-gray-200 shadow-sm">
         <div className="h-4" /> {/* Spacer for status bar area if needed, or just padding */}
 
         {/* Segmented Control / Tabs */}
@@ -273,7 +273,7 @@ function DetailView({ listing, onClose, onEdit, loading }: { listing: any; onClo
       className="fixed inset-0 z-50 bg-white flex flex-col"
     >
       {/* Detail Header */}
-      <div className="absolute top-0 left-0 right-0 p-4 pt-safe-top z-20 flex justify-between items-start bg-gradient-to-b from-white/80 to-transparent">
+      <div className="absolute top-0 left-0 right-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] z-20 flex justify-between items-start bg-gradient-to-b from-white/80 to-transparent">
         <button
           onClick={onClose}
           className="w-10 h-10 bg-black/10 backdrop-blur-md rounded-full flex items-center justify-center text-black border border-black/10 active:scale-90 transition-transform"

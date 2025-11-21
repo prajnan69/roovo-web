@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import supabase, { getListingsByHostId, fetchListingById } from "@/services/api";
 import type { ListingData } from "@/types";
-import RoovoLoader from "./RoovoLoader"; 
+import RoovoLoader from "./RoovoLoader";
 import BackButton from "./BackButton";
 
 // --- Reusable Mobile Components ---
@@ -17,8 +17,8 @@ const ActionButton = ({ onClick, children, variant = "primary", disabled = false
     className={`
       w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2
       disabled:opacity-50 disabled:cursor-not-allowed transition-all
-      ${variant === "primary" 
-        ? "bg-indigo-600 text-white shadow-indigo-500/25" 
+      ${variant === "primary"
+        ? "bg-indigo-600 text-white shadow-indigo-500/25"
         : "bg-neutral-800 text-neutral-200 border border-white/10"}
     `}
   >
@@ -92,14 +92,14 @@ export default function ManageListings() {
   // --- State ---
   const [listings, setListings] = useState<ListingData[]>([]);
   const [selectedListing, setSelectedListing] = useState<any>(null); // This acts as the router
-  
+
   // Form State
   const [guestCount, setGuestCount] = useState(1);
   const [activeTab, setActiveTab] = useState("Property");
   const [propertyType, setPropertyType] = useState("");
   const [checkInTime, setCheckInTime] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("");
-  
+
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -161,17 +161,17 @@ export default function ManageListings() {
 
   return (
     <div className="relative w-full h-screen bg-black text-white overflow-hidden font-sans">
-      
+
       {/* ========================== */}
       {/* SCREEN 1: LIST VIEW        */}
       {/* ========================== */}
-      <motion.div 
+      <motion.div
         className="absolute inset-0 flex flex-col z-10"
         animate={{ scale: selectedListing ? 0.92 : 1, opacity: selectedListing ? 0.5 : 1, x: selectedListing ? "-20%" : "0%" }}
         transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
       >
         {/* Header */}
-        <div className="pt-safe-top px-6 pb-4 bg-black/80 backdrop-blur-xl sticky top-0 z-20 border-b border-white/5">
+        <div className="pt-[calc(env(safe-area-inset-top)+1rem)] px-6 pb-4 bg-black/80 backdrop-blur-xl sticky top-0 z-20 border-b border-white/5">
           <div className="flex items-center justify-between mt-2">
             <BackButton />
             <h1 className="text-xl font-bold tracking-tight">Your Listings</h1>
@@ -190,7 +190,7 @@ export default function ManageListings() {
               className="bg-neutral-900 rounded-3xl p-3 border border-white/5 shadow-xl overflow-hidden cursor-pointer relative pointer-events-auto"
             >
               <div className="flex gap-4">
-                <motion.div 
+                <motion.div
                   layoutId={`image-${listing.id}`}
                   className="w-24 h-24 rounded-2xl bg-neutral-800 overflow-hidden shrink-0"
                 >
@@ -221,7 +221,7 @@ export default function ManageListings() {
       {/* ========================== */}
       <AnimatePresence>
         {selectedListing && (
-          <motion.div 
+          <motion.div
             key="detail-view"
             className="absolute inset-0 z-50 bg-black flex flex-col"
             initial={{ x: "100%" }}
@@ -230,7 +230,7 @@ export default function ManageListings() {
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
             {/* 1. Detail Header (Transparent) */}
-            <div className="absolute top-0 left-0 right-0 z-20 p-4 pt-safe-top flex justify-between items-center">
+            <div className="absolute top-0 left-0 right-0 z-20 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex justify-between items-center">
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setSelectedListing(null)}
@@ -245,14 +245,14 @@ export default function ManageListings() {
 
             {/* 2. Scrollable Content */}
             <div className="flex-1 overflow-y-auto scrollbar-hide">
-              
+
               {/* Hero Image */}
               <div className="relative h-[35vh] w-full">
                 <motion.div layoutId={`image-${selectedListing.id}`} className="w-full h-full">
                   <img src={selectedListing.primary_image_url} className="w-full h-full object-cover" alt="" />
                 </motion.div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                
+
                 <div className="absolute bottom-0 left-0 p-6 w-full">
                   <motion.h2 layoutId={`title-${selectedListing.id}`} className="text-3xl font-extrabold leading-tight text-white mb-2">
                     {selectedListing.title}
@@ -273,8 +273,8 @@ export default function ManageListings() {
                       onClick={() => setActiveTab(tab)}
                       className={`
                         px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all
-                        ${activeTab === tab 
-                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25" 
+                        ${activeTab === tab
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
                           : "bg-neutral-900 text-neutral-400 border border-white/5"}
                       `}
                     >
@@ -286,7 +286,7 @@ export default function ManageListings() {
 
               {/* Form Content */}
               <div className="p-6 space-y-8 pb-32 min-h-[50vh]">
-                
+
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
@@ -299,11 +299,11 @@ export default function ManageListings() {
                     {/* --- Property Tab --- */}
                     {activeTab === "Property" && (
                       <>
-                        <SelectField 
-                          label="Property Type" 
-                          value={propertyType} 
-                          onChange={setPropertyType} 
-                          options={["Apartment", "House", "Villa", "Guest Suite", "Unique Space"]} 
+                        <SelectField
+                          label="Property Type"
+                          value={propertyType}
+                          onChange={setPropertyType}
+                          options={["Apartment", "House", "Villa", "Guest Suite", "Unique Space"]}
                         />
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider ml-1">Guest Capacity</label>
@@ -315,14 +315,14 @@ export default function ManageListings() {
                     {/* --- Pricing Tab --- */}
                     {activeTab === "Pricing" && (
                       <>
-                        <InputField 
-                          label="Weekday Price" 
-                          type="number" 
-                          prefix="₹" 
-                          value={selectedListing.price_per_night} 
-                          onChange={(v: any) => setSelectedListing({ ...selectedListing, price_per_night: v })} 
+                        <InputField
+                          label="Weekday Price"
+                          type="number"
+                          prefix="₹"
+                          value={selectedListing.price_per_night}
+                          onChange={(v: any) => setSelectedListing({ ...selectedListing, price_per_night: v })}
                         />
-                        
+
                         <div className="p-4 rounded-2xl bg-neutral-900 border border-white/10">
                           <div className="flex justify-between items-center mb-4">
                             <label className="text-sm font-bold text-white">Weekend Surge</label>
@@ -331,12 +331,12 @@ export default function ManageListings() {
                             </div>
                           </div>
                           <p className="text-xs text-neutral-500 mb-4">Automatically increase price by 7% on Fri/Sat.</p>
-                          <InputField 
-                            label="Weekend Price" 
-                            type="number" 
-                            prefix="₹" 
-                            value={selectedListing.weekend_price || (selectedListing.price_per_night * 1.07).toFixed(0)} 
-                            onChange={(v: any) => setSelectedListing({ ...selectedListing, weekend_price: v })} 
+                          <InputField
+                            label="Weekend Price"
+                            type="number"
+                            prefix="₹"
+                            value={selectedListing.weekend_price || (selectedListing.price_per_night * 1.07).toFixed(0)}
+                            onChange={(v: any) => setSelectedListing({ ...selectedListing, weekend_price: v })}
                           />
                         </div>
                       </>
@@ -355,7 +355,7 @@ export default function ManageListings() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider ml-1">Description</label>
-                          <textarea 
+                          <textarea
                             rows={6}
                             value={selectedListing.the_space || ""}
                             onChange={(e) => setSelectedListing({ ...selectedListing, the_space: e.target.value })}

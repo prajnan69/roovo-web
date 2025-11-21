@@ -197,7 +197,7 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
       </div>
 
       {/* Input Bar */}
-      <div className="p-3 bg-white border-t border-gray-100 z-20 safe-area-bottom">
+      <div className="p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] bg-white border-t border-gray-100 z-20">
         <form
           onSubmit={handleSendMessage}
           className="flex items-center gap-3"
