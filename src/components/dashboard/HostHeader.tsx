@@ -33,7 +33,7 @@ const HostHeader: React.FC<HostHeaderProps> = ({ initialScroll = 0, onScroll }) 
   };
 
   const handleTabClick = async (path: string) => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await Haptics.vibrate({ duration: 15 });
     navigate(path);
   };
 

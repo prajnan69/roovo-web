@@ -19,6 +19,12 @@
 
   --radius: 0.625rem;
 
+  /* === Safe Area Variables (iOS Notch Handling) === */
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+
   /* === Indigo Theme Variables (Light Mode) === */
   --background: #ffffff;
   --foreground: #1e1b4b;
@@ -62,13 +68,29 @@ a:hover {
   color: rgb(79 70 229);
 }
 
+/* === FIXED BODY STYLES === */
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
+  /* Removed display: flex & place-items: center (Caused the layout break on mobile) */
+  display: block; 
   min-width: 320px;
   min-height: 100vh;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+  background-color: var(--background);
+}
+
+/* === ADDED: Root Container Handling === */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  
+  /* Applies padding so content doesn't hide behind the Notch/Home Bar */
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
 }
 
 h1 {
@@ -104,9 +126,6 @@ button:focus-visible {
   a:hover {
     color: rgb(99 102 241);
   }
-  /* button {
-    background-color: #f9f9f9;
-  } */
 }
 
 @theme inline {
