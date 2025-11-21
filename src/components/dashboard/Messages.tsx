@@ -74,7 +74,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             className="flex-1 flex flex-col h-full bg-white"
           >
             {/* Native Header with Search */}
-            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-2 px-4">
+            <div className={`sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100 ${userType === 'guest' ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : 'pt-2'} pb-2 px-4`}>
               <div className="text-2xl font-bold text-gray-900 mb-4 mt-2">Messages</div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -165,7 +165,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
           >
             {/* Chat Header */}
-            <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm">
+            <div className={`bg-white/90 backdrop-blur-md border-b border-gray-100 ${userType === 'guest' ? 'pt-[calc(env(safe-area-inset-top)+0.75rem)]' : 'pt-3'} pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm`}>
               <button
                 onClick={handleBack}
                 className="p-2 -ml-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
