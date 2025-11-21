@@ -80,7 +80,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ show, isChatOpen, onSearchC
         initial={{ y: 100 }}
         animate={{ y: isChatOpen ? 100 : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] left-1/2 -translate-x-1/2 z-50 md:hidden"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-1/2 -translate-x-1/2 z-50 md:hidden"
       >
         <button
           onClick={() => {
@@ -105,7 +105,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ show, isChatOpen, onSearchC
           animate={{ y: 0, opacity: 1, x: "-50%" }}
           exit={{ y: 100, opacity: 0, x: "-50%" }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] left-1/2 z-50 w-[94%] max-w-md bg-white/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12)] rounded-2xl md:hidden"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-50 w-[94%] max-w-md bg-white/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12)] rounded-2xl md:hidden"
         >
           <div className="flex items-center justify-around p-1.5">
             {navLinks.map((item) => {
