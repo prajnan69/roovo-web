@@ -13,7 +13,6 @@ const MobileSearchBar: React.FC<MobileSearchBarProps> = ({ onClose }) => {
   const [dates, setDates] = useState<{ checkIn: Date | null; checkOut: Date | null }>({ checkIn: null, checkOut: null });
   const [adults, setAdults] = useState(0);
   const [childrenState, setChildrenState] = useState(0);
-  const [infants, setInfants] = useState(0);
   const [pets, setPets] = useState(0);
 
   const handleSearch = () => {
@@ -22,7 +21,8 @@ const MobileSearchBar: React.FC<MobileSearchBarProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="p-4">
+    <div className="fixed inset-0 bg-transparent z-50 p-4">
+      
       <MobileSearchModal
         isOpen={isModalOpen}
         onClose={handleSearch}
@@ -34,8 +34,6 @@ const MobileSearchBar: React.FC<MobileSearchBarProps> = ({ onClose }) => {
         setAdults={setAdults}
         childrenState={childrenState}
         setChildrenState={setChildrenState}
-        infants={infants}
-        setInfants={setInfants}
         pets={pets}
         setPets={setPets}
       />

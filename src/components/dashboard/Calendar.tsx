@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  fetchBookings,
-  API_BASE_URL,
-  getListingsWithBookingsByHostId,
-} from "../../services/api";
+import { getListingsWithBookingsByHostId } from "../../services/api";
 import supabase from "../../services/api";
 import ListingCarousel from "./ListingCarousel";
 import CalendarGrid from "./CalendarGrid";
@@ -30,7 +26,6 @@ interface Listing {
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [guestNames, setGuestNames] = useState<Record<string, string>>({});
   const [listings, setListings] = useState<Listing[]>([]);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,43 +59,6 @@ const Calendar = () => {
     getListings();
   }, []);
 
-  useEffect(() => {
-    const getGuestNames = async () => {
-      if (bookings.length === 0) {
-        setGuestNames({});
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const guestIds = [...new Set(bookings.map((b: Booking) => b.guest_id))];
-        const response = await fetch(`${API_BASE_URL}/api/users/by-ids`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids: guestIds }),
-        });
-
-        if (!response.ok) throw new Error("Failed to fetch guest names");
-
-        const { data: users } = await response.json();
-        const namesMap = users.reduce(
-          (acc: Record<string, string>, user: { id: string; name: string }) => {
-            acc[user.id] = user.name;
-            return acc;
-          },
-          {}
-        );
-        setGuestNames(namesMap);
-      } catch (error) {
-        console.error("Failed to fetch guest names:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    getGuestNames();
-  }, [bookings]);
-
   const handleSelectListing = (listing: Listing) => {
     setSelectedListing(listing);
     setBookings(listing.bookings || []);
@@ -126,7 +84,6 @@ const Calendar = () => {
       <CalendarGrid
         currentDate={currentDate}
         bookings={bookings}
-        guestNames={guestNames}
         isLoading={isLoading}
         direction={direction}
         onPreviousMonth={goToPreviousMonth}

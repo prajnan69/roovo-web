@@ -2,7 +2,10 @@
 
 import React, { useState } from 'react';
 import dayjs from 'dayjs';
+import weekday from 'dayjs/plugin/weekday';
 import { motion, AnimatePresence } from 'framer-motion';
+
+dayjs.extend(weekday);
 
 interface MobileWhenProps {
   dates: { checkIn: Date | null; checkOut: Date | null };
@@ -42,11 +45,8 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
     const startDate = monthStart.startOf('week');
     const endDate = monthEnd.endOf('week');
     const calendarDays = [];
-    let day = startDate;
-
-    while (day.isBefore(endDate, 'day') || day.isSame(endDate, 'day')) {
+    for (let day = startDate; day.isBefore(endDate.add(1, 'day')); day = day.add(1, 'day')) {
       calendarDays.push(day);
-      day = day.add(1, 'day');
     }
 
     return (

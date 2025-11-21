@@ -10,7 +10,9 @@ interface ProfileData {
   phone: string;
   about: string;
   host_profile_picture_url: string;
+  traveling_profile_picture_url: string;
   kyc_verified: boolean;
+  is_host: boolean;
 }
 
 interface PreloadContextType {

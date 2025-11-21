@@ -1,7 +1,11 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useOnClickOutside } from '../hooks/useOnClickOutside';
+import { triggerHaptic } from '../lib/haptics';
+import { useGoogleMapsLoader } from '../lib/googleMaps';
+import { useNavigation } from '../hooks/useNavigation';
 import MobileWhere from './MobileWhere';
 import MobileWhen from './MobileWhen';
 import MobileWho from './MobileWho';
@@ -17,8 +21,6 @@ interface MobileSearchModalProps {
   setAdults: (n: number) => void;
   childrenState: number;
   setChildrenState: (n: number) => void;
-  infants: number;
-  setInfants: (n: number) => void;
   pets: number;
   setPets: (n: number) => void;
 }
@@ -34,71 +36,393 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
   setAdults,
   childrenState,
   setChildrenState,
-  infants,
-  setInfants,
   pets,
   setPets,
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(isOpen);
+  const [activeSection, setActiveSection] = useState<'where' | 'when' | 'who'>('where');
+
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const { navigate } = useNavigation();
+
+  useOnClickOutside(searchContainerRef, () => setIsDropdownOpen(false));
+
+  const { isLoaded } = useGoogleMapsLoader();
+
+  useEffect(() => {
+    setIsVisible(isOpen);
+  }, [isOpen]);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchPredictions = async () => {
+      if (isLoaded && searchQuery) {
+        try {
+          // Import the Places library dynamically to ensure we use the latest version available
+          const { AutocompleteService, AutocompleteSessionToken, PlacesServiceStatus } = await window.google.maps.importLibrary("places") as any;
+          
+          const service = new AutocompleteService();
+          const sessionToken = new AutocompleteSessionToken();
+          
+          service.getPlacePredictions(
+            {
+              input: `${searchQuery} in Bengaluru`,
+              componentRestrictions: { country: 'in' },
+              locationBias: {
+                radius: 50000,
+                center: { lat: 12.9716, lng: 77.5946 },
+              },
+              sessionToken: sessionToken,
+            },
+            (predictions: google.maps.places.AutocompletePrediction[] | null, status: google.maps.places.PlacesServiceStatus) => {
+              if (!active) return;
+              // Check status against the imported enum or the global one
+              if (status === PlacesServiceStatus.OK && predictions) {
+                const filteredPredictions = predictions.filter(p => 
+                  p.description.toLowerCase().includes('bengaluru') || 
+                  p.description.toLowerCase().includes('bangalore')
+                );
+                setSearchResults(filteredPredictions);
+              }
+            }
+          );
+        } catch (error) {
+          console.error("Error using Google Maps Places library:", error);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    };
+
+    fetchPredictions();
+
+    return () => {
+      active = false;
+    };
+  }, [searchQuery, isLoaded]);
+
+  const isBengaluru = selectedCity.name === 'Bengaluru';
+
+  const handleClose = () => {
+    setIsVisible(false);
+  };
+
+const handleSearch = () => {
+  const params = new URLSearchParams();
+  
+  const buildParamsAndNavigate = (lat?: number, lng?: number) => {
+    if (selectedCity.name !== 'Anywhere') {
+        params.append('location', selectedCity.name);
+    }
+    
+    if (lat && lng) {
+        params.append('lat', lat.toString());
+        params.append('lng', lng.toString());
+    }
+
+    if (dates.checkIn) params.append('checkIn', dates.checkIn.toISOString());
+    if (dates.checkOut) params.append('checkOut', dates.checkOut.toISOString());
+    
+    const totalGuests = adults + childrenState;
+    if (totalGuests > 0) params.append('guests', totalGuests.toString());
+    if (pets > 0) params.append('pets', pets.toString());
+
+    navigate(`/search?${params.toString()}`);
+    handleClose();
+  };
+
+  const geocodeAndSearch = (address: string) => {
+    if (window.google) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          const lat = results[0].geometry.location.lat();
+          const lng = results[0].geometry.location.lng();
+          buildParamsAndNavigate(lat, lng);
+        } else {
+          // Fallback if geocoding fails, search by location name
+          buildParamsAndNavigate();
+        }
+      });
+    } else {
+      // Fallback if google maps is not loaded
+      buildParamsAndNavigate();
+    }
+  };
+
+  if (searchQuery) {
+    geocodeAndSearch(searchQuery + ", " + selectedCity.name);
+  } else if (selectedCity.name !== 'Anywhere') {
+    geocodeAndSearch(selectedCity.name);
+  } else {
+    buildParamsAndNavigate(); 
+  }
+};
+
+  const toggleSection = (section: 'where' | 'when' | 'who') => {
+    if (activeSection !== section) {
+      triggerHaptic();
+      setActiveSection(section);
+    }
+  };
+
+  // Helper to format header summary text
+  const getHeaderSummary = () => {
+    const totalGuests = adults + childrenState;
+    const dateText = dates.checkIn 
+      ? `${dates.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
+      : 'Dates';
+    const guestText = totalGuests > 0 ? `${totalGuests} Guest${totalGuests > 1 ? 's' : ''}` : 'Guests';
+    
+    return (
+      <div className="flex flex-col items-center">
+        <span className="font-bold text-slate-900 text-sm">Stays</span>
+        <span className="text-xs text-slate-500 font-medium mt-0.5">
+          {selectedCity.name !== 'Anywhere' ? selectedCity.name : 'Anywhere'} • {dateText} • {guestText}
+        </span>
+      </div>
+    );
+  };
+
+  // Animation configs
+  const sectionTransition = { type: "tween" as const, duration: 0.4, ease: [0.22, 1, 0.36, 1] as const };
+  const contentAnimation = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { delay: 0.15, duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } },
+    exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
+  };
+
   return (
-    <AnimatePresence>
-      {isOpen && (
+    <AnimatePresence onExitComplete={onClose}>
+      {isVisible && (
         <motion.div
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
-          transition={{ duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
-          className="fixed inset-0 bg-gray-50 z-50 flex flex-col"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed inset-0 bg-slate-50 z-50 flex flex-col"
         >
-          <header className="flex items-center justify-center p-4 relative">
-            <button onClick={onClose} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <h2 className="text-lg font-bold">Plan your trip</h2>
+          {/* Header */}
+          <header className="flex items-center justify-between px-4 py-4 bg-white shadow-[0_1px_3px_0_rgba(0,0,0,0.02)] z-10">
+            <motion.button 
+              onClick={handleClose} 
+              className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"
+              whileTap={{ scale: 0.9 }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </motion.button>
+            
+            {/* Central Summary Information */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center"
+            >
+              {getHeaderSummary()}
+            </motion.div>
+            
+            <div className="w-10"></div> {/* Spacer for center alignment */}
           </header>
 
-          <main className="flex-grow overflow-y-auto px-4 pb-24">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ delay: 0.2, duration: 0.4 }}
-              className="space-y-8"
+          <main className="flex-grow overflow-y-auto px-3 pt-6 pb-32 space-y-3">
+            
+            {/* Where Section */}
+            <motion.div 
+               layout 
+               transition={sectionTransition}
+               onClick={() => toggleSection('where')}
+               className={`relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${activeSection === 'where' ? 'p-5 ring-2 ring-indigo-500 ring-opacity-10' : 'p-4 flex items-center justify-between cursor-pointer'}`}
             >
-              <section className="bg-white p-4 rounded-2xl shadow-sm">
-                <h3 className="font-bold text-xl mb-4 text-gray-800">Where to?</h3>
-                <MobileWhere selectedCity={selectedCity} setSelectedCity={setSelectedCity} />
-              </section>
-              <section className="bg-white p-4 rounded-2xl shadow-sm">
-                <h3 className="font-bold text-xl mb-4 text-gray-800">When's your trip?</h3>
-                <MobileWhen dates={dates} setDates={setDates} />
-              </section>
-              <section className="bg-white p-4 rounded-2xl shadow-sm">
-                <h3 className="font-bold text-xl mb-4 text-gray-800">Who's coming?</h3>
-                <MobileWho 
-                  adults={adults}
-                  setAdults={setAdults}
-                  childrenState={childrenState}
-                  setChildrenState={setChildrenState}
-                  infants={infants}
-                  setInfants={setInfants}
-                  pets={pets}
-                  setPets={setPets}
-                />
-              </section>
+               <AnimatePresence mode='popLayout'>
+               {activeSection === 'where' ? (
+                 <motion.div 
+                    key="where-expanded"
+                    variants={contentAnimation}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-5"
+                 >
+                    <h3 className="text-2xl font-bold text-slate-900">Where to?</h3>
+                    <MobileWhere selectedCity={selectedCity} setSelectedCity={setSelectedCity} />
+                    
+                    {/* Search Bar for Bengaluru */}
+                    {isBengaluru && (
+                      <div className="relative" ref={searchContainerRef}>
+                        <div className="flex items-center bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-slate-900 focus-within:bg-white focus-within:shadow-md transition-all duration-300">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                           </svg>
+                           <input
+                              type="text"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              onFocus={() => setIsDropdownOpen(true)}
+                              placeholder="Search area (e.g. Indiranagar)"
+                              className="bg-transparent w-full outline-none text-slate-900 placeholder:text-slate-400 font-medium"
+                           />
+                        </div>
+
+                        <AnimatePresence>
+                          {isDropdownOpen && searchResults.length > 0 && (
+                            <motion.div
+                              key="search-results-dropdown"
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10, height: 0 }}
+                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] as const }}
+                              className="w-full bg-white border border-slate-100 mt-2 rounded-xl shadow-xl overflow-hidden z-20"
+                            >
+                              {searchResults.map((result) => (
+                                <div
+                                  key={result.place_id}
+                                  className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 text-sm flex flex-col gap-0.5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSearchQuery(result.description);
+                                    setIsDropdownOpen(false);
+                                    setActiveSection('when');
+                                  }}
+                                >
+                                  <div className="font-semibold text-slate-900">{result.structured_formatting.main_text}</div>
+                                  <div className="text-slate-500 text-xs truncate">{result.structured_formatting.secondary_text}</div>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                 </motion.div>
+               ) : (
+                 <motion.div 
+                    key="where-collapsed"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex justify-between w-full items-center"
+                 >
+                   <span className="text-slate-500 font-medium text-sm">Where</span>
+                   <span className="font-bold text-slate-900 text-sm">{selectedCity.name}</span>
+                 </motion.div>
+               )}
+               </AnimatePresence>
             </motion.div>
+
+            {/* When Section */}
+            <motion.div 
+               layout 
+               transition={sectionTransition}
+               onClick={() => toggleSection('when')}
+               className={`relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${activeSection === 'when' ? 'p-5 ring-2 ring-indigo-500 ring-opacity-10' : 'p-4 flex items-center justify-between cursor-pointer'}`}
+            >
+               <AnimatePresence mode='popLayout'>
+               {activeSection === 'when' ? (
+                  <motion.div 
+                     key="when-expanded"
+                     variants={contentAnimation}
+                     initial="hidden"
+                     animate="visible"
+                     exit="exit"
+                     className="space-y-5"
+                  >
+                     <h3 className="text-2xl font-bold text-slate-900">When's your trip?</h3>
+                     <MobileWhen dates={dates} setDates={setDates} />
+                  </motion.div>
+               ) : (
+                  <motion.div 
+                    key="when-collapsed"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex justify-between w-full items-center"
+                  >
+                    <span className="text-slate-500 font-medium text-sm">When</span>
+                    <span className="font-bold text-slate-900 text-sm">
+                       {dates.checkIn ? `${dates.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${dates.checkOut ? dates.checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '...'}` : 'Add dates'}
+                    </span>
+                  </motion.div>
+               )}
+               </AnimatePresence>
+            </motion.div>
+
+            {/* Who Section */}
+            <motion.div 
+               layout 
+               transition={sectionTransition}
+               onClick={() => toggleSection('who')}
+               className={`relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${activeSection === 'who' ? 'p-5 ring-2 ring-indigo-500 ring-opacity-10' : 'p-4 flex items-center justify-between cursor-pointer'}`}
+            >
+               <AnimatePresence mode='popLayout'>
+               {activeSection === 'who' ? (
+                  <motion.div 
+                     key="who-expanded"
+                     variants={contentAnimation}
+                     initial="hidden"
+                     animate="visible"
+                     exit="exit"
+                     className="space-y-5"
+                  >
+                     <h3 className="text-2xl font-bold text-slate-900">Who's coming?</h3>
+                     <MobileWho 
+                        adults={adults}
+                        setAdults={setAdults}
+                        childrenState={childrenState}
+                        setChildrenState={setChildrenState}
+                        pets={pets}
+                        setPets={setPets}
+                     />
+                  </motion.div>
+               ) : (
+                  <motion.div 
+                    key="who-collapsed"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex justify-between w-full items-center"
+                  >
+                    <span className="text-slate-500 font-medium text-sm">Who</span>
+                    <span className="font-bold text-slate-900 text-sm">
+                       {adults + childrenState > 0 ? `${adults + childrenState} guests` : 'Add guests'}
+                    </span>
+                  </motion.div>
+               )}
+               </AnimatePresence>
+            </motion.div>
+
           </main>
 
+          {/* Footer */}
           <motion.footer 
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            transition={{ delay: 0.4, duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
-            className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-sm border-t border-gray-200"
+            className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex justify-between items-center z-50"
           >
             <button 
-              onClick={onClose}
-              className="w-full bg-indigo-500 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 transition-all duration-300 shadow-lg shadow-indigo-500/30 text-lg"
+               onClick={() => {
+                  setDates({ checkIn: null, checkOut: null });
+                  setAdults(0);
+                  setChildrenState(0);
+                  setPets(0);
+                  setSelectedCity({ name: "Anywhere", img: "/bengaluru.png" });
+               }}
+               className="text-slate-900 font-bold underline text-sm px-4"
             >
+               Clear all
+            </button>
+
+            <button 
+              onClick={handleSearch}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
               Search
             </button>
           </motion.footer>

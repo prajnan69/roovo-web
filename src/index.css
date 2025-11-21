@@ -68,6 +68,7 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
 }
 
 h1 {
@@ -196,6 +197,13 @@ button:focus-visible {
     display: none;
   }
   .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }

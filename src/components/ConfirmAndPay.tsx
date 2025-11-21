@@ -45,11 +45,11 @@ export default function ConfirmAndPay({
     "idle" | "loading" | "confirmed" | "pending"
   >("idle");
 
-  const handleBooking = async () => {
+  const handleBooking = async (): Promise<boolean> => {
     setIsLoading(true);
     setBookingStatus("loading");
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
+    if (!session) return false;
 
     const guest_id = session.user.id;
     const bookingData = {
@@ -72,8 +72,10 @@ export default function ConfirmAndPay({
       if (!response.ok) throw new Error("Failed to create booking");
 
       setBookingStatus(auto_bookable ? "confirmed" : "pending");
+      return true;
     } catch (error) {
       console.error(error);
+      return false;
     } finally {
       setIsLoading(false);
     }

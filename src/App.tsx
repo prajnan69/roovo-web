@@ -4,35 +4,40 @@ import { Capacitor } from '@capacitor/core';
 import { LiveUpdate } from '@capawesome/capacitor-live-update';
 import { preloadAllGuestChats } from './services/chatService';
 import { preloadProfileData } from './services/profileService';
-import supabase, { fetchConversationsByHostId } from './services/api';
+import supabase, { fetchConversationsByHostId, fetchConversationsByGuestId } from './services/api';
 import HomeFeed from './components/HomeFeed';
 import ListingDetailsPage from './components/ListingDetailsPage';
-import GuestChat from './components/GuestChat';
-import ConversationList from './components/ConversationList';
 import Profile from './components/Profile';
 import HostDashboard from './components/dashboard/HostDashboard';
+import Messages from './components/dashboard/Messages';
+import Verify from './components/Verify';
 import Router from './components/Router';
 import Route from './components/Route';
 import BottomNavBar from './components/BottomNavBar';
 import MobileSearchBar from './components/MobileSearchBar';
+import SearchPage from './components/SearchPage';
 import Login from './components/Login';
 import { useNavigation } from './hooks/useNavigation';
 import { PreloadProvider } from './context/PreloadContext';
+import { BottomNavBarProvider, useBottomNavBar } from './context/BottomNavBarContext';
 import SwitchingToHostLoader from './components/SwitchingToHostLoader';
 import SwitchingToTravelingLoader from './components/SwitchingToTravelingLoader';
 import './index.css';
 
-function App() {
+function AppContent() {
+  const { isNavBarVisible } = useBottomNavBar();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSwitchingToHost, setIsSwitchingToHost] = useState(false);
+  const [isHostStatusResolved, setIsHostStatusResolved] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<'host' | 'traveling'>('host');
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
-  const [conversations, setConversations] = useState<any[]>([]);
+  const [hostConversations, setHostConversations] = useState<any[]>([]);
+  const [guestConversations, setGuestConversations] = useState<any[]>([]);
   const { pathname, back, navigate } = useNavigation();
 
   const showBottomNavBar =
-    !pathname.startsWith('/listing/') && !isSwitchingToHost && !selectedConversation;
+    !pathname.startsWith('/listing/') && !isSwitchingToHost && !selectedConversation && !isSearchOpen && isNavBarVisible && isHostStatusResolved;
 
   // ✅ Self-hosted LiveUpdate logic
   useEffect(() => {
@@ -124,7 +129,7 @@ function App() {
     init();
   }, []);
 
-  // ✅ Fetch host conversations
+  // ✅ Fetch host and guest conversations
   useEffect(() => {
     const getConversations = async () => {
       const {
@@ -141,7 +146,7 @@ function App() {
           try {
             const data = await fetchConversationsByHostId(host.id);
             if (Array.isArray(data)) {
-              setConversations(
+              setHostConversations(
                 data.sort(
                   (a, b) =>
                     new Date(b.last_message_at).getTime() -
@@ -150,10 +155,26 @@ function App() {
               );
             }
           } catch (err) {
-            console.error('Error fetching conversations:', err);
+            console.error('Error fetching host conversations:', err);
           }
         }
+
+        try {
+          const data = await fetchConversationsByGuestId(session.user.id);
+          if (Array.isArray(data)) {
+            setGuestConversations(
+              data.sort(
+                (a, b) =>
+                  new Date(b.last_message_at).getTime() -
+                  new Date(a.last_message_at).getTime(),
+              ),
+            );
+          }
+        } catch (err) {
+          console.error('Error fetching guest conversations:', err);
+        }
       }
+      setIsHostStatusResolved(true);
     };
     getConversations();
   }, []);
@@ -198,93 +219,107 @@ function App() {
   }
 
   return (
-    <PreloadProvider>
-      <div className={`w-screen overflow-x-hidden ${showBottomNavBar ? 'pb-24' : ''}`}>
-        <Router>
-          <Route path="/" component={() => <HomeFeed onSwitchToHost={handleSwitchToHost} />} />
-          <Route path="/listing/:id" component={ListingDetailsPage} />
-          <Route path="/messages" component={ConversationList} />
-          <Route path="/messages/:id" component={GuestChat} />
-          <Route path="/profile" component={Profile} />
-          <Route
-            path="/hosting"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-          <Route
-            path="/hosting/calendar"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-          <Route
-            path="/hosting/messages"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-          <Route
-            path="/hosting/listings"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-          <Route
-            path="/hosting/bookings"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-          <Route
-            path="/hosting/payouts"
-            component={() => (
-              <HostDashboard
-                conversations={conversations}
-                selectedConversation={selectedConversation}
-                onConversationSelect={setSelectedConversation}
-              />
-            )}
-          />
-        </Router>
-
-        <BottomNavBar
-          show={showBottomNavBar}
-          isChatOpen={!!selectedConversation}
-          onSearchClick={() => setIsSearchOpen(true)}
-          openLogin={() => setIsLoginOpen(true)}
-          onSwitchToHost={handleSwitchToHost}
-          onSwitchToTraveling={handleSwitchToTraveling}
+    <div className="w-screen h-screen overflow-x-hidden">
+      <Router>
+        <Route
+          path="/"
+          render={() => (
+            <HomeFeed onSwitchToHost={handleSwitchToHost} showBottomNavBar={showBottomNavBar} />
+          )}
         />
-        {isSearchOpen && <MobileSearchBar onClose={() => setIsSearchOpen(false)} />}
-        {isLoginOpen && (
-          <Login
-            isOpen={isLoginOpen}
-            onClose={() => setIsLoginOpen(false)}
-            onLoginSuccess={() => setIsLoginOpen(false)}
-          />
-        )}
-      </div>
+        <Route path="/listing/:id" render={(props) => <ListingDetailsPage {...props} />} />
+        <Route path="/search" render={() => <SearchPage />} />
+        <Route path="/messages" render={() => <Messages conversations={guestConversations} selectedConversation={selectedConversation} onConversationSelect={setSelectedConversation} userType="guest" />} />
+        <Route path="/profile" render={() => <Profile />} />
+        <Route path="/verify-identity" render={() => <Verify />} />
+        <Route
+          path="/hosting"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+        <Route
+          path="/hosting/calendar"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+        <Route
+          path="/hosting/messages"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+        <Route
+          path="/hosting/listings"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+        <Route
+          path="/hosting/bookings"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+        <Route
+          path="/hosting/payouts"
+          render={() => (
+            <HostDashboard
+              conversations={hostConversations}
+              selectedConversation={selectedConversation}
+              onConversationSelect={setSelectedConversation}
+            />
+          )}
+        />
+      </Router>
+
+      <BottomNavBar
+        show={showBottomNavBar}
+        isChatOpen={!!selectedConversation}
+        onSearchClick={() => setIsSearchOpen(true)}
+        openLogin={() => setIsLoginOpen(true)}
+        onSwitchToHost={handleSwitchToHost}
+        onSwitchToTraveling={handleSwitchToTraveling}
+      />
+      {isSearchOpen && <MobileSearchBar onClose={() => setIsSearchOpen(false)} />}
+      {isLoginOpen && (
+        <Login
+          isOpen={isLoginOpen}
+          onClose={() => setIsLoginOpen(false)}
+          onLoginSuccess={() => setIsLoginOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <PreloadProvider>
+      <BottomNavBarProvider>
+        <AppContent />
+      </BottomNavBarProvider>
     </PreloadProvider>
   );
 }

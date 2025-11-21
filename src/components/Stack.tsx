@@ -50,7 +50,7 @@ interface StackProps {
 
 export default function Stack({
   randomRotation = false,
-  sensitivity = 200,
+  sensitivity = 50,
   cardDimensions = { width: 208, height: 208 },
   cardsData = [],
   animationConfig = { stiffness: 260, damping: 20 },

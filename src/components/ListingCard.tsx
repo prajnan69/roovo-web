@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ListingData as Listing } from '@/types';
+import { addRecentlyViewed } from '@/services/api';
+import supabase from '@/services/api';
 import Stack from './Stack';
 import { IconStarFilled } from '@tabler/icons-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,12 +12,12 @@ import { triggerHaptic } from '@/lib/haptics';
 interface ListingCardProps {
   listing: Listing;
   onImageLoad: () => void;
-  isMobile?: boolean;
   size?: 'small' | 'normal';
+  variant?: 'default' | 'search';
 }
 
 // --- Main ListingCard Component ---
-const ListingCard: React.FC<ListingCardProps> = ({ listing, isMobile, size = 'normal' }) => {
+const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', variant = 'default' }) => {
   const [isBadgeHovered, setIsBadgeHovered] = useState(false);
   const isGuestFavourite = listing.overall_rating && listing.overall_rating > 4.8;
   const displayLocation = listing.location?.city || 'Location unavailable';
@@ -23,7 +25,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isMobile, size = 'no
     return { id: index, img: src.url };
   });
 
-  const cardWidth = size === 'small' || isMobile ? 160 : 224;
+  const cardWidth = variant === 'search' ? 300 : 160;
 
   const navigate = (path: string) => {
     window.history.pushState({}, '', path);
@@ -31,12 +33,66 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isMobile, size = 'no
     window.dispatchEvent(navEvent);
   };
 
+  const handleClick = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      await addRecentlyViewed(session.user.id, String(listing.id));
+    }
+    navigate(`/listing/${listing.id}`);
+  };
+
+  if (variant === 'search') {
+    return (
+      <div onClick={handleClick} className="cursor-pointer w-full flex flex-col gap-3 group isolate">
+        {/* Single Image Display */}
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-gray-100">
+           <img
+             src={images[0]?.img}
+             alt={listing.title}
+             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+             loading="lazy"
+           />
+           
+           {/* Guest Favorite Badge */}
+           {isGuestFavourite && (
+            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+              <IconStarFilled className="h-3 w-3 text-rose-500" />
+              <span className="text-xs font-semibold text-slate-900">Guest favorite</span>
+            </div>
+           )}
+
+           {/* Wishlist Button */}
+           <button className="absolute top-3 right-3 p-2 rounded-full bg-black/10 hover:bg-white/20 backdrop-blur-md text-white transition-all">
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z" /></svg>
+           </button>
+        </div>
+
+        {/* Listing Info */}
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-start gap-2">
+            <h3 className="font-semibold text-slate-900 text-base line-clamp-1">{listing.title}</h3>
+            <div className="flex items-center gap-1 shrink-0">
+               <IconStarFilled className="h-3.5 w-3.5 text-slate-900" />
+               <span className="text-sm font-medium text-slate-900">{listing.overall_rating}</span>
+            </div>
+          </div>
+          
+          <p className="text-sm text-slate-500 truncate">{displayLocation}</p>
+          
+          <div className="flex items-baseline gap-1 mt-1">
+            <span className="font-semibold text-slate-900">₹{listing.price_per_night}</span>
+            <span className="text-slate-500 text-sm">night</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     // Card container: Smaller width, flex-shrink-0 to prevent squishing
-    <div
-      onClick={() => navigate(`/listing/${listing.id}`)}
-      className={`cursor-pointer ${size === 'small' || isMobile ? 'w-40' : 'w-56'} flex-shrink-0 isolate`}
-    >
+    <div onClick={handleClick} className="cursor-pointer w-40 flex-shrink-0 isolate">
       {/* --- Image Carousel --- */}
       <div className="relative rounded-2xl aspect-square group">
         <Stack cardsData={images} cardDimensions={{ width: cardWidth, height: cardWidth }} onSwipe={triggerHaptic} />
@@ -75,7 +131,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isMobile, size = 'no
 
       {/* --- Listing Info --- */}
       <div className="mt-2">
-        {size !== 'small' && <h3 className="font-medium text-sm text-slate-800">{listing.title}</h3>}
+        {size !== 'small' && <h3 className="font-medium text-sm text-slate-800 line-clamp-2">{listing.title}</h3>}
         <p className="text-xs text-slate-500 mt-1">{displayLocation}</p>
         <div className="text-xs text-slate-500 flex items-center space-x-1 mt-1">
             <span>
@@ -93,8 +149,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, isMobile, size = 'no
 };
 
 // --- Skeleton Card for Loading State ---
-export const SkeletonCard: React.FC<{ isMobile?: boolean, size?: 'small' | 'normal' }> = ({ isMobile, size = 'normal' }) => (
-  <div className={`animate-pulse ${size === 'small' || isMobile ? 'w-40' : 'w-56'} flex-shrink-0`}>
+export const SkeletonCard: React.FC<{ size?: 'small' | 'normal' }> = ({ size = 'normal' }) => (
+  <div className="animate-pulse w-40 flex-shrink-0">
     <div className="bg-slate-200 rounded-2xl aspect-square"></div>
     <div className="mt-2 space-y-2">
       <div className="h-3 bg-slate-200 rounded w-5/6"></div>

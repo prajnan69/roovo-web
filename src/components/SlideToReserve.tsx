@@ -5,9 +5,9 @@ import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 
-const SlideToReserve = ({ onSlide }: { onSlide: () => void }) => {
+const SlideToReserve = ({ onSlide, variant = "reserve" }: { onSlide: () => Promise<boolean>, variant?: "reserve" | "confirm" }) => {
   const x = useMotionValue(0);
-  const [slid, setSlid] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const background = useTransform(
     x,
@@ -15,11 +15,19 @@ const SlideToReserve = ({ onSlide }: { onSlide: () => void }) => {
     ['#4f46e5', '#34d399']
   );
 
-  const handleSlide = () => {
-    if (!slid) {
-      onSlide();
-      setSlid(true);
+  const handleSlide = async () => {
+    if (isProcessing) return;
+
+    setIsProcessing(true);
+    console.log("SlideToReserve: onSlide triggered");
+    const success = await onSlide();
+    
+    if (!success) {
+      // If failed, reset the slider
+      x.set(0);
     }
+    // On success, the slider will stay at the end. The parent component is responsible for unmounting it.
+    setIsProcessing(false);
   };
 
   return (
@@ -32,10 +40,11 @@ const SlideToReserve = ({ onSlide }: { onSlide: () => void }) => {
         drag="x"
         dragConstraints={{ left: 0, right: 200 }}
         style={{ x }}
-        onDragEnd={(_, info) => {
+        onDragEnd={async (_, info) => {
           if (info.offset.x > 150) {
             triggerHaptic();
-            handleSlide();
+            x.set(200); // Keep the slider at the end
+            await handleSlide();
           } else {
             x.set(0);
           }
@@ -43,7 +52,7 @@ const SlideToReserve = ({ onSlide }: { onSlide: () => void }) => {
       >
         <ChevronRight className="text-indigo-500" />
       </motion.div>
-      <span>Slide to reserve</span>
+      <span>{isProcessing ? "Processing..." : (variant === "reserve" ? "Slide to reserve" : "Slide to confirm")}</span>
     </motion.div>
   );
 };

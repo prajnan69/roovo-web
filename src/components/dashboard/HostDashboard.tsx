@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import HostHeader from "./HostHeader";
+import Overview from "./Overview";
 import Calendar from "../Calendar";
 import Messages from "./Messages";
 import ManageListings from "./ManageListings";
@@ -19,34 +20,15 @@ interface HostDashboardProps {
 
 const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedConversation, onConversationSelect }) => {
   const { pathname } = useNavigation();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Persist scroll position across renders/unmounts of HostHeader
   const scrollPosition = useRef(0);
-
-  useEffect(() => {
-    const scrollable = scrollRef.current;
-    if (scrollable) {
-      const handleScroll = () => {
-        scrollPosition.current = scrollable.scrollLeft;
-      };
-      scrollable.addEventListener("scroll", handleScroll);
-      return () => {
-        scrollable.removeEventListener("scroll", handleScroll);
-      };
-    }
-  }, []);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollPosition.current;
-    }
-  }, [pathname]);
 
   const renderContent = () => {
     if (pathname === "/hosting/calendar") {
-      return <Calendar />;
+      return <Calendar conversations={conversations} onConversationSelect={onConversationSelect} />;
     }
     if (pathname === "/hosting/messages") {
-      return <Messages conversations={conversations} selectedConversation={selectedConversation} onConversationSelect={onConversationSelect} />;
+      return <Messages conversations={conversations} selectedConversation={selectedConversation} onConversationSelect={onConversationSelect} userType="host" />;
     }
     if (pathname === "/hosting/listings") {
       return <ManageListings />;
@@ -57,12 +39,17 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
     if (pathname === "/hosting/payouts") {
       return <Payouts />;
     }
-    return <Calendar />;
+    return <Overview />;
   };
 
   return (
     <div className="h-screen flex flex-col">
-      {!selectedConversation && <HostHeader scrollRef={scrollRef as React.RefObject<HTMLDivElement>} />}
+      {!selectedConversation && (
+        <HostHeader
+          initialScroll={scrollPosition.current}
+          onScroll={(pos) => scrollPosition.current = pos}
+        />
+      )}
       <AnimatePresence mode="wait">
         <motion.div
           key={pathname}

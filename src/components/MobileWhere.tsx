@@ -46,19 +46,25 @@ const MobileWhere: React.FC<MobileWhereProps> = ({ selectedCity, setSelectedCity
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
-            className="flex items-center justify-center overflow-hidden"
+            className="flex flex-col items-center justify-center overflow-hidden"
           >
-            <motion.img
-              key={selectedCity.name}
-              src={selectedCity.img}
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={selectedCity.name}
+                src={selectedCity.img}
               alt={selectedCity.name}
               width={200}
               height={200}
-              className="object-contain rounded-xl"
+              className={`object-contain rounded-xl ${selectedCity.name !== 'Bengaluru' ? 'filter grayscale' : ''}`}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.2, duration: 0.4 }}
-            />
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.3 }}
+              />
+            </AnimatePresence>
+            {selectedCity.name !== 'Bengaluru' && (
+              <p className="text-slate-500 mt-2">Coming Soon</p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

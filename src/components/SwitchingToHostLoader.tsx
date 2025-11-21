@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import RotatingText from "./RotatingText";
+import RoovoLogo from "./RoovoLogo";
 
 interface LoaderProps {
   onAnimationComplete: () => void;
@@ -74,19 +75,29 @@ const SwitchingToHostLoader = ({ onAnimationComplete, onTransitionStart, to }: L
         )}
       </AnimatePresence>
       </div>
-      <div className="absolute bottom-1/4 text-center flex items-center">
-        <img src="/logo.png" alt="Logo" className="h-7 mr-2" />
+      <div className="absolute bottom-1/4 text-center flex items-center gap-3">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="h-8 w-auto"
+        >
+          <RoovoLogo height="100%" width="auto" />
+        </motion.div>
+        
+        <div className="h-8 w-px bg-gray-200 mx-1" />
+
         <AnimatePresence mode="wait">
           <motion.div
             key={toHost ? "hosting" : "traveling"}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
           >
             <RotatingText
               texts={toHost ? ["Hosting"] : ["Traveling"]}
-              mainClassName="text-3xl font-semibold text-neutral-900"
+              mainClassName="text-2xl font-medium text-gray-600 tracking-wide"
             />
           </motion.div>
         </AnimatePresence>

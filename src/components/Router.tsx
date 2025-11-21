@@ -24,12 +24,12 @@ const Router: React.FC<RouterProps> = ({ children }) => {
 
   React.Children.forEach(children, (child) => {
     if (React.isValidElement(child) && child.type === Route && !matchedComponent) {
-      const { path: routePath } = child.props as { path: string; component: React.ComponentType<any> };
+      const { path: routePath, render } = child.props as { path: string; render: (props: any) => React.ReactElement };
       const regex = new RegExp(`^${routePath.replace(/:\w+/g, '([^/]+)')}$`);
       const match = path.match(regex);
 
       if (match) {
-        matchedComponent = React.cloneElement(child, { match });
+        matchedComponent = render({ match });
       }
     }
   });

@@ -2,7 +2,8 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Spinner } from "../ui/shadcn-io/spinner";
+import RoovoLoader from "../RoovoLoader";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 
 interface Booking {
   id: string;
@@ -15,7 +16,6 @@ interface Booking {
 interface CalendarGridProps {
   currentDate: Date;
   bookings: Booking[];
-  guestNames: Record<string, string>;
   isLoading: boolean;
   direction: number;
   onPreviousMonth: () => void;
@@ -25,7 +25,6 @@ interface CalendarGridProps {
 const CalendarGrid = ({
   currentDate,
   bookings,
-  guestNames,
   isLoading,
   direction,
   onPreviousMonth,
@@ -50,42 +49,63 @@ const CalendarGrid = ({
     center: {
       x: 0,
       opacity: 1,
-      transition: { duration: 0.5 },
+      transition: { duration: 0.4 },
     },
     exit: (direction: number) => ({
       x: direction < 0 ? "100%" : "-100%",
       opacity: 0,
-      transition: { duration: 0.5 },
+      transition: { duration: 0.4 },
     }),
   };
 
+  const handlePrev = async () => {
+    await Haptics.impact({ style: ImpactStyle.Light });
+    onPreviousMonth();
+  };
+
+  const handleNext = async () => {
+    await Haptics.impact({ style: ImpactStyle.Light });
+    onNextMonth();
+  };
+
   return (
-    <div className="bg-white p-4 md:p-6 rounded-2xl shadow-lg border border-gray-200 overflow-x-auto">
-      <div className="flex justify-between items-center mb-4 md:mb-6">
-        <div className="flex items-center">
+    <div className="bg-white p-4 md:p-6 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center justify-between w-full">
           <button
-            onClick={onPreviousMonth}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            onClick={handlePrev}
+            className="p-2 rounded-full hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-600"
           >
-            <ChevronLeft />
+            <ChevronLeft size={24} />
           </button>
-          <h2 className="text-xl md:text-2xl font-bold mx-4 tracking-wide">
+          <h2 className="text-lg font-bold text-gray-900">
             {currentDate.toLocaleString("default", {
               month: "long",
               year: "numeric",
             })}
           </h2>
           <button
-            onClick={onNextMonth}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+            onClick={handleNext}
+            className="p-2 rounded-full hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-600"
           >
-            <ChevronRight />
+            <ChevronRight size={24} />
           </button>
         </div>
       </div>
 
-      <div className="relative overflow-hidden min-w-[600px] md:min-w-0">
-        <AnimatePresence initial={false} custom={direction}>
+      <div className="relative overflow-hidden min-h-[350px]">
+        <div className="grid grid-cols-7 gap-1 text-center mb-2">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div
+              key={day}
+              className="font-medium text-gray-400 text-xs uppercase tracking-wider py-2"
+            >
+              {day}
+            </div>
+          ))}
+        </div>
+
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.div
             key={currentDate.toString()}
             custom={direction}
@@ -93,22 +113,14 @@ const CalendarGrid = ({
             initial="enter"
             animate="center"
             exit="exit"
-            className="grid grid-cols-7 gap-2 text-center"
+            className="grid grid-cols-7 gap-1 text-center absolute w-full"
           >
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div
-                key={day}
-                className="font-semibold text-gray-500 text-xs md:text-sm uppercase tracking-wider"
-              >
-                {day}
-              </div>
-            ))}
             {Array.from({ length: firstDayOfMonth }).map((_, i) => (
               <div key={`empty-${i}`} />
             ))}
             {isLoading ? (
               <div className="col-span-7 flex justify-center items-center h-64">
-                <Spinner />
+                <RoovoLoader />
               </div>
             ) : (
               Array.from({ length: daysInMonth }).map((_, i) => {
@@ -124,43 +136,36 @@ const CalendarGrid = ({
                   return date >= startDate && date <= endDate;
                 });
 
+                const isToday = new Date().toDateString() === date.toDateString();
+
                 const getStatusColor = (status: string) => {
                   switch (status) {
                     case "confirmed":
-                      return "bg-red-500 text-white";
+                      return "bg-rose-500 text-white shadow-md shadow-rose-200";
                     case "pending":
-                      return "bg-yellow-400 text-black";
+                      return "bg-amber-400 text-white shadow-md shadow-amber-200";
                     case "completed":
-                      return "bg-gray-300 text-black";
+                      return "bg-slate-200 text-slate-600";
                     default:
-                      return "bg-gray-100";
+                      return "bg-gray-50 text-gray-400";
                   }
                 };
 
                 return (
                   <div
                     key={day}
-                    className={`p-2 rounded-lg transition-all duration-300 ${
-                      booking
-                        ? getStatusColor(booking.status)
-                        : "bg-green-100 hover:bg-green-200"
-                    }`}
+                    className={`aspect-square p-1 relative flex flex-col items-center justify-center rounded-xl transition-all duration-200 ${booking
+                      ? getStatusColor(booking.status)
+                      : isToday
+                        ? "bg-indigo-50 text-indigo-600 font-bold"
+                        : "hover:bg-gray-50 text-gray-700"
+                      }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-sm md:text-lg">
-                        {day}
-                      </span>
-                    </div>
+                    <span className={`text-sm ${isToday ? "font-bold" : "font-medium"}`}>
+                      {day}
+                    </span>
                     {booking && (
-                      <p
-                        className={`text-[10px] md:text-xs mt-2 truncate ${
-                          booking.status === "pending"
-                            ? "text-black/80"
-                            : "text-white/80"
-                        }`}
-                      >
-                        {guestNames[booking.guest_id] || "Guest"}
-                      </p>
+                      <div className="w-1.5 h-1.5 rounded-full bg-white/50 mt-1" />
                     )}
                   </div>
                 );

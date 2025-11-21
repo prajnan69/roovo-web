@@ -1,30 +1,102 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FC, type ReactNode, type ChangeEvent } from 'react';
 import supabase from '@/services/api';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigation } from '@/hooks/useNavigation';
 import { usePreloadedData } from '@/context/PreloadContext';
+import PersonalDetailsDrawer from './PersonalDetailsDrawer';
+import PastTrips from './PastTrips';
+import BecomeAHostSection from './BecomeAHostSection';
+import ReferAHost from './ReferAHost';
+import { FiBell, FiChevronRight, FiCamera, FiLogOut, FiUserCheck, FiSettings, FiUser } from 'react-icons/fi';
 
-const Profile = () => {
+// --- Reusable Components ---
+
+interface MenuItemProps {
+  icon: ReactNode;
+  label: string;
+  sublabel?: string;
+  onClick: () => void;
+  isVerified?: boolean;
+  variant?: 'default' | 'destructive';
+}
+
+const MenuItem: FC<MenuItemProps> = ({ icon, label, sublabel, onClick, isVerified, variant = 'default' }) => (
+  <motion.button
+    whileTap={{ scale: 0.98 }}
+    onClick={onClick}
+    disabled={isVerified}
+    className={`w-full flex items-center justify-between p-4 bg-white first:rounded-t-2xl last:rounded-b-2xl border-b last:border-b-0 border-gray-100 transition-colors ${isVerified ? 'opacity-75 cursor-default' : 'cursor-pointer hover:bg-gray-50'}`}
+  >
+    <div className="flex items-center gap-4">
+      <div className={`flex items-center justify-center w-10 h-10 rounded-xl text-lg ${
+        variant === 'destructive' 
+          ? 'bg-red-100 text-red-600' 
+          : isVerified 
+            ? 'bg-green-100 text-green-600' 
+            : 'bg-indigo-50 text-indigo-600'
+      }`}>
+        {icon}
+      </div>
+      <div className="text-left">
+        <p className={`font-medium text-[15px] ${variant === 'destructive' ? 'text-red-600' : 'text-gray-900'}`}>
+          {label}
+        </p>
+        {sublabel && <p className="text-xs text-gray-500 mt-0.5">{sublabel}</p>}
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+        {isVerified && <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">Verified</span>}
+        {!isVerified && <FiChevronRight className="text-gray-400 text-lg" />}
+    </div>
+  </motion.button>
+);
+
+interface ProfileState {
+  name: string;
+  dob: string;
+  gender: string;
+  address: string;
+  email: string;
+  phone: string;
+  about: string;
+}
+
+// --- Main Component ---
+
+const Profile: FC = () => {
   const { profileData, updateProfileData } = usePreloadedData();
   const { navigate } = useNavigation();
-  const [profile, setProfile] = useState({
-    name: '',
-    dob: '',
-    gender: '',
-    address: '',
-    email: '',
-    phone: '',
-    about: ''
+
+  const [profile, setProfile] = useState<ProfileState>({
+    name: '', dob: '', gender: '', address: '', email: '', phone: '', about: ''
   });
-  const [hostProfilePicture, setHostProfilePicture] = useState('');
-  const [travelingProfilePicture, setTravelingProfilePicture] = useState('');
-const [travelingProfilePictureFile] = useState<File | null>(null);
+  
+  const [hostProfilePicture, setHostProfilePicture] = useState<string>('');
+  const [travelingProfilePicture, setTravelingProfilePicture] = useState<string>('');
+  const [travelingProfilePictureFile, setTravelingProfilePictureFile] = useState<File | null>(null);
   const [hostProfilePictureFile, setHostProfilePictureFile] = useState<File | null>(null);
-  const [kycVerified, setKycVerified] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [kycVerified, setKycVerified] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  
+  const travelingFileInputRef = useRef<HTMLInputElement>(null);
+  const hostFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Animation Variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { staggerChildren: 0.08 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 }
+  };
 
   useEffect(() => {
     if (profileData) {
@@ -37,17 +109,15 @@ const [travelingProfilePictureFile] = useState<File | null>(null);
         phone: profileData.phone || '',
         about: profileData.about || ''
       });
-      setHostProfilePicture(profileData.host_profile_picture_url);
-      setKycVerified(profileData.kyc_verified);
+      setHostProfilePicture(profileData.host_profile_picture_url || '');
+      setTravelingProfilePicture(profileData.traveling_profile_picture_url || '');
+      setKycVerified(profileData.kyc_verified || false);
     }
   }, [profileData]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setProfile(prevProfile => ({
-      ...prevProfile,
-      [name]: value
-    }));
+    setProfile(prev => ({ ...prev, [name]: value }));
   };
 
   const handleLogout = async () => {
@@ -58,35 +128,16 @@ const [travelingProfilePictureFile] = useState<File | null>(null);
   const handleSaveProfile = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
+        // Logic remains same
       if (travelingProfilePictureFile) {
-        await supabase.storage
-          .from('profile-pictures')
-          .upload(`${session.user.id}/traveling`, travelingProfilePictureFile, {
-            cacheControl: '3600',
-            upsert: true
-          });
+        await supabase.storage.from('profile-pictures').upload(`${session.user.id}/traveling`, travelingProfilePictureFile, { cacheControl: '3600', upsert: true });
       }
       if (hostProfilePictureFile) {
-        await supabase.storage
-          .from('profile-pictures')
-          .upload(`${session.user.id}/hosting`, hostProfilePictureFile, {
-            cacheControl: '3600',
-            upsert: true
-          });
+        await supabase.storage.from('profile-pictures').upload(`${session.user.id}/hosting`, hostProfilePictureFile, { cacheControl: '3600', upsert: true });
       }
 
-      const { error } = await supabase
-        .from('users')
-        .update({
-          name: profile.name,
-          dob: profile.dob,
-          gender: profile.gender,
-          address: profile.address,
-          email: profile.email,
-          phone: profile.phone,
-          about: profile.about
-        })
-        .eq('id', session.user.id);
+      const { error } = await supabase.from('users').update({ ...profile }).eq('id', session.user.id);
+      
       if (error) {
         console.error('Error updating profile:', error);
       } else {
@@ -94,164 +145,178 @@ const [travelingProfilePictureFile] = useState<File | null>(null);
           ...profileData,
           ...profile,
           host_profile_picture_url: hostProfilePicture,
+          traveling_profile_picture_url: travelingProfilePicture,
           kyc_verified: kycVerified,
+          is_host: profileData?.is_host || false,
         };
         updateProfileData(updatedProfileData);
-        setSaveStatus('Thank you!');
-        setTimeout(() => {
-          navigate('/hosting');
-        }, 2000);
+        setSaveStatus('Saved!');
+        setTimeout(() => setIsDrawerOpen(false), 2000);
       }
     }
   };
 
-  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureUpload = (e: ChangeEvent<HTMLInputElement>, type: 'traveling' | 'hosting') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setHostProfilePicture(reader.result as string);
-        setHostProfilePictureFile(file);
+        if (type === 'traveling') {
+          setTravelingProfilePicture(reader.result as string);
+          setTravelingProfilePictureFile(file);
+        } else {
+          setHostProfilePicture(reader.result as string);
+          setHostProfilePictureFile(file);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleUseSamePicture = () => {
-    setTravelingProfilePicture(hostProfilePicture);
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 p-4 sm:p-6 md:p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <header className="flex items-center justify-between mb-8">
-        </header>
-
-        {/* Profile Info */}
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-3 gap-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+    <div className="min-h-screen bg-gray-50 pb-12">
+      {/* Native-like Sticky Header with Blur */}
+      <div className="sticky top-0 z-40 bg-gray-50/80 backdrop-blur-md border-b border-gray-200/50 px-6 py-4 flex items-center justify-between">
+        <div className="text-xl font-bold text-gray-900 tracking-tight">Profile</div>
+        <motion.button 
+          whileTap={{ scale: 0.9 }}
+          onClick={() => navigate('/notifications')} 
+          className="p-2 bg-white rounded-full shadow-sm text-gray-600 hover:text-indigo-600 transition-colors relative"
         >
-          <div className="md:col-span-1 flex flex-col items-center">
-            <input type="file" ref={fileInputRef} onChange={handleProfilePictureUpload} className="hidden" />
-            <div className="flex space-x-4 mb-4">
-              <div className="text-center">
-                <motion.div 
-                  className="w-32 h-32 bg-gray-200 border-2 border-gray-300 rounded-full flex items-center justify-center text-4xl font-bold text-gray-500 cursor-pointer"
-                  whileHover={{ scale: 1.1 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {travelingProfilePicture ? (
-                    <img src={travelingProfilePicture} alt="Traveling Profile" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    profile.name.charAt(0)
-                  )}
-                </motion.div>
-                <p className="mt-2 text-sm font-medium text-gray-600">Travelling</p>
-              </div>
-              <div className="text-center">
-                <motion.div 
-                  className="w-32 h-32 bg-gray-200 border-2 border-gray-300 rounded-full cursor-pointer"
-                  whileHover={{ scale: 1.1 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {hostProfilePicture ? (
-                    <img src={hostProfilePicture} alt="Host Profile" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full rounded-full bg-gray-200" />
-                  )}
-                </motion.div>
-                <p className="mt-2 text-sm font-medium text-gray-600">Hosting</p>
-              </div>
-            </div>
-            <button className="w-full bg-indigo-500 text-white py-2 hover:bg-indigo-600 rounded-lg" onClick={handleUseSamePicture}>
-              Use same picture
-            </button>
-            <div className="mt-6 w-full">
-              <h3 className="font-bold text-lg mb-2">Identity Verification</h3>
-              <div className="p-4 border border-gray-300 bg-white rounded-lg">
-                {kycVerified ? (
-                  <div className="flex items-center text-green-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>KYC Verified</span>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-sm text-gray-600 mb-2">
-                      Verify your identity to build trust and enhance security.
-                    </p>
-                    <button className="w-full bg-indigo-500 text-white py-2 hover:bg-indigo-600 rounded-lg">
-                      Get Verified
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="md:col-span-2">
-            <div className="border border-gray-300 p-6 bg-white rounded-lg">
-              <h2 className="text-2xl font-bold mb-4">{profile.name}</h2>
-              <p className="text-gray-500 mb-6">Joined in 2024</p>
-
-              <div>
-                <h3 className="font-bold text-lg mb-4">Personal Details</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Full Name</label>
-                    <input type="text" name="name" value={profile.name} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Date of Birth</label>
-                    <input type="text" name="dob" value={profile.dob} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Gender</label>
-                    <input type="text" name="gender" value={profile.gender} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Address</label>
-                    <input type="text" name="address" value={profile.address} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                  </div>
-                  {profile.email !== 'imorted@roovo.com' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Email Address</label>
-                      <input type="email" name="email" value={profile.email} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Phone Number</label>
-                    <input type="tel" name="phone" value={profile.phone} onChange={handleInputChange} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">About You</label>
-                    <textarea name="about" value={profile.about} onChange={handleInputChange} rows={4} className="w-full bg-gray-100 border border-gray-300 p-2 mt-1" placeholder="Tell us something about yourself..."></textarea>
-                  </div>
-                </div>
-                <button 
-                  className="mt-6 w-full bg-indigo-500 text-white py-2 font-bold hover:bg-indigo-600 rounded-lg"
-                  onClick={handleSaveProfile}
-                >
-                  {saveStatus || 'Save Profile'}
-                </button>
-                <button 
-                  className="mt-4 w-full text-red-500 py-2 font-bold hover:bg-red-50 rounded-lg"
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </motion.div>
+          <FiBell size={20} />
+          <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+        </motion.button>
       </div>
+
+      <motion.div 
+        className="max-w-lg mx-auto px-4 sm:px-6 pt-6 space-y-8"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Profile Hero Section */}
+        <motion.div variants={itemVariants} className="flex flex-col items-center text-center">
+          <div className="relative mb-6">
+             {/* Hidden Inputs */}
+             <input type="file" ref={travelingFileInputRef} onChange={(e) => handleProfilePictureUpload(e, 'traveling')} className="hidden" />
+             <input type="file" ref={hostFileInputRef} onChange={(e) => handleProfilePictureUpload(e, 'hosting')} className="hidden" />
+
+            <div className="relative inline-block">
+                {/* Main Avatar (Traveler) */}
+                <motion.div
+                    className="w-28 h-28 rounded-full p-1 bg-white shadow-xl cursor-pointer"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => travelingFileInputRef.current?.click()}
+                >
+                     <div className="w-full h-full rounded-full overflow-hidden relative bg-gray-200">
+                        {travelingProfilePicture ? (
+                            <img src={travelingProfilePicture} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-gray-400">
+                                {profile.name.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <FiCamera className="text-white drop-shadow-md" size={24} />
+                        </div>
+                     </div>
+                </motion.div>
+
+                {/* Secondary Avatar Badge (Host) */}
+                <motion.div
+                    className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full border-[3px] border-gray-50 bg-white shadow-md cursor-pointer overflow-hidden flex items-center justify-center z-10"
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => hostFileInputRef.current?.click()}
+                >
+                    {hostProfilePicture ? (
+                        <img src={hostProfilePicture} alt="Host" className="w-full h-full object-cover" />
+                    ) : (
+                         <div className="w-full h-full bg-indigo-100 flex items-center justify-center">
+                            <FiUser className="text-indigo-400" size={16} />
+                         </div>
+                    )}
+                </motion.div>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold text-gray-900">{profile.name || "Guest User"}</h2>
+            <p className="text-gray-500 text-sm">{profile.email || "Update your email"}</p>
+          </div>
+
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setIsDrawerOpen(true)}
+            className="mt-5 px-6 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-full shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all"
+          >
+            Edit Profile
+          </motion.button>
+        </motion.div>
+
+        {/* Settings Groups */}
+        <motion.div variants={itemVariants} className="space-y-6">
+          
+          {/* Group 1: Account & Verification */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-4 mb-2">Account Security</h3>
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <MenuItem
+                icon={<FiUserCheck />}
+                label={kycVerified ? "Identity Verified" : "Identity Verification"}
+                sublabel={kycVerified ? undefined : "Required to book stays"}
+                isVerified={kycVerified}
+                onClick={() => !kycVerified && navigate('/verify-identity')}
+              />
+               <MenuItem
+                icon={<FiSettings />}
+                label="Account Settings"
+                sublabel="Privacy, Language, Notifications"
+                onClick={() => {}} // Placeholder
+              />
+            </div>
+          </div>
+
+          {/* Group 2: Hosting & Trips */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider ml-4 mb-2">Activity</h3>
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden p-0">
+                {!profileData?.is_host && (
+                    <div className="border-b border-gray-100">
+                         <BecomeAHostSection />
+                    </div>
+                )}
+                <div className="border-b border-gray-100">
+                    <PastTrips />
+                </div>
+                <ReferAHost />
+            </div>
+          </div>
+
+          {/* Group 3: Danger Zone */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <MenuItem
+              icon={<FiLogOut />}
+              label="Log Out"
+              variant="destructive"
+              onClick={handleLogout}
+            />
+          </div>
+
+          <div className="text-center pb-6">
+            <p className="text-xs text-gray-300">App Version 2.4.0</p>
+          </div>
+
+        </motion.div>
+      </motion.div>
+
+      <PersonalDetailsDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        profile={profile}
+        handleInputChange={handleInputChange}
+        handleSaveProfile={handleSaveProfile}
+        saveStatus={saveStatus}
+      />
     </div>
   );
 };

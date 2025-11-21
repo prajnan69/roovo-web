@@ -2,12 +2,12 @@ import React from 'react';
 
 interface RouteProps {
   path: string;
-  component: React.ComponentType<any>;
+  render: (props: any) => React.ReactElement;
   match?: any;
 }
 
-const Route: React.FC<RouteProps> = ({ component: Component, match }) => {
-  return <Component match={match} />;
+const Route: React.FC<RouteProps> = ({ render, match }) => {
+  return render({ match });
 };
 
 export default Route;

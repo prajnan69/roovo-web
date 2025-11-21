@@ -203,7 +203,13 @@ const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
   // --- Render ---
 
   return (
-    <motion.div layoutId="search-bar-container" className="w-full" transition={transition}>
+    <motion.div
+      initial={{ y: "100%" }}
+      animate={{ y: 0 }}
+      exit={{ y: "100%" }}
+      transition={{ duration: 0.5, ease: "easeInOut" }}
+      className="fixed bottom-0 left-0 right-0 bg-white p-4 z-50"
+    >
       {isCollapsed ? (
         <motion.div
           key="collapsed"

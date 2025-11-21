@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 
 export const useNavigation = () => {
   const [pathname, setPathname] = useState(window.location.pathname);
+  const [search, setSearch] = useState(window.location.search);
 
   useEffect(() => {
     const handlePopState = () => {
       setPathname(window.location.pathname);
+      setSearch(window.location.search);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -24,5 +26,5 @@ export const useNavigation = () => {
     window.history.back();
   };
 
-  return { pathname, navigate, back };
+  return { pathname, search, navigate, back };
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@/components/ui/shadcn-io/spinner";
+import RoovoLoader from "@/components/RoovoLoader";
 
 interface Listing {
   id: string;
@@ -79,7 +79,7 @@ const PriceUpdater = ({
         disabled={isSaving}
       >
         {isSaving ? (
-          <Spinner className="h-5 w-5 text-white" />
+          <RoovoLoader />
         ) : saveSuccess ? (
           'Saved!'
         ) : (
