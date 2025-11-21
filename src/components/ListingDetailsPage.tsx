@@ -130,10 +130,10 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
 
   return (
     <div className="relative bg-white text-slate-900 min-h-screen w-full overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
-      
+
       {/* --- Dynamic Header Controls --- */}
-      <motion.div 
-        className="fixed top-0 left-0 right-0 z-50 px-4 pt-12 pb-4 flex justify-between items-center"
+      <motion.div
+        className="fixed top-0 left-0 right-0 z-50 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-4 flex justify-between items-center"
         style={{ backgroundColor: `rgba(255, 255, 255, ${headerBgOpacity.get()})`, backdropFilter: `blur(${headerBgOpacity.get() * 10}px)` }}
       >
         <motion.button
@@ -181,14 +181,14 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
 
       {/* --- Main Content Sheet --- */}
       <div className="relative z-10 mt-[42vh] bg-white rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] min-h-screen pb-32">
-        
+
         {/* Drag Handle Indicator */}
         <div className="w-full flex justify-center pt-3 pb-1">
           <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
         </div>
 
         <div className="px-6 py-4 space-y-8">
-          
+
           {/* Title & Basic Info */}
           <div className="space-y-4">
             <motion.h1
@@ -231,7 +231,7 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
                 {listing.the_space}
               </p>
               {!isDescriptionExpanded && (
-                 <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-white to-transparent" />
+                <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-white to-transparent" />
               )}
             </div>
             <button
@@ -257,8 +257,8 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
             <h3 className="text-lg font-bold text-slate-900 mb-4">What this place offers</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {listing.included_amenities?.slice(0, 6).map((a: string, idx: number) => (
-                <motion.div 
-                  key={a} 
+                <motion.div
+                  key={a}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.4 + (idx * 0.05) }}
@@ -271,7 +271,7 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
                 </motion.div>
               ))}
             </div>
-            
+
             {listing.included_amenities?.length > 6 && (
               <button
                 onClick={() => triggerHaptic()}
@@ -283,7 +283,7 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
 
             {/* Not Included Amenities Toggle */}
             <div className="mt-6">
-               <button
+              <button
                 onClick={() => {
                   triggerHaptic();
                   setShowNotIncluded(!showNotIncluded);
@@ -296,7 +296,7 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
                   transition={{ duration: 0.3 }}
                   className="bg-slate-100 rounded-full p-1 group-active:bg-slate-200 transition-colors"
                 >
-                   <div className="w-4 h-4 flex items-center justify-center">▼</div>
+                  <div className="w-4 h-4 flex items-center justify-center">▼</div>
                 </motion.span>
               </button>
               <AnimatePresence>
@@ -310,8 +310,8 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-2">
                       {listing.not_included_amenities?.map((a: string) => (
                         <div key={a} className="flex items-center p-3 rounded-xl bg-red-50/50 border border-red-100/50 opacity-75">
-                           <X className="w-4 h-4 text-red-400 mr-3" />
-                           <span className="text-slate-600 text-sm line-through decoration-slate-400">{a}</span>
+                          <X className="w-4 h-4 text-red-400 mr-3" />
+                          <span className="text-slate-600 text-sm line-through decoration-slate-400">{a}</span>
                         </div>
                       ))}
                     </div>
@@ -348,31 +348,31 @@ const ListingDetailsPage = ({ match }: { match: any }) => {
 
           {/* House Rules */}
           <motion.div
-             initial={{ opacity: 0 }}
-             whileInView={{ opacity: 1 }}
-             viewport={{ once: true }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
           >
             <HouseRules rules={listing} />
           </motion.div>
-          
+
           <div className="h-px w-full bg-slate-100" />
 
           {/* Detailed Ratings */}
           <motion.div
-             initial={{ opacity: 0 }}
-             whileInView={{ opacity: 1 }}
-             viewport={{ once: true }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
           >
             <DetailedRatings ratings={listing} />
           </motion.div>
-          
+
           <div className="h-px w-full bg-slate-100" />
 
           {/* Reviews */}
           <motion.div
-             initial={{ opacity: 0 }}
-             whileInView={{ opacity: 1 }}
-             viewport={{ once: true }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
           >
             <Reviews ratings={listing} listingId={id} />
           </motion.div>

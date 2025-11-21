@@ -19,6 +19,13 @@ interface MobileWhereProps {
 const MobileWhere: React.FC<MobileWhereProps> = ({ selectedCity, setSelectedCity }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Automatically expand if a city is already selected
+  React.useEffect(() => {
+    if (selectedCity.name !== 'Anywhere') {
+      setIsExpanded(true);
+    }
+  }, [selectedCity.name]);
+
   const handleCityClick = (city: typeof destinations[0]) => {
     setSelectedCity(city);
     setIsExpanded(true);
@@ -52,14 +59,14 @@ const MobileWhere: React.FC<MobileWhereProps> = ({ selectedCity, setSelectedCity
               <motion.img
                 key={selectedCity.name}
                 src={selectedCity.img}
-              alt={selectedCity.name}
-              width={200}
-              height={200}
-              className={`object-contain rounded-xl ${selectedCity.name !== 'Bengaluru' ? 'filter grayscale' : ''}`}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.3 }}
+                alt={selectedCity.name}
+                width={200}
+                height={200}
+                className={`object-contain rounded-xl ${selectedCity.name !== 'Bengaluru' ? 'filter grayscale' : ''}`}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.3 }}
               />
             </AnimatePresence>
             {selectedCity.name !== 'Bengaluru' && (

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import dayjs from 'dayjs';
 import weekday from 'dayjs/plugin/weekday';
 import { motion, AnimatePresence } from 'framer-motion';
+import Toast from './ui/toast';
 
 dayjs.extend(weekday);
 
@@ -12,9 +13,22 @@ interface MobileWhenProps {
   setDates: (dates: { checkIn: Date | null; checkOut: Date | null }) => void;
 }
 
+const wittyMessages = [
+  "⏰ Time travel isn't available yet! Pick a future date.",
+  "🕰️ Unless you have a DeLorean, let's stick to future dates!",
+  "⌛ The past is history, the future is mystery - pick ahead!",
+  "🚀 We can't book yesterday's rooms, they're occupied by memories!",
+  "📅 That ship has sailed! Choose a date ahead.",
+  "⏳ Oops! That date is in the rearview mirror.",
+  "🔮 Let's focus on the future, not the past!",
+  "🎭 Time machines are still in beta. Future dates only!",
+];
+
 const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
   const [currentMonth, setCurrentMonth] = useState(dayjs());
   const [direction, setDirection] = useState(0);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const changeMonth = (newDirection: number) => {
     setDirection(newDirection);
@@ -22,6 +36,17 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
   };
 
   const handleDateClick = (date: dayjs.Dayjs) => {
+    const isPastDate = date.isBefore(dayjs(), 'day');
+
+    // Show witty toast if trying to click a past date
+    if (isPastDate) {
+      const randomMessage = wittyMessages[Math.floor(Math.random() * wittyMessages.length)];
+      setToastMessage(randomMessage);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      return;
+    }
+
     const selectedDate = date.toDate();
     if (!dates.checkIn || (dates.checkIn && dates.checkOut)) {
       setDates({ checkIn: selectedDate, checkOut: null });
@@ -66,16 +91,15 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
             return (
               <motion.div
                 key={idx}
-                onClick={() => isCurrentMonth && !isPastDate && handleDateClick(date)}
+                onClick={() => isCurrentMonth && handleDateClick(date)}
                 whileHover={{ scale: isPastDate ? 1 : 1.1 }}
                 whileTap={{ scale: isPastDate ? 1 : 0.95 }}
-                className={`h-10 flex items-center justify-center rounded-full transition-all duration-200 font-semibold ${
-                  !isCurrentMonth ? 'text-slate-300' :
+                className={`h-10 flex items-center justify-center rounded-full transition-all duration-200 font-semibold ${!isCurrentMonth ? 'text-slate-300' :
                   isPastDate ? "text-slate-400 cursor-not-allowed" :
-                  isCheckIn || isCheckOut ? "bg-indigo-600 text-white shadow-md" :
-                  inRange ? "bg-indigo-100 text-indigo-700" :
-                  isToday ? "text-indigo-600" : "hover:bg-slate-100"
-                }`}
+                    isCheckIn || isCheckOut ? "bg-indigo-600 text-white shadow-md" :
+                      inRange ? "bg-indigo-100 text-indigo-700" :
+                        isToday ? "text-indigo-600" : "hover:bg-slate-100"
+                  }`}
               >
                 {date.date()}
               </motion.div>
@@ -130,6 +154,12 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
           {renderCalendar(currentMonth)}
         </motion.div>
       </AnimatePresence>
+
+      <Toast
+        message={toastMessage}
+        show={showToast}
+        onClose={() => setShowToast(false)}
+      />
     </div>
   );
 };

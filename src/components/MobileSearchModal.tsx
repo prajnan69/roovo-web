@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import { triggerHaptic } from '../lib/haptics';
 import { useGoogleMapsLoader } from '../lib/googleMaps';
 import { useNavigation } from '../hooks/useNavigation';
@@ -41,14 +40,10 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<google.maps.places.AutocompletePrediction[]>([]);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(isOpen);
   const [activeSection, setActiveSection] = useState<'where' | 'when' | 'who'>('where');
 
-  const searchContainerRef = useRef<HTMLDivElement>(null);
   const { navigate } = useNavigation();
-
-  useOnClickOutside(searchContainerRef, () => setIsDropdownOpen(false));
 
   const { isLoaded } = useGoogleMapsLoader();
 
@@ -245,52 +240,91 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
                     initial="hidden"
                     animate="visible"
                     exit="exit"
-                    className="space-y-5"
+                    className="space-y-5 min-h-[400px]"
                   >
-                    <h3 className="text-2xl font-bold text-slate-900">Where to?</h3>
-                    <MobileWhere selectedCity={selectedCity} setSelectedCity={setSelectedCity} />
+                    {/* Always render but control visibility with opacity and pointer-events */}
+                    <motion.div
+                      animate={{
+                        opacity: searchQuery.length === 0 ? 1 : 0,
+                        height: searchQuery.length === 0 ? 'auto' : 0
+                      }}
+                      transition={{ duration: 0.3 }}
+                      className={searchQuery.length > 0 ? 'pointer-events-none overflow-hidden' : ''}
+                    >
+                      <h3 className="text-2xl font-bold text-slate-900 mb-5">Where to?</h3>
+                      <MobileWhere selectedCity={selectedCity} setSelectedCity={setSelectedCity} />
+                    </motion.div>
 
                     {/* Search Bar for Bengaluru */}
                     {isBengaluru && (
-                      <div className="relative" ref={searchContainerRef}>
-                        <div className="flex items-center bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-slate-900 focus-within:bg-white focus-within:shadow-md transition-all duration-300">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                      <div className="relative">
+                        {/* Animate search bar to top when typing */}
+                        <motion.div
+                          layout
+                          className="flex items-center bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white focus-within:shadow-md transition-all duration-300"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                           </svg>
                           <input
                             type="text"
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onFocus={() => setIsDropdownOpen(true)}
+                            onChange={(e) => {
+                              setSearchQuery(e.target.value);
+                            }}
                             placeholder="Search area (e.g. Indiranagar)"
                             className="bg-transparent w-full outline-none text-slate-900 placeholder:text-slate-400 font-medium"
                           />
-                        </div>
-
-                        <AnimatePresence>
-                          {isDropdownOpen && searchResults.length > 0 && (
-                            <motion.div
-                              key="search-results-dropdown"
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10, height: 0 }}
-                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] as const }}
-                              className="w-full bg-white border border-slate-100 mt-2 rounded-xl shadow-xl overflow-hidden z-20"
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="p-1 rounded-full hover:bg-slate-200 transition-colors flex-shrink-0"
                             >
-                              {searchResults.map((result) => (
-                                <div
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          )}
+                        </motion.div>
+
+                        {/* Dropdown Results */}
+                        <AnimatePresence>
+                          {searchQuery.length > 0 && searchResults.length > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                              className="mt-3 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-80 overflow-y-auto"
+                            >
+                              {searchResults.map((result, index) => (
+                                <motion.div
                                   key={result.place_id}
-                                  className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 last:border-0 text-sm flex flex-col gap-0.5"
+                                  initial={{ opacity: 0, x: -20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05, type: "spring", stiffness: 300, damping: 25 }}
+                                  className="p-4 active:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSearchQuery(result.description);
-                                    setIsDropdownOpen(false);
                                     setActiveSection('when');
                                   }}
                                 >
-                                  <div className="font-semibold text-slate-900">{result.structured_formatting.main_text}</div>
-                                  <div className="text-slate-500 text-xs truncate">{result.structured_formatting.secondary_text}</div>
-                                </div>
+                                  <div className="flex items-start gap-3">
+                                    <div className="mt-0.5 p-2 bg-indigo-50 rounded-full">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-600" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-semibold text-slate-900 text-sm">{result.structured_formatting.main_text}</div>
+                                      <div className="text-slate-500 text-xs mt-0.5 truncate">{result.structured_formatting.secondary_text}</div>
+                                    </div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                </motion.div>
                               ))}
                             </motion.div>
                           )}

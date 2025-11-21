@@ -80,7 +80,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ show, isChatOpen, onSearchC
         initial={{ y: 100 }}
         animate={{ y: isChatOpen ? 100 : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-1/2 -translate-x-1/2 z-50 md:hidden"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] left-1/2 -translate-x-1/2 z-50 md:hidden"
       >
         <button
           onClick={() => {
