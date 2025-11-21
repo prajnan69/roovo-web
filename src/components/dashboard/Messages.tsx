@@ -165,7 +165,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
           >
             {/* Chat Header */}
-            <div className={`bg-white/90 backdrop-blur-md border-b border-gray-100 ${userType === 'guest' ? 'pt-[calc(env(safe-area-inset-top)+0.75rem)]' : 'pt-3'} pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm`}>
+            <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm">
               <button
                 onClick={handleBack}
                 className="p-2 -ml-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
