@@ -8,6 +8,7 @@
   line-height: 1.5;
   font-weight: 400;
 
+  /* Ionic defaults usually handle color-scheme, but this is fine to keep */
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
@@ -18,6 +19,13 @@
   -moz-osx-font-smoothing: grayscale;
 
   --radius: 0.625rem;
+
+  /* === Safe Area Variables === */
+  /* Kept as utility variables, but Ionic components handle this automatically */
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
 
   /* === Indigo Theme Variables (Light Mode) === */
   --background: #ffffff;
@@ -62,13 +70,37 @@ a:hover {
   color: rgb(79 70 229);
 }
 
+/* === FIXED BODY STYLES FOR IONIC/CAPACITOR === */
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  /* "position: fixed" prevents the whole webview from bouncing on scroll */
+  position: fixed; 
+  width: 100%;
+  height: 100%;
+  overflow: hidden; 
+  
+  background-color: var(--background);
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  /* Disables iOS text selection highlight */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* === ROOT CONTAINER === */
+#root {
+  width: 100%;
+  height: 100%; /* Fill the fixed body */
+  
+  /* Removed display: flex to let IonApp handle layout naturally */
+  display: block; 
+  
+  /* 
+     CRITICAL FIX: Removed manual padding. 
+     Ionic components (<IonHeader>, <IonContent>) automatically read 
+     safe-area env variables. Adding padding here causes layout breaks.
+  */
 }
 
 h1 {
@@ -104,9 +136,6 @@ button:focus-visible {
   a:hover {
     color: rgb(99 102 241);
   }
-  /* button {
-    background-color: #f9f9f9;
-  } */
 }
 
 @theme inline {
@@ -161,9 +190,9 @@ button:focus-visible {
   html,
   body {
     overscroll-behavior: none;
+    user-select: none; /* Standard for native-feeling apps */
   }
   body {
-    font-family: 'SF Pro Display', sans-serif;
     @apply bg-background text-foreground;
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
@@ -211,5 +240,13 @@ button:focus-visible {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  
+  /* Utility to force Safe Area padding if you build a custom non-Ionic header */
+  .safe-pt {
+    padding-top: var(--sat);
+  }
+  .safe-pb {
+    padding-bottom: var(--sab);
   }
 }
