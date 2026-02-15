@@ -1,9 +1,9 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useRef } from "react";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import RoovoLoader from "../RoovoLoader";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface Booking {
   id: string;
@@ -20,6 +20,10 @@ interface CalendarGridProps {
   direction: number;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
+  priceMap?: Record<string, number>;
+  selectedDates?: string[];
+  onToggleDate?: (date: string) => void;
+  onRangeSelect?: (dates: string[]) => void;
 }
 
 const CalendarGrid = ({
@@ -29,7 +33,69 @@ const CalendarGrid = ({
   direction,
   onPreviousMonth,
   onNextMonth,
+  priceMap = {},
+  selectedDates = [],
+  onToggleDate,
+  onRangeSelect
 }: CalendarGridProps) => {
+  const isDragging = useRef(false);
+  const dragStartDate = useRef<string | null>(null);
+  const currentRange = useRef<Set<string>>(new Set());
+
+
+
+  const calculateRange = (start: string, end: string) => {
+    const d1 = new Date(start);
+    const d2 = new Date(end);
+    const range: string[] = [];
+    const low = d1 < d2 ? d1 : d2;
+    const high = d1 < d2 ? d2 : d1;
+
+    for (let d = new Date(low); d <= high; d.setDate(d.getDate() + 1)) {
+      const offset = d.getTimezoneOffset();
+      const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+      range.push(localDate.toISOString().split('T')[0]);
+    }
+    return range;
+  };
+
+  const handlePointerDown = (dateStr: string) => {
+    isDragging.current = true;
+    dragStartDate.current = dateStr;
+    currentRange.current.clear();
+    currentRange.current.add(dateStr);
+
+    // Select the initial date immediately
+    if (onToggleDate) {
+      triggerHaptic();
+      onToggleDate(dateStr);
+    }
+
+    // Capture pointer to track movement outside the element if needed
+    // (e.target as Element).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerEnter = (dateStr: string) => {
+    if (isDragging.current && dragStartDate.current) {
+      const range = calculateRange(dragStartDate.current, dateStr);
+      // Only trigger update if range changed significantly? 
+      // Actually, passing the whole range to parent is safest
+      if (onRangeSelect) {
+        // Debounce or check?
+        // Ideally we just fire it. Framer motion layoutId might be heavy
+        // triggerHaptic(); // Maybe too many haptics?
+        onRangeSelect(range);
+      }
+    }
+  };
+
+  const handlePointerUp = () => {
+    isDragging.current = false;
+    dragStartDate.current = null;
+    currentRange.current.clear();
+  };
+
+
   const daysInMonth = new Date(
     currentDate.getFullYear(),
     currentDate.getMonth() + 1,
@@ -41,7 +107,7 @@ const CalendarGrid = ({
     1
   ).getDay();
 
-  const variants = {
+  const variants: Variants = {
     enter: (direction: number) => ({
       x: direction > 0 ? "100%" : "-100%",
       opacity: 0,
@@ -49,131 +115,178 @@ const CalendarGrid = ({
     center: {
       x: 0,
       opacity: 1,
-      transition: { duration: 0.4 },
+      transition: { duration: 0.3, ease: "circOut" },
     },
     exit: (direction: number) => ({
       x: direction < 0 ? "100%" : "-100%",
       opacity: 0,
-      transition: { duration: 0.4 },
+      transition: { duration: 0.3, ease: "circIn" },
     }),
   };
 
   const handlePrev = async () => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     onPreviousMonth();
   };
 
   const handleNext = async () => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     onNextMonth();
   };
 
   return (
-    <div className="bg-white p-4 md:p-6 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center justify-between w-full">
-          <button
-            onClick={handlePrev}
-            className="p-2 rounded-full hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-600"
+    <div
+      className="px-3 pb-20 overflow-hidden touch-none" // touch-none is key for preventing scroll interference
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+    >
+      {/* Weekdays Header - Matching Original */}
+      <div className="grid grid-cols-7 mb-2">
+        {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
+          <div
+            key={i}
+            className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider"
           >
-            <ChevronLeft size={24} />
-          </button>
-          <h2 className="text-lg font-bold text-gray-900">
-            {currentDate.toLocaleString("default", {
-              month: "long",
-              year: "numeric",
-            })}
-          </h2>
-          <button
-            onClick={handleNext}
-            className="p-2 rounded-full hover:bg-gray-50 active:bg-gray-100 transition-colors text-gray-600"
-          >
-            <ChevronRight size={24} />
-          </button>
-        </div>
+            {day}
+          </div>
+        ))}
       </div>
 
-      <div className="relative overflow-hidden min-h-[350px]">
-        <div className="grid grid-cols-7 gap-1 text-center mb-2">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div
-              key={day}
-              className="font-medium text-gray-400 text-xs uppercase tracking-wider py-2"
-            >
-              {day}
-            </div>
+      <AnimatePresence initial={false} custom={direction} mode="popLayout">
+        <motion.div
+          key={currentDate.toString()}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          className="grid grid-cols-7 gap-2"
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          onDragEnd={(_, { offset, velocity }) => {
+            // Swipe Logic
+            const swipe = Math.abs(offset.x) * velocity.x;
+            if (swipe < -10000) handleNext();
+            else if (swipe > 10000) handlePrev();
+          }}
+        >
+          {/* Empty Slots */}
+          {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+            <div key={`empty-${i}`} />
           ))}
-        </div>
 
-        <AnimatePresence initial={false} custom={direction} mode="popLayout">
-          <motion.div
-            key={currentDate.toString()}
-            custom={direction}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            className="grid grid-cols-7 gap-1 text-center absolute w-full"
-          >
-            {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-              <div key={`empty-${i}`} />
-            ))}
-            {isLoading ? (
-              <div className="col-span-7 flex justify-center items-center h-64">
-                <RoovoLoader />
-              </div>
-            ) : (
-              Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const date = new Date(
-                  currentDate.getFullYear(),
-                  currentDate.getMonth(),
-                  day
-                );
-                const booking = bookings.find((b) => {
-                  const startDate = new Date(b.start_date);
-                  const endDate = new Date(b.end_date);
-                  return date >= startDate && date <= endDate;
-                });
+          {isLoading ? (
+            <div className="col-span-7 flex justify-center py-12">
+              <RoovoLoader className="w-12 h-12" />
+            </div>
+          ) : (
+            Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const date = new Date(
+                currentDate.getFullYear(),
+                currentDate.getMonth(),
+                day
+              );
 
-                const isToday = new Date().toDateString() === date.toDateString();
+              // Format: YYYY-MM-DD
+              const offset = date.getTimezoneOffset();
+              const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+              const dateStr = localDate.toISOString().split("T")[0];
 
-                const getStatusColor = (status: string) => {
-                  switch (status) {
-                    case "confirmed":
-                      return "bg-rose-500 text-white shadow-md shadow-rose-200";
-                    case "pending":
-                      return "bg-amber-400 text-white shadow-md shadow-amber-200";
-                    case "completed":
-                      return "bg-slate-200 text-slate-600";
-                    default:
-                      return "bg-gray-50 text-gray-400";
-                  }
-                };
+              const booking = bookings.find((b) => {
+                const startDate = new Date(b.start_date);
+                const endDate = new Date(b.end_date);
+                return date >= startDate && date <= endDate;
+              });
 
-                return (
-                  <div
-                    key={day}
-                    className={`aspect-square p-1 relative flex flex-col items-center justify-center rounded-xl transition-all duration-200 ${booking
-                      ? getStatusColor(booking.status)
-                      : isToday
-                        ? "bg-indigo-50 text-indigo-600 font-bold"
-                        : "hover:bg-gray-50 text-gray-700"
-                      }`}
-                  >
-                    <span className={`text-sm ${isToday ? "font-bold" : "font-medium"}`}>
+              // --- ORIGINAL STYLING LOGIC START ---
+              const isToday = new Date().toDateString() === date.toDateString();
+              const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
+              const isSelected = selectedDates.includes(dateStr);
+              const price = priceMap[dateStr];
+
+              // Base Styles
+              let bgClass = "bg-white border border-slate-100";
+              let textClass = "text-slate-700";
+              let priceColor = "text-slate-400";
+
+              if (isSelected) {
+                // Selected State (Modern touch on old style)
+                bgClass = "bg-slate-900 border-slate-900 shadow-xl shadow-indigo-200 scale-[1.05] z-10";
+                textClass = "text-white";
+                priceColor = "text-slate-400";
+              } else if (booking) {
+                if (booking.status === "confirmed") {
+                  bgClass = "bg-rose-50 border border-rose-100";
+                  textClass = "text-rose-700";
+                } else if (booking.status === "pending") {
+                  bgClass = "bg-amber-50 border border-amber-100";
+                  textClass = "text-amber-700";
+                } else {
+                  bgClass = "bg-slate-100 border border-slate-200";
+                  textClass = "text-slate-500";
+                }
+              } else if (isPast) {
+                bgClass = "bg-gray-50 border border-gray-50 opacity-60";
+                textClass = "text-gray-400";
+              } else if (isToday) {
+                bgClass += " ring-2 ring-indigo-500 ring-offset-2";
+                textClass = "text-indigo-600";
+                priceColor = "text-indigo-400";
+              }
+
+              // --- ORIGINAL STYLING LOGIC END ---
+
+              return (
+                <motion.div
+                  key={day}
+                  layoutId={isSelected ? `selected-${dateStr}` : undefined}
+                  onPointerDown={() => {
+                    // Only start drag if no booking and not past
+                    if (!booking && !isPast) handlePointerDown(dateStr);
+                  }}
+                  onPointerEnter={() => {
+                    handlePointerEnter(dateStr);
+                  }}
+                  className={`relative flex flex-col justify-between p-1.5 rounded-xl h-24 shadow-sm transition-all duration-200 select-none cursor-pointer ${bgClass}`}
+                >
+                  {/* Top Row: Date & Dot */}
+                  <div className="flex justify-between items-start pointer-events-none">
+                    <span className={`text-sm font-bold ${textClass}`}>
                       {day}
                     </span>
-                    {booking && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-white/50 mt-1" />
-                    )}
+                    {/* Simplified dot logic for now or overrides if available */}
+                    {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
                   </div>
-                );
-              })
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+
+                  {/* Bottom Row: Content */}
+                  {booking ? (
+                    <div className="mt-1 pointer-events-none">
+                      <div
+                        className={`text-[9px] font-semibold leading-tight truncate px-1 py-0.5 rounded-md w-full ${booking.status === "confirmed"
+                          ? "bg-rose-100/50"
+                          : "bg-amber-100/50"
+                          }`}
+                      >
+                        {/* We don't have guest names here yet, just show Status or 'Booked' */}
+                        {booking.status}
+                      </div>
+                    </div>
+                  ) : (
+                    !isPast && (
+                      <div
+                        className={`text-[9px] font-medium text-right self-end mt-auto pointer-events-none ${priceColor}`}
+                      >
+                        {price ? `₹${(price / 1000).toFixed(1)}k` : "-"}
+                      </div>
+                    )
+                  )}
+                </motion.div>
+              );
+            })
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import HostHeader from "./HostHeader";
+import HostBottomNavigation from "./HostBottomNavigation";
 import Overview from "./Overview";
-import Calendar from "../Calendar";
+import Calendar from "./Calendar";
 import Messages from "./Messages";
 import ManageListings from "./ManageListings";
 import Bookings from "./Bookings";
 import Payouts from "./Payouts";
+import PayoutMethods from "./PayoutMethods";
 import { useNavigation } from "@/hooks/useNavigation";
 import supabase, { fetchConversationsByHostId } from "../../services/api";
 
@@ -20,8 +21,6 @@ interface HostDashboardProps {
 
 const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedConversation, onConversationSelect }) => {
   const { pathname } = useNavigation();
-  // Persist scroll position across renders/unmounts of HostHeader
-  const scrollPosition = useRef(0);
 
   const renderContent = () => {
     if (pathname === "/hosting/calendar") {
@@ -39,17 +38,18 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
     if (pathname === "/hosting/payouts") {
       return <Payouts />;
     }
+    if (pathname === "/hosting/payouts") {
+      return <Payouts />;
+    }
+    if (pathname === "/hosting/payout-methods") {
+      return <PayoutMethods />;
+    }
     return <Overview />;
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      {!selectedConversation && (
-        <HostHeader
-          initialScroll={scrollPosition.current}
-          onScroll={(pos) => scrollPosition.current = pos}
-        />
-      )}
+    <div className="h-screen flex flex-col relative bg-gray-50">
+      {pathname !== "/hosting/payout-methods" && <HostBottomNavigation />}
       <AnimatePresence mode="wait">
         <motion.div
           key={pathname}

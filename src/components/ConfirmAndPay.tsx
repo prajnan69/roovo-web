@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Star } from "lucide-react";
-import { Spinner } from "./ui/shadcn-io/spinner";
-import supabase, { API_BASE_URL } from "../services/api";
+import { API_BASE_URL } from "../services/api";
 import SlideToReserve from "./SlideToReserve";
+import { load } from '@cashfreepayments/cashfree-js';
 
 interface ConfirmAndPayProps {
   listing: {
@@ -30,6 +29,11 @@ interface ConfirmAndPayProps {
   onBack: () => void;
   host_id: string;
   auto_bookable?: boolean;
+  guestDetails: {
+    id: string;
+    name: string;
+    phone: string;
+  };
 }
 
 export default function ConfirmAndPay({
@@ -39,31 +43,128 @@ export default function ConfirmAndPay({
   onBack,
   host_id,
   auto_bookable,
+  guestDetails,
 }: ConfirmAndPayProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<
     "idle" | "loading" | "confirmed" | "pending"
   >("idle");
+  const [cashfree, setCashfree] = useState<any>(null);
+
+  useEffect(() => {
+    const initializeSDK = async () => {
+      try {
+        const cf = await load({
+          mode: "sandbox" // Change to "production" for live
+        });
+        setCashfree(cf);
+      } catch (err) {
+        console.error("Cashfree SDK failed to load", err);
+      }
+    };
+    initializeSDK();
+  }, []);
 
   const handleBooking = async (): Promise<boolean> => {
     setIsLoading(true);
     setBookingStatus("loading");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return false;
 
-    const guest_id = session.user.id;
+    try {
+      // 1. Create Order on Backend
+      const orderAmount = parseFloat((priceDetails.totalPrice + priceDetails.taxes).toFixed(2));
+      const customerPhone = guestDetails.phone || "9999999999"; // Fallback for dev
+      const customerName = guestDetails.name || "Guest";
+
+      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_amount: orderAmount,
+          customer_details: {
+            customer_id: guestDetails.id,
+            customer_phone: customerPhone,
+            customer_name: customerName,
+            customer_email: "guest@roovo.in" // We might need email from session/profile
+          },
+          order_meta: {
+            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
+          }
+        })
+      });
+
+      if (!orderRes.ok) throw new Error("Failed to create payment order");
+      const orderData = await orderRes.json();
+      const paymentSessionId = orderData.payment_session_id;
+      const orderId = orderData.order_id;
+
+      // Store pending booking data for redirect handling
+      localStorage.setItem(`pending_booking_${orderId}`, JSON.stringify({
+        listing_id: listing.id,
+        guest_id: guestDetails.id,
+        host_id,
+        start_date: bookingDetails.startDate,
+        end_date: bookingDetails.endDate,
+        total_price: parseFloat((priceDetails.totalPrice + priceDetails.taxes).toFixed(2)),
+        auto_bookable,
+      }));
+
+      // 2. Trigger Checkout
+      if (cashfree) {
+        cashfree.checkout({
+          paymentSessionId,
+          redirectTarget: "_self", // Ensure redirect happens in same tab for PWA
+          returnUrl: `${window.location.origin}/payment/status?order_id={order_id}`
+        }).then((result: any) => {
+          if (result.error) {
+            console.error("Payment Error:", result.error);
+            setIsLoading(false);
+            setBookingStatus("idle");
+            alert("Payment Failed: " + result.error.message);
+          }
+        });
+
+        // Poll for status
+        const pollInterval = setInterval(async () => {
+          const statusRes = await fetch(`${API_BASE_URL}/api/cashfree/orders/${orderId}/status`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.status === "SUCCESS") {
+              clearInterval(pollInterval);
+              await createBooking(orderId);
+            }
+          }
+        }, 5000);
+
+        // Clean up interval after some time
+        setTimeout(() => clearInterval(pollInterval), 600000); // 10 mins
+
+        return true; // We initiated payment
+      }
+
+    } catch (error) {
+      console.error(error);
+      setIsLoading(false);
+      setBookingStatus("idle");
+      return false;
+    }
+
+    return false;
+  };
+
+  const createBooking = async (paymentOrderId: string) => {
+    // Create Booking after successful payment
     const bookingData = {
       listing_id: listing.id,
-      guest_id,
+      guest_id: guestDetails.id,
       host_id,
       start_date: bookingDetails.startDate,
       end_date: bookingDetails.endDate,
       total_price: priceDetails.totalPrice + priceDetails.taxes,
       auto_bookable,
+      payment_order_id: paymentOrderId
     };
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 3000)); // simulate delay
       const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,20 +173,34 @@ export default function ConfirmAndPay({
       if (!response.ok) throw new Error("Failed to create booking");
 
       setBookingStatus(auto_bookable ? "confirmed" : "pending");
-      return true;
-    } catch (error) {
-      console.error(error);
-      return false;
-    } finally {
+      setIsLoading(false);
+      // Maybe redirect to success page
+    } catch (e) {
+      console.error("Error creating booking:", e);
+      alert("Payment successful but booking creation failed. Please contact support.");
       setIsLoading(false);
     }
-  };
+  }
 
   const formattedStartDate = new Date(bookingDetails.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const formattedEndDate = new Date(bookingDetails.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
+  if (bookingStatus === "confirmed" || bookingStatus === "pending") {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-white">
+        <div className="text-2xl font-bold mb-4">Booking {bookingStatus === "confirmed" ? "Confirmed" : "Requested"}!</div>
+        <p className="text-center text-gray-600 px-6">
+          {bookingStatus === "confirmed"
+            ? "Your reservation is confirmed. Enjoy your stay!"
+            : "Your reservation request has been sent to the host."}
+        </p>
+        <button onClick={onBack} className="mt-8 px-6 py-3 bg-black text-white rounded-full">Back to Listing</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 relative font-inter">
+    <div className="h-full bg-neutral-50 text-neutral-900 relative font-inter overflow-y-auto pb-32">
 
       {/* Header */}
       <div className="sticky top-0 z-40 backdrop-blur-md bg-white/80 border-b border-neutral-200 flex items-center px-4 py-3 shadow-sm">
@@ -157,28 +272,24 @@ export default function ConfirmAndPay({
         {/* Cancellation Policy */}
         <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
           <h3 className="font-semibold mb-2 text-neutral-800">Cancellation Policy</h3>
-          <p className="text-neutral-600 text-sm leading-relaxed">
-            {listing.cancellation_policy}
+          <p className="text-sm text-neutral-600 leading-relaxed">
+            {listing.cancellation_policy || "This booking is non-refundable. Please review the host's policy for more details."}
           </p>
         </div>
 
-        {/* Slide to Reserve */}
-        <div className="fixed bottom-0 left-0 right-0 px-5 pb-8 pt-4 bg-gradient-to-t from-neutral-100 via-white/90 backdrop-blur-md border-t border-neutral-200">
-          <AnimatePresence>
-            {isLoading ? (
-              <motion.div
-                key="loading"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex justify-center items-center py-4"
-              >
-                <Spinner />
-              </motion.div>
-            ) : (
-              <SlideToReserve onSlide={handleBooking} />
-            )}
-          </AnimatePresence>
+        {/* Ground Rules */}
+        <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
+          <h3 className="font-semibold mb-2 text-neutral-800">Ground Rules</h3>
+          <p className="text-sm text-neutral-600 leading-relaxed">
+            Please follow the house rules and treat the place with respect.
+          </p>
+        </div>
+
+        {/* Slide to Reserve component */}
+        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-2 border border-neutral-200 shadow-lg">
+          <SlideToReserve
+            onSlide={handleBooking}
+          />
         </div>
       </motion.div>
     </div>

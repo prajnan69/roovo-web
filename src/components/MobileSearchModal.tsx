@@ -110,7 +110,10 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
     const params = new URLSearchParams();
 
     const buildParamsAndNavigate = (lat?: number, lng?: number) => {
-      if (selectedCity.name !== 'Anywhere') {
+      // Prioritize the specific area typed by the user
+      if (searchQuery) {
+        params.append('location', searchQuery);
+      } else if (selectedCity.name !== 'Anywhere') {
         params.append('location', selectedCity.name);
       }
 
@@ -240,7 +243,7 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
                     initial="hidden"
                     animate="visible"
                     exit="exit"
-                    className="space-y-5 min-h-[400px]"
+                    className="space-y-5"
                   >
                     {/* Always render but control visibility with opacity and pointer-events */}
                     <motion.div
@@ -286,6 +289,30 @@ const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
                             </button>
                           )}
                         </motion.div>
+
+                        {/* Popular Areas Pills */}
+                        {!searchQuery && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="mt-3 flex flex-wrap gap-2"
+                          >
+                            {['Indiranagar', 'Koramangala', 'Whitefield', 'HSR Layout', 'MG Road', 'JP Nagar', 'Jayanagar'].map((area) => (
+                              <button
+                                key={area}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchQuery(area);
+                                  setActiveSection('when');
+                                }}
+                                className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-700 transition-colors shadow-sm"
+                              >
+                                {area}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
 
                         {/* Dropdown Results */}
                         <AnimatePresence>

@@ -19,9 +19,9 @@ const RecentlyViewedBanner: React.FC<RecentlyViewedBannerProps> = ({ listings })
   return (
     <div className="w-full py-2">
       <div className="flex items-center justify-between px-5 mb-2">
-         <h3 className="font-bold text-lg text-slate-900">Continue searching</h3>
+        <h3 className="font-bold text-lg text-slate-900">Continue searching</h3>
       </div>
-      
+
       <div className="flex overflow-x-auto space-x-4 px-5 pb-2 scrollbar-hide snap-x snap-mandatory">
         {listingsToShow.map((listing, index) => (
           <motion.div
@@ -43,7 +43,7 @@ const RecentlyViewedBanner: React.FC<RecentlyViewedBannerProps> = ({ listings })
               />
             </div>
             <h4 className="font-medium text-sm text-slate-900 truncate">{listing.title}</h4>
-            <p className="text-xs text-slate-500 truncate">{listing.location?.city || 'Location unavailable'}</p>
+
           </motion.div>
         ))}
       </div>

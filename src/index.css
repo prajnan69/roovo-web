@@ -34,18 +34,27 @@
   --card-foreground: #1e1b4b;
   --popover: #ffffff;
   --popover-foreground: #1e1b4b;
-  --primary: rgb(99 102 241); /* indigo-500 */
+  --primary: rgb(99 102 241);
+  /* indigo-500 */
   --primary-foreground: white;
-  --secondary: rgb(67 56 202); /* indigo-700 */
+  --secondary: rgb(67 56 202);
+  /* indigo-700 */
   --secondary-foreground: white;
-  --accent: rgb(129 140 248); /* indigo-400 */
+  --accent: rgb(129 140 248);
+  /* indigo-400 */
   --accent-foreground: white;
-  --muted: rgb(199 210 254); /* indigo-200 */
-  --muted-foreground: rgb(55 48 163); /* indigo-800 */
-  --destructive: rgb(220 38 38); /* red-600 */
-  --border: rgb(165 180 252); /* indigo-300 */
-  --input: rgb(199 210 254); /* indigo-200 */
-  --ring: rgb(79 70 229); /* indigo-600 */
+  --muted: rgb(199 210 254);
+  /* indigo-200 */
+  --muted-foreground: rgb(55 48 163);
+  /* indigo-800 */
+  --destructive: rgb(220 38 38);
+  /* red-600 */
+  --border: rgb(165 180 252);
+  /* indigo-300 */
+  --input: rgb(199 210 254);
+  /* indigo-200 */
+  --ring: rgb(79 70 229);
+  /* indigo-600 */
   --chart-1: rgb(129 140 248);
   --chart-2: rgb(99 102 241);
   --chart-3: rgb(67 56 202);
@@ -66,6 +75,7 @@ a {
   color: rgb(99 102 241);
   text-decoration: inherit;
 }
+
 a:hover {
   color: rgb(79 70 229);
 }
@@ -75,14 +85,14 @@ body {
   margin: 0;
   padding: 0;
   /* "position: fixed" prevents the whole webview from bouncing on scroll */
-  position: fixed; 
+  position: fixed;
   width: 100%;
   height: 100%;
-  overflow: hidden; 
-  
+  overflow: hidden;
+
   background-color: var(--background);
   font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  
+
   /* Disables iOS text selection highlight */
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -91,11 +101,12 @@ body {
 /* === ROOT CONTAINER === */
 #root {
   width: 100%;
-  height: 100%; /* Fill the fixed body */
-  
+  height: 100%;
+  /* Fill the fixed body */
+
   /* Removed display: flex to let IonApp handle layout naturally */
-  display: block; 
-  
+  display: block;
+
   /* 
      CRITICAL FIX: Removed manual padding. 
      Ionic components (<IonHeader>, <IonContent>) automatically read 
@@ -118,12 +129,15 @@ button {
   cursor: pointer;
   transition: all 0.25s ease;
 }
+
 button:hover {
   transform: scale(1.03);
 }
+
 button:focus {
   outline: none;
 }
+
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
@@ -133,6 +147,7 @@ button:focus-visible {
     color: #213547;
     background-color: #ffffff;
   }
+
   a:hover {
     color: rgb(99 102 241);
   }
@@ -156,13 +171,16 @@ button:focus-visible {
 }
 
 .dark {
-  --background: rgb(17 24 39); /* gray-900 */
-  --foreground: rgb(224 231 255); /* indigo-100 */
+  --background: rgb(17 24 39);
+  /* gray-900 */
+  --foreground: rgb(224 231 255);
+  /* indigo-100 */
   --card: rgb(31 41 55);
   --card-foreground: rgb(224 231 255);
   --popover: rgb(31 41 55);
   --popover-foreground: rgb(224 231 255);
-  --primary: rgb(129 140 248); /* indigo-400 */
+  --primary: rgb(129 140 248);
+  /* indigo-400 */
   --primary-foreground: rgb(17 24 39);
   --secondary: rgb(67 56 202);
   --secondary-foreground: white;
@@ -187,16 +205,22 @@ button:focus-visible {
   * {
     @apply border-border outline-ring/50;
   }
+
   html,
   body {
     overscroll-behavior: none;
-    user-select: none; /* Standard for native-feeling apps */
+    user-select: none;
+    /* Standard for native-feeling apps */
   }
+
   body {
     @apply bg-background text-foreground;
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
+
   body::-webkit-scrollbar {
     display: none;
   }
@@ -225,28 +249,53 @@ button:focus-visible {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
   .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
   }
+
   .truncate-one-line {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
   /* Utility to force Safe Area padding if you build a custom non-Ionic header */
   .safe-pt {
     padding-top: var(--sat);
   }
+
   .safe-pb {
     padding-bottom: var(--sab);
   }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 8s linear infinite;
 }

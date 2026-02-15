@@ -11,6 +11,7 @@ dayjs.extend(weekday);
 interface MobileWhenProps {
   dates: { checkIn: Date | null; checkOut: Date | null };
   setDates: (dates: { checkIn: Date | null; checkOut: Date | null }) => void;
+  bookings?: any[];
 }
 
 const wittyMessages = [
@@ -24,7 +25,7 @@ const wittyMessages = [
   "🎭 Time machines are still in beta. Future dates only!",
 ];
 
-const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
+const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates, bookings = [] }) => {
   const [currentMonth, setCurrentMonth] = useState(dayjs());
   const [direction, setDirection] = useState(0);
   const [showToast, setShowToast] = useState(false);
@@ -35,13 +36,31 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
     setCurrentMonth(currentMonth.add(newDirection, "month"));
   };
 
+  const isDateBlocked = (date: dayjs.Dayjs) => {
+    return bookings.some(b => {
+      const start = dayjs(b.start_date);
+      const end = dayjs(b.end_date);
+      return (date.isSame(start, 'day') || date.isAfter(start, 'day')) && date.isBefore(end, 'day');
+    });
+  };
+
+  const getBookingForDate = (date: dayjs.Dayjs) => {
+    return bookings.find(b => {
+      const start = dayjs(b.start_date);
+      const end = dayjs(b.end_date);
+      return (date.isSame(start, 'day') || date.isAfter(start, 'day')) && date.isBefore(end, 'day');
+    });
+  };
+
   const handleDateClick = (date: dayjs.Dayjs) => {
     const isPastDate = date.isBefore(dayjs(), 'day');
+    const isBlocked = isDateBlocked(date);
 
-    // Show witty toast if trying to click a past date
-    if (isPastDate) {
-      const randomMessage = wittyMessages[Math.floor(Math.random() * wittyMessages.length)];
-      setToastMessage(randomMessage);
+    if (isPastDate || isBlocked) {
+      const message = isBlocked
+        ? "🔒 This date is already booked! Try another one."
+        : wittyMessages[Math.floor(Math.random() * wittyMessages.length)];
+      setToastMessage(message);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
       return;
@@ -51,57 +70,78 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
     if (!dates.checkIn || (dates.checkIn && dates.checkOut)) {
       setDates({ checkIn: selectedDate, checkOut: null });
     } else {
-      if (dayjs(selectedDate).isBefore(dates.checkIn, 'day')) {
-        setDates({ checkIn: selectedDate, checkOut: dates.checkIn });
+      if (date.isBefore(dayjs(dates.checkIn))) {
+        setDates({ checkIn: selectedDate, checkOut: null });
       } else {
+        let current = dayjs(dates.checkIn);
+        let hasBlocked = false;
+        while (current.isBefore(date)) {
+          if (isDateBlocked(current)) {
+            hasBlocked = true;
+            break;
+          }
+          current = current.add(1, 'day');
+        }
+
+        if (hasBlocked) {
+          setToastMessage("🚫 Range includes booked dates!");
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+          return;
+        }
+
         setDates({ ...dates, checkOut: selectedDate });
       }
     }
   };
 
-  const isInRange = (date: dayjs.Dayjs) => {
-    if (!dates.checkIn || !dates.checkOut) return false;
-    return date.isAfter(dayjs(dates.checkIn)) && date.isBefore(dayjs(dates.checkOut));
-  };
-
   const renderCalendar = (month: dayjs.Dayjs) => {
-    const monthStart = month.startOf('month');
-    const monthEnd = month.endOf('month');
-    const startDate = monthStart.startOf('week');
-    const endDate = monthEnd.endOf('week');
-    const calendarDays = [];
-    for (let day = startDate; day.isBefore(endDate.add(1, 'day')); day = day.add(1, 'day')) {
-      calendarDays.push(day);
+    const startOfMonth = month.startOf("month");
+    const startDay = startOfMonth.weekday();
+    const daysInMonth = month.daysInMonth();
+
+    const days = [];
+    for (let i = 0; i < startDay; i++) {
+      days.push(startOfMonth.subtract(startDay - i, "day"));
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(startOfMonth.date(i));
     }
 
     return (
-      <div key={month.format('YYYY-MM')}>
-        <div className="grid grid-cols-7 text-center text-sm font-semibold text-slate-700 mb-2">
-          {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i}>{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {calendarDays.map((date, idx) => {
-            const isCurrentMonth = date.isSame(month, 'month');
+      <div className="mt-2">
+        <div className="grid grid-cols-7 gap-y-2">
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+            <div key={d} className="text-center text-xs font-semibold text-slate-400 py-2">{d}</div>
+          ))}
+          {days.map((date, idx) => {
+            const isCurrentMonth = date.month() === month.month();
+            const isToday = date.isSame(dayjs(), "day");
             const isPastDate = date.isBefore(dayjs(), 'day');
-            const inRange = isInRange(date);
-            const isCheckIn = dates.checkIn && date.isSame(dates.checkIn, "day");
-            const isCheckOut = dates.checkOut && date.isSame(dates.checkOut, "day");
-            const isToday = date.isSame(dayjs(), 'day');
+            const isBlocked = isDateBlocked(date);
+
+            const isCheckIn = dates.checkIn && date.isSame(dayjs(dates.checkIn), "day");
+            const isCheckOut = dates.checkOut && date.isSame(dayjs(dates.checkOut), "day");
+            const inRange = dates.checkIn && dates.checkOut &&
+              date.isAfter(dayjs(dates.checkIn), "day") &&
+              date.isBefore(dayjs(dates.checkOut), "day");
 
             return (
               <motion.div
                 key={idx}
                 onClick={() => isCurrentMonth && handleDateClick(date)}
-                whileHover={{ scale: isPastDate ? 1 : 1.1 }}
-                whileTap={{ scale: isPastDate ? 1 : 0.95 }}
-                className={`h-10 flex items-center justify-center rounded-full transition-all duration-200 font-semibold ${!isCurrentMonth ? 'text-slate-300' :
-                  isPastDate ? "text-slate-400 cursor-not-allowed" :
+                whileHover={{ scale: (isPastDate || isBlocked) ? 1 : 1.1 }}
+                whileTap={{ scale: (isPastDate || isBlocked) ? 1 : 0.95 }}
+                className={`h-10 relative flex items-center justify-center rounded-full transition-all duration-200 font-semibold ${!isCurrentMonth ? 'text-slate-300' :
+                  (isPastDate || isBlocked) ? "text-slate-300 opacity-60 cursor-not-allowed" :
                     isCheckIn || isCheckOut ? "bg-indigo-600 text-white shadow-md" :
                       inRange ? "bg-indigo-100 text-indigo-700" :
                         isToday ? "text-indigo-600" : "hover:bg-slate-100"
                   }`}
               >
-                {date.date()}
+                <span className={isBlocked ? "line-through decoration-slate-400" : ""}>
+                  {date.date()}
+                </span>
               </motion.div>
             );
           })}
@@ -157,7 +197,7 @@ const MobileWhen: React.FC<MobileWhenProps> = ({ dates, setDates }) => {
 
       <Toast
         message={toastMessage}
-        show={showToast}
+        isVisible={showToast}
         onClose={() => setShowToast(false)}
       />
     </div>

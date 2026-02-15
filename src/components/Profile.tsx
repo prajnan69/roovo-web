@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, type FC, type ReactNode, type ChangeEvent } from 'react';
-import supabase from '@/services/api';
+import { useState, useEffect, useRef, type FC, type ChangeEvent, type ReactNode } from 'react';
+import supabase, { createSupportTicket } from '@/services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigation } from '@/hooks/useNavigation';
 import { usePreloadedData } from '@/context/PreloadContext';
 import PersonalDetailsDrawer from './PersonalDetailsDrawer';
-import PastTrips from './PastTrips';
-import BecomeAHostSection from './BecomeAHostSection';
-import ReferAHost from './ReferAHost';
-import { FiBell, FiChevronRight, FiCamera, FiLogOut, FiUserCheck, FiSettings, FiUser, FiShield, FiCreditCard, FiHelpCircle } from 'react-icons/fi';
+import {
+  FiBell, FiChevronRight, FiCamera, FiLogOut, FiUser,
+  FiSettings, FiShield, FiHelpCircle, FiAlertCircle,
+  FiGlobe, FiFileText, FiPhone, FiUserCheck
+} from 'react-icons/fi';
+import { triggerHaptic } from '@/lib/haptics';
 
-// --- Reusable Components ---
-
+/* -------------------- Menu Item -------------------- */
 interface MenuItemProps {
   icon: ReactNode;
   label: string;
@@ -20,327 +21,351 @@ interface MenuItemProps {
   onClick: () => void;
   isVerified?: boolean;
   variant?: 'default' | 'destructive';
-  showChevron?: boolean;
 }
 
-const MenuItem: FC<MenuItemProps> = ({ icon, label, sublabel, onClick, isVerified, variant = 'default', showChevron = true }) => (
-  <motion.button
-    whileTap={{ scale: 0.98, backgroundColor: "rgba(249, 250, 251, 1)" }}
-    onClick={onClick}
-    disabled={isVerified}
-    className={`w-full flex items-center justify-between p-4 bg-white border-b last:border-b-0 border-gray-50 transition-all ${isVerified ? 'opacity-75 cursor-default' : 'cursor-pointer hover:bg-gray-50/50'}`}
+const MenuItem: FC<MenuItemProps> = ({
+  icon, label, sublabel, onClick, isVerified, variant = 'default'
+}) => (
+  <motion.div
+    whileTap={{ scale: 0.97 }}
+    onClick={() => {
+      triggerHaptic();
+      onClick();
+    }}
+    className={`w-full flex items-center justify-between p-4 bg-white active:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0 cursor-pointer ${isVerified ? 'opacity-80' : ''}`}
   >
     <div className="flex items-center gap-4">
-      <div className={`flex items-center justify-center w-11 h-11 rounded-2xl text-xl shadow-sm ${variant === 'destructive'
-        ? 'bg-red-50 text-red-500'
-        : isVerified
-          ? 'bg-green-50 text-green-600'
-          : 'bg-white border border-gray-100 text-gray-700'
-        }`}>
+      <div className={`
+        flex items-center justify-center w-10 h-10 rounded-full shrink-0
+        ${variant === 'destructive'
+          ? 'bg-rose-50 text-rose-600'
+          : isVerified
+            ? 'bg-emerald-50 text-emerald-600'
+            : 'bg-slate-50 text-slate-600'}
+      `}>
         {icon}
       </div>
       <div className="text-left">
-        <p className={`font-semibold text-[15px] ${variant === 'destructive' ? 'text-red-600' : 'text-gray-900'}`}>
+        <div className={`font-semibold text-[15px] ${variant === 'destructive' ? 'text-rose-600' : 'text-slate-900'}`}>
           {label}
-        </p>
-        {sublabel && <p className="text-xs text-gray-400 mt-0.5 font-medium">{sublabel}</p>}
+        </div>
+        {sublabel && (
+          <div className="text-[13px] text-slate-400 mt-0.5 font-medium leading-tight">
+            {sublabel}
+          </div>
+        )}
       </div>
     </div>
-    <div className="flex items-center gap-2">
-      {isVerified && (
-        <div className="flex items-center gap-1 bg-green-50 px-2.5 py-1 rounded-full border border-green-100">
-          <FiUserCheck className="text-green-600 text-xs" />
-          <span className="text-[10px] font-bold text-green-700 uppercase tracking-wide">Verified</span>
-        </div>
-      )}
-      {!isVerified && showChevron && <FiChevronRight className="text-gray-300 text-lg" />}
-    </div>
-  </motion.button>
+
+    {isVerified ? (
+      <div className="flex items-center gap-1 bg-emerald-100/60 px-2 py-1 rounded-md">
+        <FiUserCheck className="text-emerald-600 text-xs" />
+        <span className="text-[10px] font-bold text-emerald-700 uppercase">
+          Verified
+        </span>
+      </div>
+    ) : (
+      <FiChevronRight className="text-slate-300 text-lg shrink-0" />
+    )}
+  </motion.div>
 );
 
-interface ProfileState {
-  name: string;
-  dob: string;
-  gender: string;
-  address: string;
-  email: string;
-  phone: string;
-  about: string;
-}
-
-// --- Main Component ---
-
+/* -------------------- Profile -------------------- */
 const Profile: FC = () => {
-  const { profileData, updateProfileData } = usePreloadedData();
+  const { profileData } = usePreloadedData();
   const { navigate } = useNavigation();
 
-  const [profile, setProfile] = useState<ProfileState>({
-    name: '', dob: '', gender: '', address: '', email: '', phone: '', about: ''
+  const [profile, setProfile] = useState({
+    name: '', dob: '', gender: '', address: '',
+    email: '', phone: '', about: ''
   });
 
-  const [hostProfilePicture, setHostProfilePicture] = useState<string>('');
-  const [travelingProfilePicture, setTravelingProfilePicture] = useState<string>('');
-  const [travelingProfilePictureFile, setTravelingProfilePictureFile] = useState<File | null>(null);
-  const [hostProfilePictureFile, setHostProfilePictureFile] = useState<File | null>(null);
-  const [kycVerified, setKycVerified] = useState<boolean>(false);
-  const [saveStatus, setSaveStatus] = useState<string>('');
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [travelingProfilePicture, setTravelingProfilePicture] = useState('');
+  const [hostProfilePicture, setHostProfilePicture] = useState('');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [kycVerified, setKycVerified] = useState(false);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setProfile(prev => ({ ...prev, [name]: value }));
-  };
+  // Support
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportCategory, setSupportCategory] = useState('Technical Issue');
+  const [supportStatus, setSupportStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
+
   const travelingFileInputRef = useRef<HTMLInputElement>(null);
   const hostFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Animation Variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.06 }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { type: "spring" as const, stiffness: 400, damping: 30 }
-    }
-  };
-
+  /* -------------------- Load Profile -------------------- */
   useEffect(() => {
-    if (profileData) {
-      setProfile({
-        name: profileData.name || '',
-        dob: profileData.dob || '',
-        gender: profileData.gender || '',
-        address: profileData.address || '',
-        email: profileData.email || '',
-        phone: profileData.phone || '',
-        about: profileData.about || ''
-      });
-      setHostProfilePicture(profileData.host_profile_picture_url || '');
-      setTravelingProfilePicture(profileData.traveling_profile_picture_url || '');
-      setKycVerified(profileData.kyc_verified || false);
-    }
+    if (!profileData) return;
+
+    setProfile({
+      name: profileData.name || '',
+      dob: profileData.dob || '',
+      gender: profileData.gender || '',
+      address: profileData.address || '',
+      email: profileData.email || '',
+      phone: profileData.phone || '',
+      about: profileData.about || ''
+    });
+
+    setTravelingProfilePicture(profileData.traveling_profile_picture_url || '');
+    setHostProfilePicture(profileData.host_profile_picture_url || '');
   }, [profileData]);
 
+  /* -------------------- KYC SOURCE OF TRUTH -------------------- */
+  useEffect(() => {
+    const checkKyc = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('kyc')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_approved', true)
+        .maybeSingle();
+
+      setKycVerified(!!data);
+    };
+
+    checkKyc();
+  }, []);
+
+  /* -------------------- Handlers -------------------- */
   const handleLogout = async () => {
+    triggerHaptic();
     await supabase.auth.signOut();
-    window.location.href = "/";
+    navigate('/');
   };
 
-  const handleSaveProfile = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      if (travelingProfilePictureFile) {
-        await supabase.storage.from('profile-pictures').upload(`${session.user.id}/traveling`, travelingProfilePictureFile, { cacheControl: '3600', upsert: true });
-      }
-      if (hostProfilePictureFile) {
-        await supabase.storage.from('profile-pictures').upload(`${session.user.id}/hosting`, hostProfilePictureFile, { cacheControl: '3600', upsert: true });
-      }
-
-      const { error } = await supabase.from('users').update({ ...profile }).eq('id', session.user.id);
-
-      if (error) {
-        console.error('Error updating profile:', error);
-      } else {
-        const updatedProfileData = {
-          ...profileData,
-          ...profile,
-          host_profile_picture_url: hostProfilePicture,
-          traveling_profile_picture_url: travelingProfilePicture,
-          kyc_verified: kycVerified,
-          is_host: profileData?.is_host || false,
-        };
-        updateProfileData(updatedProfileData);
-        setSaveStatus('Saved!');
-        setTimeout(() => setIsDrawerOpen(false), 2000);
-      }
-    }
-  };
-
-  const handleProfilePictureUpload = (e: ChangeEvent<HTMLInputElement>, type: 'traveling' | 'hosting') => {
+  const handleProfilePictureUpload = (
+    e: ChangeEvent<HTMLInputElement>,
+    type: 'traveling' | 'hosting'
+  ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (type === 'traveling') {
-          setTravelingProfilePicture(reader.result as string);
-          setTravelingProfilePictureFile(file);
-        } else {
-          setHostProfilePicture(reader.result as string);
-          setHostProfilePictureFile(file);
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (type === 'traveling') setTravelingProfilePicture(reader.result as string);
+      else setHostProfilePicture(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRaiseIssue = async () => {
+    if (!supportMessage.trim()) return;
+
+    setIsSubmittingSupport(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error();
+
+      await createSupportTicket(user.id, `[${supportCategory}] ${supportMessage}`);
+      setSupportStatus('success');
+      setSupportMessage('');
+      setTimeout(() => {
+        setIsSupportOpen(false);
+        setSupportStatus('idle');
+      }, 2000);
+    } catch {
+      setSupportStatus('error');
+    } finally {
+      setIsSubmittingSupport(false);
     }
   };
 
+  /* -------------------- UI -------------------- */
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-24">
-      {/* Modern Header */}
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center justify-between">
-        <div className="text-2xl font-bold text-gray-900 tracking-tight">Profile</div>
-        <motion.button
-          whileTap={{ scale: 0.9 }}
+    <div className="min-h-screen bg-slate-50 pb-32 font-sans">
+
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex justify-between items-center">
+        <div className="text-2xl font-bold text-slate-900 tracking-tight">Profile</div>
+        <button
           onClick={() => navigate('/notifications')}
-          className="p-2.5 bg-white rounded-full shadow-sm border border-gray-100 text-gray-600 hover:text-indigo-600 transition-colors relative"
+          className="relative p-2.5 rounded-full bg-slate-50 active:bg-slate-100 transition-colors"
         >
-          <FiBell size={20} />
-          <span className="absolute top-2.5 right-3 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-        </motion.button>
+          <FiBell size={20} className="text-slate-700" />
+          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
+        </button>
       </div>
 
-      <motion.div
-        className="max-w-lg mx-auto px-5 pt-8 space-y-8"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {/* Profile Hero Section */}
-        <motion.div variants={itemVariants} className="flex flex-col items-center text-center">
-          <div className="relative mb-6 group">
-            {/* Hidden Inputs */}
-            <input type="file" ref={travelingFileInputRef} onChange={(e) => handleProfilePictureUpload(e, 'traveling')} className="hidden" />
-            <input type="file" ref={hostFileInputRef} onChange={(e) => handleProfilePictureUpload(e, 'hosting')} className="hidden" />
+      <div className="max-w-md mx-auto px-5 pt-8 space-y-10">
 
-            <div className="relative inline-block">
-              {/* Main Avatar (Traveler) */}
-              <motion.div
-                className="w-32 h-32 rounded-full p-1.5 bg-white shadow-2xl shadow-indigo-100 cursor-pointer relative z-10"
-                whileTap={{ scale: 0.95 }}
-                onClick={() => travelingFileInputRef.current?.click()}
-              >
-                <div className="w-full h-full rounded-full overflow-hidden relative bg-gray-100 border border-gray-100">
-                  {travelingProfilePicture ? (
-                    <img src={travelingProfilePicture} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-50 to-white">
-                      <span className="text-4xl font-bold text-indigo-300">
-                        {profile.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[1px]">
-                    <FiCamera className="text-white drop-shadow-md" size={28} />
-                  </div>
-                </div>
-              </motion.div>
+        {/* Avatar */}
+        <div className="flex flex-col items-center">
+          <input type="file" ref={travelingFileInputRef} className="hidden"
+            onChange={(e) => handleProfilePictureUpload(e, 'traveling')} />
+          <input type="file" ref={hostFileInputRef} className="hidden"
+            onChange={(e) => handleProfilePictureUpload(e, 'hosting')} />
 
-              {/* Secondary Avatar Badge (Host) */}
-              <motion.div
-                className="absolute -bottom-1 -right-1 w-12 h-12 rounded-full border-4 border-white bg-white shadow-lg cursor-pointer overflow-hidden flex items-center justify-center z-20"
-                whileTap={{ scale: 0.9 }}
-                onClick={() => hostFileInputRef.current?.click()}
-              >
-                {hostProfilePicture ? (
-                  <img src={hostProfilePicture} alt="Host" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-indigo-50 flex items-center justify-center">
-                    <FiUser className="text-indigo-400" size={18} />
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{profile.name || "Guest User"}</h2>
-            <p className="text-gray-500 font-medium">{profile.email || "Update your email"}</p>
-          </div>
-
-          <motion.button
+          <motion.div
             whileTap={{ scale: 0.96 }}
-            onClick={() => setIsDrawerOpen(true)}
-            className="mt-6 px-8 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-full shadow-lg shadow-gray-200 hover:bg-gray-800 transition-all"
+            onClick={() => travelingFileInputRef.current?.click()}
+            className="w-28 h-28 rounded-full bg-white shadow-xl shadow-slate-200 overflow-hidden cursor-pointer relative group"
           >
-            Edit Profile
-          </motion.button>
-        </motion.div>
-
-        {/* Settings Groups */}
-        <motion.div variants={itemVariants} className="space-y-6">
-
-          {/* Group 1: Account */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-4">Account</h3>
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <MenuItem
-                icon={<FiShield />}
-                label={kycVerified ? "Identity Verified" : "Identity Verification"}
-                sublabel={kycVerified ? "Your identity is confirmed" : "Required to book stays"}
-                isVerified={kycVerified}
-                onClick={() => !kycVerified && navigate('/verify-identity')}
-              />
-              <MenuItem
-                icon={<FiSettings />}
-                label="Settings"
-                sublabel="Privacy, Language, Notifications"
-                onClick={() => { }}
-              />
-              <MenuItem
-                icon={<FiCreditCard />}
-                label="Payments & Payouts"
-                sublabel="Manage payment methods"
-                onClick={() => { }}
-              />
-            </div>
-          </div>
-
-          {/* Group 2: Hosting & Trips */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-4">Activity</h3>
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              {!profileData?.is_host && (
-                <div className="border-b border-gray-50">
-                  <BecomeAHostSection />
-                </div>
-              )}
-              <div className="border-b border-gray-50">
-                <PastTrips />
+            {travelingProfilePicture ? (
+              <img src={travelingProfilePicture} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center text-3xl font-bold text-indigo-400">
+                {profile.name?.charAt(0) || 'U'}
               </div>
-              <ReferAHost />
+            )}
+            <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <FiCamera className="text-white drop-shadow-md" size={24} />
+            </div>
+          </motion.div>
+
+          {/* Name & Email - Using divs/spans instead of h2 for better control */}
+          <div className="mt-4 text-center">
+            <div className="text-xl font-bold text-slate-900 tracking-tight">
+              {profile.name || 'Welcome, Traveler'}
+            </div>
+            <div className="text-sm text-slate-500 mt-0.5 font-medium">
+              {profile.email || 'Complete your profile'}
             </div>
           </div>
+        </div>
 
-          {/* Group 3: Support & Legal */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-4">Support</h3>
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <MenuItem
-                icon={<FiHelpCircle />}
-                label="Help & Support"
-                onClick={() => { }}
-              />
-              <MenuItem
-                icon={<FiLogOut />}
-                label="Log Out"
-                variant="destructive"
-                showChevron={false}
-                onClick={handleLogout}
-              />
-            </div>
+        {/* Account Settings */}
+        <section>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-3 mb-3">
+            Account
           </div>
-
-          <div className="text-center pt-4 pb-8">
-            <p className="text-xs font-medium text-gray-300">Roovo v2.4.0 (Build 2024)</p>
+          <div className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm shadow-slate-100 overflow-hidden">
+            <MenuItem
+              icon={<FiUser />}
+              label="Edit Profile"
+              sublabel="Personal details & bio"
+              onClick={() => setIsDrawerOpen(true)}
+            />
+            <MenuItem
+              icon={<FiShield />}
+              label={kycVerified ? 'Identity Verified' : 'Verify Identity'}
+              sublabel={kycVerified ? 'Government ID approved' : 'Required for bookings'}
+              isVerified={kycVerified}
+              onClick={() => !kycVerified && navigate('/verify-identity')}
+            />
+            <MenuItem
+              icon={<FiSettings />}
+              label="Global Preferences"
+              sublabel="Currency & language"
+              onClick={() => navigate('/preferences')}
+            />
           </div>
+        </section>
 
-        </motion.div>
-      </motion.div>
+        {/* Activity */}
+        <section>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-3 mb-3">
+            Activity
+          </div>
+          <div className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm shadow-slate-100 overflow-hidden">
+            <MenuItem
+              icon={<FiGlobe />}
+              label="Trips"
+              onClick={() => navigate('/trips')}
+            />
+            <MenuItem
+              icon={<FiUserCheck />}
+              label="Refer a Host"
+              sublabel="Earn rewards by inviting hosts"
+              onClick={() => navigate('/refer-host')}
+            />
+          </div>
+        </section>
 
-      <PersonalDetailsDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        profile={profile}
-        handleInputChange={handleInputChange}
-        handleSaveProfile={handleSaveProfile}
-        saveStatus={saveStatus}
-      />
+        {/* Support */}
+        <section>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-3 mb-3">
+            Support
+          </div>
+          <div className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm shadow-slate-100 overflow-hidden">
+            <MenuItem icon={<FiHelpCircle />} label="Get Help" onClick={() => { }} />
+            <MenuItem icon={<FiAlertCircle />} label="Raise an Issue" onClick={() => setIsSupportOpen(true)} />
+            <MenuItem icon={<FiPhone />} label="Contact Us" onClick={() => navigate('/contact-us')} />
+            <MenuItem icon={<FiFileText />} label="Terms & Conditions" onClick={() => navigate('/terms')} />
+            <MenuItem icon={<FiFileText />} label="Refund Policy" onClick={() => navigate('/refund-policy')} />
+            <MenuItem icon={<FiLogOut />} label="Log Out" variant="destructive" onClick={handleLogout} />
+          </div>
+        </section>
+
+        <div className="text-center text-[10px] text-slate-300 font-bold uppercase tracking-widest pt-6 pb-2">
+          Roovo v2.4.0 • Made in India
+        </div>
+      </div>
+
+      {/* Drawers */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <PersonalDetailsDrawer
+            isOpen={isDrawerOpen}
+            onClose={() => setIsDrawerOpen(false)}
+            profile={profile}
+            handleInputChange={(e: any) =>
+              setProfile({ ...profile, [e.target.name]: e.target.value })
+            }
+            handleSaveProfile={() => setIsDrawerOpen(false)}
+            saveStatus=""
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Support Modal */}
+      <AnimatePresence>
+        {isSupportOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50"
+              onClick={() => setIsSupportOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-5 right-5 top-1/2 -translate-y-1/2 bg-white rounded-2xl p-6 z-50 shadow-2xl"
+            >
+              <h3 className="text-lg font-bold text-slate-900 mb-3">Raise an Issue</h3>
+              <select
+                value={supportCategory}
+                onChange={(e) => setSupportCategory(e.target.value)}
+                className="w-full p-3 bg-slate-50 rounded-xl mb-3 text-sm font-medium border border-transparent focus:border-indigo-500 focus:ring-0 transition-colors"
+                style={{ appearance: 'none' }} // Remove default arrow if desired, or keep it
+              >
+                <option>Technical Issue</option>
+                <option>Hosting Issue</option>
+                <option>Guest Issue</option>
+              </select>
+              <textarea
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                className="w-full h-28 p-3 bg-slate-50 rounded-xl mb-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                placeholder="Describe your issue..."
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsSupportOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 text-slate-600 font-semibold rounded-xl text-sm active:scale-95 transition-transform"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={isSubmittingSupport}
+                  onClick={handleRaiseIssue}
+                  className="flex-1 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl text-sm active:scale-95 transition-transform shadow-lg shadow-indigo-200"
+                >
+                  {isSubmittingSupport ? 'Submitting...' : 'Submit'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

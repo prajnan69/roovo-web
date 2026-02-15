@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import supabase, { getListingsByHostId, fetchListingById } from "@/services/api";
 import type { ListingData } from "@/types";
 import RoovoLoader from "./RoovoLoader";
 import BackButton from "./BackButton";
+import ImportListingPage from "./import/ImportListingPage";
+
 
 // --- Reusable Mobile Components ---
 
@@ -92,6 +94,7 @@ export default function ManageListings() {
   // --- State ---
   const [listings, setListings] = useState<ListingData[]>([]);
   const [selectedListing, setSelectedListing] = useState<any>(null); // This acts as the router
+  const [showImportPage, setShowImportPage] = useState(false);
 
   // Form State
   const [guestCount, setGuestCount] = useState(1);
@@ -104,23 +107,24 @@ export default function ManageListings() {
   const [isSaving, setIsSaving] = useState(false);
 
   // --- Effects ---
-  useEffect(() => {
-    const fetchHostListings = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { data: host } = await supabase.from("hosts").select("id").eq("user_id", session.user.id).single();
-          if (host) {
-            const data = await getListingsByHostId(host.id);
-            setListings(data);
-          }
+  const fetchHostListings = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: host } = await supabase.from("hosts").select("id").eq("user_id", session.user.id).single();
+        if (host) {
+          const data = await getListingsByHostId(host.id);
+          setListings(data);
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchHostListings();
   }, []);
 
@@ -135,12 +139,9 @@ export default function ManageListings() {
 
   // --- Handlers ---
   const openListing = async (listing: ListingData) => {
-    console.log("Attempting to open listing:", listing);
     try {
       const fullDetails = await fetchListingById(String(listing.id));
-      console.log("Fetched full details:", fullDetails);
       setSelectedListing(fullDetails);
-      console.log("Set selected listing.");
     } catch (error) {
       console.error("Failed to fetch listing details:", error);
     }
@@ -153,6 +154,11 @@ export default function ManageListings() {
       setIsSaving(false);
       // Optional: Show success toast here
     }, 1000);
+  };
+
+  const handleImportSuccess = () => {
+    setShowImportPage(false);
+    fetchHostListings(); // Refresh the listings
   };
 
   const TABS = ["Property", "Pricing", "Details", "Amenities", "Rules"];
@@ -174,8 +180,16 @@ export default function ManageListings() {
         <div className="pt-[calc(env(safe-area-inset-top)+1rem)] px-6 pb-4 bg-black/80 backdrop-blur-xl sticky top-0 z-20 border-b border-white/5">
           <div className="flex items-center justify-between mt-2">
             <BackButton />
-            <h1 className="text-xl font-bold tracking-tight">Your Listings</h1>
-            <div className="w-8" /> {/* Spacer for balance */}
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowImportPage(true)}
+              className="w-8 h-8 flex items-center justify-center bg-indigo-600 rounded-full text-white shadow-lg shadow-indigo-500/20"
+              aria-label="Import listing"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </motion.button>
           </div>
         </div>
 
@@ -396,6 +410,16 @@ export default function ManageListings() {
             </div>
 
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Import Listing Page */}
+      <AnimatePresence>
+        {showImportPage && (
+          <ImportListingPage
+            onClose={() => setShowImportPage(false)}
+            onSuccess={handleImportSuccess}
+          />
         )}
       </AnimatePresence>
     </div>

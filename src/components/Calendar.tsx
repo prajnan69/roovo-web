@@ -2,17 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  ChevronUp, 
-  ChevronDown, 
-  ArrowUp, 
-  ArrowDown, 
-  User, 
-  Calendar as CalendarIcon, 
-  CheckCircle, 
-  XCircle, 
+import {
+  ChevronUp,
+  ChevronDown,
+  ArrowUp,
+  ArrowDown,
+  User,
+  Calendar as CalendarIcon,
+  CheckCircle,
+  XCircle,
   MessageSquare,
   MapPin,
   TrendingUp
@@ -24,8 +22,8 @@ import {
   getListingsWithBookingsByHostId,
   default as supabase,
 } from "@/services/api";
+import RoovoLoader from "./RoovoLoader";
 import { Spinner } from "@/components/ui/shadcn-io/spinner";
-import CalendarSkeleton from "./CalendarSkeleton";
 import {
   Drawer,
   DrawerContent,
@@ -123,7 +121,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
 
   const handlePriceEditorOpenChange = (open: boolean) => {
     setIsPriceEditorOpen(open);
-    if(open) triggerHaptic();
+    if (open) triggerHaptic();
   };
 
   useEffect(() => {
@@ -190,7 +188,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
     triggerHaptic();
   };
 
-  const variants = {
+  const variants: any = {
     enter: (d: number) => ({ x: d > 0 ? "100%" : "-100%", opacity: 0 }),
     center: { x: 0, opacity: 1, transition: { duration: 0.3, ease: "circOut" } },
     exit: (d: number) => ({ x: d < 0 ? "100%" : "-100%", opacity: 0, transition: { duration: 0.3, ease: "circIn" } }),
@@ -248,13 +246,24 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
     }
   };
 
-  if (isInitialLoading) return <CalendarSkeleton />;
+  useEffect(() => {
+    if (!isInitialLoading && listings.length === 0) {
+      setToastMessage("Please complete the property from draft listing in the listings page");
+      setShowToast(true);
+    }
+  }, [isInitialLoading, listings]);
+
+  if (isInitialLoading) return <div className="flex items-center justify-center h-screen"><RoovoLoader /></div>;
+
+  if (listings.length === 0) {
+    return <Toast message={toastMessage} show={showToast} onClose={() => setShowToast(false)} />;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 text-slate-900 font-sans pb-10">
-      
+    <div className="min-h-screen bg-gray-50/50 text-slate-900 font-sans pb-48">
+
       {/* --- Header / Property Card --- */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-md pt-4 pb-2 px-4 border-b border-gray-100/50">
+      <div className="pt-4 pb-2 px-4">
         <div className="relative h-24 w-full" onClick={handleRollerClick}>
           <AnimatePresence mode="wait">
             {selectedListing && (
@@ -275,7 +284,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                     triggerHaptic();
                   }
                 }}
-                className="bg-white rounded-2xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white flex items-center gap-4 active:scale-[0.98] transition-transform"
+                className="bg-white rounded-2xl p-3 shadow-none border border-gray-100 flex items-center gap-4 active:scale-[0.98] transition-transform"
               >
                 <div className="relative group">
                   <img
@@ -288,7 +297,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-bold text-slate-800 truncate leading-tight">
+                  <h3 className="text-base font-bold text-slate-900 truncate leading-tight">
                     {selectedListing.title}
                   </h3>
                   <div className="flex items-center gap-1 text-slate-500 text-xs mt-1">
@@ -296,7 +305,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                     <span className="truncate">Base: ₹{selectedListing.price_per_night}</span>
                   </div>
                 </div>
-                
+
                 {/* Visual Cue for Swiping */}
                 <div className="flex flex-col gap-0.5 items-center justify-center w-6 opacity-20">
                   <div className="w-1 h-1 rounded-full bg-slate-900" />
@@ -310,17 +319,17 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
       </div>
 
       {/* --- Calendar Controls --- */}
-      <div className="px-4 py-4 flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-          {currentDate.toLocaleString("default", { month: "long" })} 
-          <span className="text-slate-400 text-lg font-medium ml-2">{currentDate.getFullYear()}</span>
-        </h2>
+      <div className="px-4 py-4 flex justify-between items-center bg-gray-50/50">
+        <div className="text-2xl font-bold text-gray-900 tracking-tight">
+          {currentDate.toLocaleString("default", { month: "long" })}
+          <span className="text-gray-400 text-lg font-medium ml-2">{currentDate.getFullYear()}</span>
+        </div>
         <div className="flex gap-2">
-          <button onClick={goToPrev} className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center active:bg-gray-50 transition-colors">
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
+          <button onClick={goToPrev} className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 active:scale-95 transition-all shadow-sm">
+            <span className="text-lg font-bold leading-none pb-0.5">&#10094;</span>
           </button>
-          <button onClick={goToNext} className="w-10 h-10 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center active:bg-gray-50 transition-colors">
-            <ChevronRight className="w-5 h-5 text-slate-600" />
+          <button onClick={goToNext} className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 active:scale-95 transition-all shadow-sm">
+            <span className="text-lg font-bold leading-none pb-0.5">&#10095;</span>
           </button>
         </div>
       </div>
@@ -353,7 +362,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
             }}
           >
             {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} />)}
-            
+
             {isBookingsLoading ? (
               <div className="col-span-7 flex justify-center py-12"><Spinner /></div>
             ) : (
@@ -368,24 +377,24 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                   const eOnly = new Date(e.getFullYear(), e.getMonth(), e.getDate());
                   return dateOnly >= sOnly && dateOnly <= eOnly;
                 });
-                
+
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 const originalPrice = isWeekend ? Number(selectedListing?.weekend_price || 0) : Number(selectedListing?.price_per_night || 0);
-                
+
                 const override = selectedListing?.price_overrides.find(o => {
                   const localDate = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
                   return localDate >= o.start_date && localDate <= o.end_date;
                 });
 
                 const dayPrice = override ? (isWeekend ? override.weekend_price : override.price_per_night) : originalPrice;
-                
+
                 // Determine Styling
-                const isToday = new Date().setHours(0,0,0,0) === date.setHours(0,0,0,0);
-                const isPast = date < new Date(new Date().setHours(0,0,0,0));
+                const isToday = new Date().setHours(0, 0, 0, 0) === date.setHours(0, 0, 0, 0);
+                const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
 
                 let bgClass = "bg-white border border-slate-100";
                 let textClass = "text-slate-700";
-                
+
                 if (booking) {
                   if (booking.status === "confirmed") {
                     bgClass = "bg-rose-50 border border-rose-100";
@@ -398,13 +407,13 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                     textClass = "text-slate-500";
                   }
                 } else if (isPast) {
-                    bgClass = "bg-gray-50 border border-gray-50 opacity-60";
-                    textClass = "text-gray-400";
+                  bgClass = "bg-gray-50 border border-gray-50 opacity-60";
+                  textClass = "text-gray-400";
                 }
 
                 // Override Indicator Color
-                const priceColor = override 
-                  ? Number(dayPrice) > Number(originalPrice) ? "text-emerald-600" : "text-rose-600" 
+                const priceColor = override
+                  ? Number(dayPrice) > Number(originalPrice) ? "text-emerald-600" : "text-rose-600"
                   : "text-slate-400";
 
                 return (
@@ -417,16 +426,16 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                         setSelectedBooking(booking);
                         setIsBookingDetailsOpen(true);
                       } else {
-                         const today = new Date();
-                         today.setHours(0,0,0,0);
-                         if (date >= today) {
-                           setIsPriceEditorOpen(true);
-                         } else {
-                           setToastMessage("Cannot edit past dates");
-                           setShowToast(true);
-                           triggerErrorHaptic();
-                           setTimeout(() => setShowToast(false), 2000);
-                         }
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        if (date >= today) {
+                          setIsPriceEditorOpen(true);
+                        } else {
+                          setToastMessage("Cannot edit past dates");
+                          setShowToast(true);
+                          triggerErrorHaptic();
+                          setTimeout(() => setShowToast(false), 2000);
+                        }
                       }
                     }}
                   >
@@ -442,13 +451,13 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                     {booking ? (
                       <div className="mt-1">
                         <div className={`text-[9px] font-semibold leading-tight truncate px-1 py-0.5 rounded-md w-full ${booking.status === 'confirmed' ? 'bg-rose-100/50' : 'bg-amber-100/50'}`}>
-                           {guestNames[booking.guest_id]?.split(' ')[0] || "Guest"}
+                          {guestNames[booking.guest_id]?.split(' ')[0] || "Guest"}
                         </div>
                       </div>
                     ) : (
                       !isPast && (
                         <div className={`text-[9px] font-medium text-right self-end mt-auto ${priceColor}`}>
-                          ₹{(dayPrice/1000).toFixed(1)}k
+                          ₹{(dayPrice / 1000).toFixed(1)}k
                         </div>
                       )
                     )}
@@ -461,7 +470,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
       </div>
 
       {/* --- Drawers (Modernized) --- */}
-      
+
       {/* 1. Base Price Editor */}
       <Drawer open={isPriceEditorOpen} onOpenChange={handlePriceEditorOpenChange}>
         <DrawerContent className="bg-white rounded-t-[32px]">
@@ -477,7 +486,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
             <div className="bg-slate-50 rounded-2xl p-5 mb-6">
               <div className="flex justify-between items-center mb-4">
                 <span className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-500" /> 
+                  <TrendingUp className="w-4 h-4 text-indigo-500" />
                   Price Adjustment
                 </span>
                 <span className="text-indigo-600 font-bold bg-indigo-50 px-3 py-1 rounded-full text-sm">
@@ -503,20 +512,20 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
 
             {/* Date Wheel Picker */}
             <div className="mb-6">
-               <label className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 block">Apply Until</label>
-               <div className="h-32 rounded-xl border border-slate-100 overflow-hidden bg-slate-50/50 relative">
-                  <WheelPicker
-                    data={dateOptions.map(d => d.label)}
-                    onChange={(label) => {
-                      const opt = dateOptions.find(o => o.label === label);
-                      if (opt) setUntilDate(opt.value);
-                    }}
-                    initialValue={dateOptions.find(o => o.value === untilDate)?.label}
-                  />
-                  {/* Gradient overlays for 3D feel */}
-                  <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-slate-50 to-transparent pointer-events-none" />
-                  <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
-               </div>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 block">Apply Until</label>
+              <div className="h-32 rounded-xl border border-slate-100 overflow-hidden bg-slate-50/50 relative">
+                <WheelPicker
+                  data={dateOptions.map(d => d.label)}
+                  onChange={(label) => {
+                    const opt = dateOptions.find(o => o.label === label);
+                    if (opt) setUntilDate(opt.value);
+                  }}
+                  initialValue={dateOptions.find(o => o.value === untilDate)?.label}
+                />
+                {/* Gradient overlays for 3D feel */}
+                <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-slate-50 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+              </div>
             </div>
 
             <Button onClick={() => setIsWeekendDrawerOpen(true)} className="w-full h-14 text-lg rounded-xl bg-indigo-500 hover:bg-indigo-600 shadow-lg shadow-indigo-200">
@@ -529,16 +538,16 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
       {/* 2. Weekend Editor */}
       <Drawer open={isWeekendDrawerOpen} onOpenChange={setIsWeekendDrawerOpen}>
         <DrawerContent className="bg-white rounded-t-[32px]">
-           <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-gray-300 mt-4" />
-           <DrawerHeader className="px-6">
+          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-gray-300 mt-4" />
+          <DrawerHeader className="px-6">
             <DrawerTitle className="text-xl font-bold text-slate-900">Weekend Premium</DrawerTitle>
             <DrawerDescription>Extra charge for Fri/Sat/Sun nights.</DrawerDescription>
           </DrawerHeader>
           <div className="px-6 pb-8">
             <div className="bg-indigo-50 rounded-2xl p-5 mb-6 border border-indigo-100">
               <div className="flex justify-between mb-4">
-                 <span className="text-sm font-semibold text-indigo-900">Markup</span>
-                 <span className="font-bold text-indigo-600">{weekendPercentage}%</span>
+                <span className="text-sm font-semibold text-indigo-900">Markup</span>
+                <span className="font-bold text-indigo-600">{weekendPercentage}%</span>
               </div>
               <input
                 type="range"
@@ -554,15 +563,15 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
                   Base: ₹{newBasePrice.toFixed(0)}
                 </div>
                 <div className="text-right">
-                   <div className="text-3xl font-bold text-indigo-700">
-                     ₹<SlidingNumber number={weekendPrice.toFixed(0)} />
-                   </div>
-                   <div className="text-[10px] font-bold text-indigo-400 uppercase">Weekend Price</div>
+                  <div className="text-3xl font-bold text-indigo-700">
+                    ₹<SlidingNumber number={weekendPrice.toFixed(0)} />
+                  </div>
+                  <div className="text-[10px] font-bold text-indigo-400 uppercase">Weekend Price</div>
                 </div>
               </div>
             </div>
             <div className="mt-2">
-               <SlideToReserve onSlide={handleSave} variant="confirm" />
+              <SlideToReserve onSlide={handleSave} variant="confirm" />
             </div>
           </div>
         </DrawerContent>
@@ -591,37 +600,37 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
 
                 {/* Status Grid */}
                 <div className="grid grid-cols-2 gap-3">
-                   <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${selectedBooking.status === 'confirmed' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
-                      {selectedBooking.status === 'confirmed' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-                      <div>
-                        <p className="text-[10px] opacity-70 font-bold uppercase">Status</p>
-                        <p className="font-bold capitalize">{selectedBooking.status}</p>
-                      </div>
-                   </div>
-                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col gap-2 text-slate-700">
-                      <CalendarIcon className="w-5 h-5 text-slate-400" />
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Nights</p>
-                        <p className="font-bold">
-                           {Math.ceil((new Date(selectedBooking.end_date).getTime() - new Date(selectedBooking.start_date).getTime()) / (1000 * 3600 * 24))} Nights
-                        </p>
-                      </div>
-                   </div>
+                  <div className={`p-4 rounded-2xl border flex flex-col gap-2 ${selectedBooking.status === 'confirmed' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
+                    {selectedBooking.status === 'confirmed' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                    <div>
+                      <p className="text-[10px] opacity-70 font-bold uppercase">Status</p>
+                      <p className="font-bold capitalize">{selectedBooking.status}</p>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col gap-2 text-slate-700">
+                    <CalendarIcon className="w-5 h-5 text-slate-400" />
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Nights</p>
+                      <p className="font-bold">
+                        {Math.ceil((new Date(selectedBooking.end_date).getTime() - new Date(selectedBooking.start_date).getTime()) / (1000 * 3600 * 24))} Nights
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Dates */}
                 <div className="flex justify-between items-center p-4 rounded-2xl border border-slate-100 bg-white shadow-sm">
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400 mb-1">Check-in</p>
-                      <p className="font-bold text-slate-800">{new Date(selectedBooking.start_date).getDate()}</p>
-                      <p className="text-xs text-slate-500 uppercase">{new Date(selectedBooking.start_date).toLocaleString('default', { month: 'short' })}</p>
-                    </div>
-                    <div className="h-8 w-[1px] bg-slate-200" />
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400 mb-1">Check-out</p>
-                      <p className="font-bold text-slate-800">{new Date(selectedBooking.end_date).getDate()}</p>
-                      <p className="text-xs text-slate-500 uppercase">{new Date(selectedBooking.end_date).toLocaleString('default', { month: 'short' })}</p>
-                    </div>
+                  <div className="text-center">
+                    <p className="text-xs text-slate-400 mb-1">Check-in</p>
+                    <p className="font-bold text-slate-800">{new Date(selectedBooking.start_date).getDate()}</p>
+                    <p className="text-xs text-slate-500 uppercase">{new Date(selectedBooking.start_date).toLocaleString('default', { month: 'short' })}</p>
+                  </div>
+                  <div className="h-8 w-[1px] bg-slate-200" />
+                  <div className="text-center">
+                    <p className="text-xs text-slate-400 mb-1">Check-out</p>
+                    <p className="font-bold text-slate-800">{new Date(selectedBooking.end_date).getDate()}</p>
+                    <p className="text-xs text-slate-500 uppercase">{new Date(selectedBooking.end_date).toLocaleString('default', { month: 'short' })}</p>
+                  </div>
                 </div>
 
                 <Button onClick={handleTextGuest} className="w-full h-14 rounded-xl bg-slate-900 text-white hover:bg-slate-800 flex items-center gap-2 shadow-lg shadow-slate-200 mt-2">
@@ -633,7 +642,7 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
           </div>
         </DrawerContent>
       </Drawer>
-      
+
       <Toast message={toastMessage} show={showToast} onClose={() => setShowToast(false)} />
     </div>
   );

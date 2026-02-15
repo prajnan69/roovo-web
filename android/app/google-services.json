@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1080478970238",
+    "project_id": "roovo-255b5",
+    "storage_bucket": "roovo-255b5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1080478970238:android:fb5e33b7d37ca3bd77432f",
+        "android_client_info": {
+          "package_name": "com.roovo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8hjTahH4JRJdO6mHHOI2t2MdlF5EHyAg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

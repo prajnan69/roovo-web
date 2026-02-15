@@ -160,6 +160,24 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
 
               const marginBottom = isSequence && !timeGap ? 'mb-0.5' : 'mb-3';
 
+              if (msg.type === 'activity') {
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex justify-center my-4 px-8"
+                  >
+                    <div className="bg-slate-100/50 backdrop-blur-sm px-4 py-2 rounded-2xl border border-slate-200/50 max-w-[90%]">
+                      <p className="text-[11px] font-bold text-slate-500 text-center leading-relaxed flex items-center justify-center gap-2">
+                        <span className="shrink-0 text-indigo-500">✨</span>
+                        {msg.content}
+                      </p>
+                    </div>
+                  </motion.div>
+                );
+              }
+
               return (
                 <motion.div
                   key={msg.id}

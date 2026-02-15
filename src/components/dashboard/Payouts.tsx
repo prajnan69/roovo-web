@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import supabase, { API_BASE_URL, fetchPayoutsByHostId } from "../../services/api";
-import { Spinner } from "../ui/shadcn-io/spinner";
+import { Spinner } from "@/components/ui/shadcn-io/spinner";
+import RoovoLoader from "../RoovoLoader";
 import {
   Drawer,
   DrawerContent,
@@ -24,6 +25,7 @@ const Payouts = () => {
   const [isMethodDrawerOpen, setIsMethodDrawerOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [upiId, setUpiId] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchHostAndPayouts = async () => {
@@ -52,6 +54,7 @@ const Payouts = () => {
   }, []);
 
   const handleSave = async () => {
+    setIsSaving(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       const response = await fetch(`${API_BASE_URL}/api/payouts`, {
@@ -71,6 +74,7 @@ const Payouts = () => {
         setIsMethodDrawerOpen(false);
       }
     }
+    setIsSaving(false);
   };
 
   const totalEarnings = transactions
@@ -82,99 +86,113 @@ const Payouts = () => {
     .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
   return (
-    <div className="p-4 space-y-6 max-w-md mx-auto pb-24">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-2xl font-bold text-gray-900">Earnings</div>
+    <div className="relative min-h-screen bg-gray-50 text-gray-900 pb-48">
+      {/* Header */}
+      <div className="px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex justify-between items-center">
+        <div className="text-2xl font-bold text-gray-900 tracking-tight">Earnings</div>
       </div>
 
-      {/* Main Earnings Card */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-white shadow-xl">
-        <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
-        <div className="absolute bottom-0 left-0 -mb-4 -ml-4 h-32 w-32 rounded-full bg-black/10 blur-2xl"></div>
-
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 text-indigo-100 mb-1">
-            <Wallet className="h-5 w-5" />
-            <span className="text-sm font-medium">Total Earnings</span>
-          </div>
-          <div className="text-4xl font-bold mb-4">
-            ${totalEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-
-          <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-indigo-200" />
-              <span className="text-sm text-indigo-100">Pending</span>
-            </div>
-            <span className="font-semibold">${pendingPayouts.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="grid grid-cols-2 gap-4">
-        <Button
-          variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 rounded-2xl border-gray-200 hover:bg-gray-50 hover:border-indigo-200 transition-all"
-          onClick={() => setIsMethodDrawerOpen(true)}
-        >
-          <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-            <CreditCard className="h-5 w-5" />
-          </div>
-          <span className="font-medium text-gray-700">Payout Method</span>
-        </Button>
-
-        <Button
-          variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 rounded-2xl border-gray-200 hover:bg-gray-50 hover:border-indigo-200 transition-all"
-          onClick={() => setIsHistoryDrawerOpen(true)}
-        >
-          <div className="h-10 w-10 rounded-full bg-violet-50 flex items-center justify-center text-violet-600">
-            <History className="h-5 w-5" />
-          </div>
-          <span className="font-medium text-gray-700">History</span>
-        </Button>
-      </div>
-
-      {/* Recent Activity Preview (Optional, maybe just last 3) */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-900">Recent Activity</h3>
-          <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" onClick={() => setIsHistoryDrawerOpen(true)}>
-            See All
-          </Button>
-        </div>
-
+      <div className="p-4 space-y-6">
         {loading ? (
-          <div className="flex justify-center py-8">
-            <Spinner />
-          </div>
-        ) : transactions.length > 0 ? (
-          <div className="space-y-4">
-            {transactions.slice(0, 3).map((tx, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${tx.status === 'Paid' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'
-                    }`}>
-                    <ArrowUpRight className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{tx.listing}</p>
-                    <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-gray-900">+${Number(tx.amount).toFixed(2)}</p>
-                  <p className={`text-xs font-medium ${tx.status === 'Paid' ? 'text-green-600' : 'text-yellow-600'
-                    }`}>
-                    {tx.status}
-                  </p>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-center h-[60vh]">
+            <RoovoLoader />
           </div>
         ) : (
-          <p className="text-center text-gray-500 py-4">No recent transactions</p>
+          <AnimatePresence mode="wait">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              {/* Main Earnings Card */}
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 text-white shadow-xl">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-white/10 blur-2xl"></div>
+                <div className="absolute bottom-0 left-0 -mb-4 -ml-4 h-32 w-32 rounded-full bg-black/10 blur-2xl"></div>
+
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 text-indigo-100 mb-1">
+                    <Wallet className="h-5 w-5" />
+                    <span className="text-sm font-medium">Total Earnings</span>
+                  </div>
+                  <div className="text-4xl font-bold mb-4">
+                    ₹{totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+
+                  <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-indigo-200" />
+                      <span className="text-sm text-indigo-100">Pending</span>
+                    </div>
+                    <span className="font-semibold">₹{pendingPayouts.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col gap-2 rounded-2xl border-gray-200 hover:bg-gray-50 hover:border-indigo-200 transition-all bg-white shadow-sm"
+                  onClick={() => setIsMethodDrawerOpen(true)}
+                >
+                  <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  <span className="font-medium text-gray-700">Payout Method</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="h-auto py-4 flex flex-col gap-2 rounded-2xl border-gray-200 hover:bg-gray-50 hover:border-indigo-200 transition-all bg-white shadow-sm"
+                  onClick={() => setIsHistoryDrawerOpen(true)}
+                >
+                  <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                    <History className="h-5 w-5" />
+                  </div>
+                  <span className="font-medium text-gray-700">History</span>
+                </Button>
+              </div>
+
+              {/* Recent Activity Preview */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-gray-900">Recent Activity</h3>
+                  <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50" onClick={() => setIsHistoryDrawerOpen(true)}>
+                    See All
+                  </Button>
+                </div>
+
+                {transactions.length > 0 ? (
+                  <div className="space-y-4">
+                    {transactions.slice(0, 3).map((tx, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${tx.status === 'Paid' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'
+                            }`}>
+                            <ArrowUpRight className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{tx.listing}</p>
+                            <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900">+₹{Number(tx.amount).toFixed(2)}</p>
+                          <p className={`text-xs font-medium ${tx.status === 'Paid' ? 'text-green-600' : 'text-yellow-600'
+                            }`}>
+                            {tx.status}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 py-4">No recent transactions</p>
+                )}
+              </div>
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
 
@@ -207,7 +225,9 @@ const Payouts = () => {
               )}
             </div>
             <DrawerFooter>
-              <Button onClick={handleSave} className="w-full rounded-xl h-12 text-base">Save Payout Method</Button>
+              <Button onClick={handleSave} className="w-full rounded-xl h-12 text-base" disabled={isSaving}>
+                {isSaving ? <Spinner className="text-white" /> : "Save Payout Method"}
+              </Button>
               <DrawerClose asChild>
                 <Button variant="outline" className="w-full rounded-xl h-12 text-base">Cancel</Button>
               </DrawerClose>

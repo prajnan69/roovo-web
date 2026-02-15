@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import ListingCard from './ListingCard';
-import { SkeletonCard } from './SkeletonCard';
+import ListingCardSkeleton from './ListingCardSkeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ListingData as Listing } from '@/types';
 
@@ -94,9 +94,9 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
           }}
         >
           {loading
-            ? Array.from({ length: 8 }).map((_, index) => (
+            ? Array.from({ length: 4 }).map((_, index) => (
               <div key={`skel-${index}`} className={size === 'small' ? 'w-40' : 'w-56'}>
-                <SkeletonCard />
+                <ListingCardSkeleton />
               </div>
             ))
             : listings.map((listing) => (

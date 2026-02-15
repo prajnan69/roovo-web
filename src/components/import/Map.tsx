@@ -1,6 +1,7 @@
 "use client";
 
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Marker } from "@react-google-maps/api";
+import { useGoogleMapsLoader } from "../../lib/googleMaps";
 import type { ListingData } from "@/types";
 
 interface MapViewProps {
@@ -14,10 +15,7 @@ const containerStyle = {
 };
 
 export default function MapView({ listing }: MapViewProps) {
-  const { isLoaded } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
-  });
+  const { isLoaded } = useGoogleMapsLoader();
 
   const lat = listing.location_and_neighborhood.latitude;
   const lng = listing.location_and_neighborhood.longitude;

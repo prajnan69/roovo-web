@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronRight, ArrowLeft } from "lucide-react";
+import { Search, ChevronRight, ArrowLeft, LogIn } from "lucide-react";
 import supabase from "../../services/api";
 import Chat from "../Chat";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface MessagesPageProps {
   conversations: any[];
   selectedConversation: any;
   onConversationSelect: (conversation: any) => void;
   userType: 'host' | 'guest';
+  onLoginClick?: () => void;
+  isAuthenticated?: boolean;
 }
 
 const MessagesPage: React.FC<MessagesPageProps> = ({
@@ -19,6 +21,8 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   selectedConversation,
   onConversationSelect,
   userType,
+  onLoginClick,
+  isAuthenticated = true,
 }) => {
   const [conversations, setConversations] = useState<any[]>(initialConversations);
 
@@ -28,6 +32,8 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   }, [initialConversations]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const channel = supabase
       .channel("conversations")
       .on(
@@ -48,17 +54,53 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [isAuthenticated]);
 
   const handleConversationSelect = async (convo: any) => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     onConversationSelect(convo);
   };
 
   const handleBack = async () => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     onConversationSelect(null);
   };
+
+  const handleLoginClick = async () => {
+    await triggerHaptic();
+    if (onLoginClick) onLoginClick();
+  };
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="relative h-screen w-full bg-white overflow-hidden flex flex-col font-sans">
+        {/* Header */}
+        <div className={`sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100 ${userType === 'guest' ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : 'pt-2'} pb-2 px-4`}>
+          <div className="text-2xl font-bold text-gray-900 mb-2 mt-2">Messages</div>
+        </div>
+
+        {/* Login Prompt */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-48">
+          <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+            <LogIn className="w-10 h-10 text-indigo-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-3 text-center">
+            Log in to view your messages
+          </h2>
+          <p className="text-slate-500 text-center mb-8 max-w-sm">
+            Sign in to access your conversations and connect with hosts or guests.
+          </p>
+          <button
+            onClick={handleLoginClick}
+            className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-full shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+          >
+            Log in
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-screen w-full bg-white overflow-hidden flex flex-col font-sans">
@@ -74,7 +116,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             className="flex-1 flex flex-col h-full bg-white"
           >
             {/* Native Header with Search */}
-            <div className={`sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-gray-100 ${userType === 'guest' ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : 'pt-2'} pb-2 px-4`}>
+            <div className={`pt-2 pb-2 px-4`}>
               <div className="text-2xl font-bold text-gray-900 mb-4 mt-2">Messages</div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -96,7 +138,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                   <p className="font-medium">No messages yet</p>
                 </div>
               ) : (
-                <div className="pb-24 pt-2">
+                <div className="pb-48 pt-2">
                   {conversations.map((convo, i) => {
                     const otherUser = userType === 'host' ? convo.guest : convo.host;
                     const isLast = i === conversations.length - 1;
@@ -113,7 +155,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                         {/* Avatar with Image Fallback */}
                         <div className="relative flex-shrink-0">
                           <img
-                            src={otherUser.avatar_url || convo.listing.primary_image_url || "https://ui-avatars.com/api/?background=random"}
+                            src={otherUser.avatar_url || (convo.listing?.images_data?.[0]?.url) || (convo.listing?.all_image_urls?.[0]?.url) || "https://ui-avatars.com/api/?background=random"}
                             alt="Avatar"
                             className="w-14 h-14 rounded-full object-cover border border-gray-100 shadow-sm"
                           />
@@ -176,7 +218,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 flex-shrink-0">
                   <img
-                    src={selectedConversation.listing.primary_image_url}
+                    src={selectedConversation.listing?.images_data?.[0]?.url || selectedConversation.listing?.all_image_urls?.[0]?.url || "https://ui-avatars.com/api/?background=random"}
                     className="w-full h-full object-cover"
                     alt="Listing"
                   />
@@ -186,7 +228,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                     {userType === 'host' ? selectedConversation.guest.name : selectedConversation.host.name}
                   </h2>
                   <span className="text-[11px] text-gray-500 font-medium truncate">
-                    {selectedConversation.listing.title}
+                    {selectedConversation.listing?.title || 'Unknown Listing'}
                   </span>
                 </div>
               </div>

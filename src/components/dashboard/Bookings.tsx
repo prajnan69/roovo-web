@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import supabase, { getListingsWithBookingsByHostId } from "../../services/api";
 import RoovoLoader from "../RoovoLoader";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { Calendar, MapPin, User, Clock, ArrowRight, Star, ChevronDown, ChevronUp, DollarSign } from "lucide-react";
+import { triggerHaptic } from "@/lib/haptics";
+import { Calendar, MapPin, User, Clock, ArrowUpRight, Search, SlidersHorizontal, ChevronRight, X, Star, ChevronDown, ChevronUp, DollarSign } from "lucide-react";
 
 const Bookings = () => {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -55,14 +55,15 @@ const Bookings = () => {
   });
 
   const handleFilterChange = async (newFilter: 'upcoming' | 'past') => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     setFilter(newFilter);
   };
 
   return (
-    <div className="p-4 space-y-6 pb-24">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-2xl font-bold text-gray-900">Bookings</div>
+    <div className="p-4 space-y-6 pb-48">
+      {/* Header */}
+      <div className="px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex justify-between items-center">
+        <div className="text-2xl font-bold text-gray-900 tracking-tight">Bookings</div>
       </div>
 
       {/* Filter Tabs */}
@@ -183,7 +184,7 @@ const Bookings = () => {
                                 </div>
                               )}
                             </div>
-                            
+
                             {booking.reviews && booking.reviews.length > 0 ? (
                               <p className="text-sm text-gray-600 italic">"{booking.reviews[0].comment}"</p>
                             ) : (
@@ -214,7 +215,7 @@ const Bookings = () => {
                       <Clock size={14} className="text-gray-400" />
                       {filter === 'upcoming' ? 'Check-in soon' : 'Completed'}
                     </div>
-                    <button 
+                    <button
                       onClick={() => setExpandedBookingId(expandedBookingId === booking.id ? null : booking.id)}
                       className="text-xs font-bold text-indigo-600 flex items-center gap-1"
                     >

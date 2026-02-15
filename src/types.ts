@@ -1,11 +1,8 @@
 export interface ListingData {
-  latitude: boolean;
-  longitude: any;
   id: number;
   host_id: string;
   auto_bookable?: boolean;
   title: string;
-  status?: "active" | "draft" | "archived";
   description?: string;
   primary_image_url?: string;
   guests?: number;
@@ -130,10 +127,10 @@ export interface ListingData {
   floors?: number;
   floor?: number;
   cleaning_fee?: number;
-  bedrooms?: number;
-  party_allowed?: boolean;
-  self_check_in?: boolean;
-  discounted?: boolean;
+  is_roovo_verified?: boolean;
+  is_enabled?: boolean;
+  is_scrape_draft?: boolean;
+  status?: string;
 }
 
 export interface Image {

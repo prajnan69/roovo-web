@@ -174,12 +174,12 @@ export default function ConfirmPriceAndList({
     setIsConfirming(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-    const { data } = await supabase
+      const { data } = await supabase
         .from('kyc')
         .select('id')
         .eq('user_id', session.user.id)
         .single();
-      
+
       if (data) {
         onConfirm(Math.round(roovoHostPrice / 10) * 10, Math.round(weekendPrice / 10) * 10, "casual", autoBookable, importedListingId);
       } else {
@@ -247,27 +247,27 @@ export default function ConfirmPriceAndList({
               </div>
               <div className="mt-3">
                 <div className="flex items-center justify-center gap-2 mb-2">
-                    <h2 className="text-lg font-semibold text-gray-900">Weekend Price Premium</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Weekend Price Premium</h2>
                 </div>
                 <div className="flex items-center gap-3">
-                    <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        step="5"
-                        value={weekendPremium}
-                        onChange={(e) => setWeekendPremium(Number(e.target.value))}
-                        className="w-full accent-indigo-500"
-                    />
-                    <div className="w-16 text-right">
-                        <div className="text-indigo-600 font-bold">{weekendPremium}%</div>
-                    </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="5"
+                    value={weekendPremium}
+                    onChange={(e) => setWeekendPremium(Number(e.target.value))}
+                    className="w-full accent-indigo-500"
+                  />
+                  <div className="w-16 text-right">
+                    <div className="text-indigo-600 font-bold">{weekendPremium}%</div>
+                  </div>
                 </div>
                 <div className="mt-3 flex justify-between items-center">
-                    <div>
-                        <div className="text-xs text-gray-500">Weekend price</div>
-                        <div className="text-xl font-bold text-gray-900">₹<SlidingNumber number={weekendPrice} decimalPlaces={0} /></div>
-                    </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Weekend price</div>
+                    <div className="text-xl font-bold text-gray-900">₹<SlidingNumber number={weekendPrice} decimalPlaces={0} /></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -316,28 +316,28 @@ export default function ConfirmPriceAndList({
           <p className="text-sm text-gray-600 text-center mt-4">A better discount improves visibility in the application.</p>
           <div className="mt-6">
             <div className="flex items-center gap-4 mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Weekend Price Premium</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Weekend Price Premium</h2>
             </div>
             <div className="flex items-center gap-6 mb-6">
-                <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    step="5"
-                    value={weekendPremium}
-                    onChange={(e) => setWeekendPremium(Number(e.target.value))}
-                    className="w-full accent-indigo-500"
-                />
-                <div className="flex flex-col items-center">
-                    <span className="text-3xl font-bold text-indigo-600">{weekendPremium}%</span>
-                    <span className="text-sm text-gray-500">Premium</span>
-                </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                step="5"
+                value={weekendPremium}
+                onChange={(e) => setWeekendPremium(Number(e.target.value))}
+                className="w-full accent-indigo-500"
+              />
+              <div className="flex flex-col items-center">
+                <span className="text-3xl font-bold text-indigo-600">{weekendPremium}%</span>
+                <span className="text-sm text-gray-500">Premium</span>
+              </div>
             </div>
             <div className="flex items-center justify-center p-4 bg-gray-100 rounded-lg">
-                <div>
-                    <div className="text-sm text-gray-500">Weekend Price</div>
-                    <div className="text-3xl font-bold text-gray-900">₹<SlidingNumber number={weekendPrice} decimalPlaces={0} /></div>
-                </div>
+              <div>
+                <div className="text-sm text-gray-500">Weekend Price</div>
+                <div className="text-3xl font-bold text-gray-900">₹<SlidingNumber number={weekendPrice} decimalPlaces={0} /></div>
+              </div>
             </div>
           </div>
         </motion.div>

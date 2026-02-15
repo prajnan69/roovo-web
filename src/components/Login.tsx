@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import supabase from "@/services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
 import RoovoLogo from "./RoovoLogo";
-import { Haptics, NotificationType } from '@capacitor/haptics';
+import { triggerHaptic, triggerErrorHaptic } from "@/lib/haptics";
 import Toast from './ui/toast';
-import { SUCCESS_MESSAGES, FAILURE_MESSAGES, getRandomMessage } from '@/utils/loginMessages';
+import { useNavigation } from '@/hooks/useNavigation';
+import { API_BASE_URL, default as supabase } from "@/services/api";
 
 interface LoginProps {
   isOpen: boolean;
@@ -32,87 +32,174 @@ export default function Login({
   subtitle,
   redirectPath,
 }: LoginProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // State
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [timer, setTimer] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+
+  // UI State
   const [isVisible, setIsVisible] = useState(isOpen);
   const [loginStatus, setLoginStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  const { navigate } = useNavigation();
+
   useEffect(() => {
     setIsVisible(isOpen);
     if (isOpen) {
-      setLoginStatus('idle');
-      setError(null);
-      setEmail("");
-      setPassword("");
+      resetState();
     }
   }, [isOpen]);
+
+  // Timer logic
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (step === 'otp') {
+      if (timer > 0) {
+        interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
+      } else if (timer === 0) {
+        setCanResend(true);
+      }
+    }
+    return () => clearInterval(interval);
+  }, [step, timer]);
+
+  const resetState = () => {
+    setStep('phone');
+    setPhoneNumber("");
+    setOtp("");
+    setError(null);
+    setLoginStatus('idle');
+    setLoading(false);
+    setTimer(30);
+    setCanResend(false);
+  };
 
   const handleClose = () => {
     setIsVisible(false);
     setTimeout(onClose, 350);
   };
 
-  const triggerHaptic = async (type: 'success' | 'error') => {
-    if (type === 'success') {
-      await Haptics.notification({ type: NotificationType.Success });
-    } else {
-      await Haptics.notification({ type: NotificationType.Error });
+  /* standardized triggerHaptic now handles default duration and simplified success calls. 
+     We can remove this local wrapper if we just call the imported functions directly, 
+     or update this wrapper to use them. Wrapper logic: */
+  const triggerHapticFeedback = async (type: 'success' | 'error') => {
+    try {
+      if (type === 'success') {
+        await triggerHaptic();
+      } else {
+        await triggerErrorHaptic();
+      }
+    } catch (e) {
+      console.error("Haptic feedback failed:", e);
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError(null);
+
+    if (!phoneNumber || phoneNumber.length < 10) {
+      setError("Please enter a valid mobile number");
+      triggerHapticFeedback('error');
+      return;
+    }
+
     setLoading(true);
-    setLoginStatus('idle');
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const response = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone: phoneNumber }),
+      });
 
-      setLoginStatus('success');
-      triggerHaptic('success');
+      const data = await response.json();
 
-      // Show success toast with random message
-      setToastMessage(getRandomMessage(SUCCESS_MESSAGES));
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to send OTP");
+      }
+
+      setStep('otp');
+      setTimer(30);
+      setCanResend(false);
+      setToastMessage("OTP Sent!");
       setShowToast(true);
-
-      // Delay slightly to show success animation and toast
-      setTimeout(() => {
-        onLoginSuccess();
-        window.location.href = "/";
-      }, 1500);
-
-    } catch (err) {
-      setLoginStatus('error');
-      triggerHaptic('error');
-
-      // Show error toast with random message
-      setToastMessage(getRandomMessage(FAILURE_MESSAGES));
-      setShowToast(true);
-
-      if (err instanceof Error) setError(err.message);
-      else setError("Unexpected error occurred");
-
-      // Auto-hide toast after 3 seconds
       setTimeout(() => setShowToast(false), 3000);
+    } catch (err: any) {
+      console.error("Error sending OTP:", err);
+      setError(err.message || "Failed to send OTP. Try again.");
+      triggerHapticFeedback('error');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isRedirecting && redirectPath) {
-      window.location.href = redirectPath;
-    }
-  }, [isRedirecting, redirectPath]);
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
 
-  // Determine the status to pass to the logo animation
+    if (!otp || otp.length !== 6) {
+      setError("Please enter a valid 6-digit OTP");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone: phoneNumber, otp }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Invalid OTP");
+      }
+
+      // Login successful
+      if (data.session) {
+        const { error: sessionError } = await supabase.auth.setSession(data.session);
+        if (sessionError) {
+          console.error("Error setting session:", sessionError);
+          // We might still want to proceed or show error
+        }
+      }
+
+      setLoginStatus('success');
+      triggerHapticFeedback('success');
+      setToastMessage("Login Successful!");
+      setShowToast(true);
+
+      setTimeout(() => {
+        setIsVisible(false);
+        setTimeout(() => {
+          onLoginSuccess();
+          if (redirectPath) navigate(redirectPath);
+        }, 400);
+      }, 1500);
+
+    } catch (err: any) {
+      console.error("Error verifying OTP:", err);
+      setLoginStatus('error');
+      triggerHapticFeedback('error');
+      setError(err.message || "Invalid OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getLogoStatus = () => {
     if (loading) return 'loading';
     if (loginStatus === 'success') return 'success';
@@ -144,136 +231,200 @@ export default function Login({
             </button>
           </div>
 
-          {/* Content */}
-          {isRedirecting ? (
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <Spinner size={48} />
-              <h2 className="text-xl font-bold mt-6">Redirecting...</h2>
-              <p className="mt-2 text-neutral-500">Please wait a moment.</p>
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col justify-center px-8 max-w-md mx-auto w-full pb-12">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
-                className="flex justify-center mb-8"
-              >
-                <div className="w-32 h-auto">
-                  {/* Pass repeatCount={2} to stop animation after 2 loops */}
-                  <RoovoLogo status={getLogoStatus()} repeatCount={2} />
-                </div>
-              </motion.div>
+          {/* Content Scrollable Area */}
+          <div className="flex-1 overflow-y-auto w-full">
+            <div className="min-h-full flex flex-col justify-center py-12">
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-center mb-10"
-              >
-                <h2 className="text-3xl font-bold text-neutral-900 tracking-tight">
-                  {subtitle || "Welcome back"}
-                </h2>
-                <p className="text-neutral-500 mt-2 text-lg">Sign in to your account</p>
-              </motion.div>
+              {/* Spacer */}
+              <div className="flex-1"></div>
 
-              <form className="space-y-5" onSubmit={handleLogin}>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                  <div className="relative group">
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="peer w-full bg-neutral-50 border border-neutral-200 rounded-2xl px-5 pt-6 pb-2 text-base font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder-transparent"
-                      placeholder="Email"
-                      id="email-input"
-                      required
-                    />
-                    <label
-                      htmlFor="email-input"
-                      className="absolute left-5 top-4 text-neutral-400 text-xs font-medium uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:normal-case peer-placeholder-shown:text-neutral-500 peer-focus:top-2 peer-focus:text-xs peer-focus:text-indigo-500 peer-focus:uppercase peer-focus:font-bold peer-[&:not(:placeholder-shown)]:top-2 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-neutral-400"
-                    >
-                      Email Address
-                    </label>
+              <div className="px-8 max-w-md mx-auto w-full">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1, duration: 0.5 }}
+                  className="flex justify-center mb-8"
+                >
+                  <div className="w-32 h-auto">
+                    <RoovoLogo status={getLogoStatus()} repeatCount={2} />
                   </div>
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                  <div className="relative group">
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="peer w-full bg-neutral-50 border border-neutral-200 rounded-2xl px-5 pt-6 pb-2 text-base font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder-transparent"
-                      placeholder="Password"
-                      id="password-input"
-                      required
-                    />
-                    <label
-                      htmlFor="password-input"
-                      className="absolute left-5 top-4 text-neutral-400 text-xs font-medium uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:normal-case peer-placeholder-shown:text-neutral-500 peer-focus:top-2 peer-focus:text-xs peer-focus:text-indigo-500 peer-focus:uppercase peer-focus:font-bold peer-[&:not(:placeholder-shown)]:top-2 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-neutral-400"
-                    >
-                      Password
-                    </label>
-                  </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-center mb-10"
+                >
+                  <h2 className="text-3xl font-bold text-neutral-900 tracking-tight">
+                    {step === 'phone' ? (subtitle || "Welcome back") : "Verify OTP"}
+                  </h2>
+                  <p className="text-neutral-500 mt-2 text-lg">
+                    {step === 'phone' ? "Enter your mobile number to continue" : `Sent to +91 ${phoneNumber}`}
+                  </p>
                 </motion.div>
 
-                <AnimatePresence>
-                  {error && (
+                <form className="space-y-5" onSubmit={step === 'phone' ? handleSendOtp : handleVerifyOtp}>
+
+                  {step === 'phone' ? (
                     <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
+                      key="phone-input"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ delay: 0.3 }}
                     >
-                      <div className="bg-red-50 text-red-600 text-sm font-medium px-4 py-3 rounded-xl flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                        {error}
+                      <div className="relative group flex items-center">
+                        <div className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-500 font-medium text-lg pointer-events-none">
+                          +91
+                        </div>
+                        <input
+                          type="tel"
+                          value={phoneNumber}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 10) setPhoneNumber(val);
+                          }}
+                          className="peer w-full bg-neutral-50 border border-neutral-200 rounded-2xl pl-16 pr-5 py-4 h-14 text-lg font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder-transparent"
+                          placeholder="Mobile Number"
+                          id="phone-input"
+                          required
+                        />
+                        <label
+                          htmlFor="phone-input"
+                          className="absolute left-16 top-4 text-neutral-400 text-xs font-medium uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-lg peer-placeholder-shown:normal-case peer-placeholder-shown:text-neutral-500 peer-focus:top-1 peer-focus:text-xs peer-focus:text-indigo-500 peer-focus:uppercase peer-focus:font-bold peer-[&:not(:placeholder-shown)]:top-1 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-neutral-400"
+                        >
+                          Mobile Number
+                        </label>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="otp-input"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          value={otp}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 6) setOtp(val);
+                          }}
+                          className="peer w-full bg-neutral-50 border border-neutral-200 rounded-2xl px-5 py-4 h-14 text-lg font-medium outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder-transparent text-center tracking-[0.5em]"
+                          placeholder="000000"
+                          id="otp-input"
+                          required
+                          autoComplete="one-time-code"
+                        />
+                        <label
+                          htmlFor="otp-input"
+                          className="absolute left-0 right-0 top-4 text-center text-neutral-400 text-xs font-medium uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-lg peer-placeholder-shown:normal-case peer-placeholder-shown:text-neutral-500 peer-focus:top-1 peer-focus:text-xs peer-focus:text-indigo-500 peer-focus:uppercase peer-focus:font-bold peer-[&:not(:placeholder-shown)]:top-1 peer-[&:not(:placeholder-shown)]:text-xs peer-[&:not(:placeholder-shown)]:text-neutral-400"
+                        >
+                          Enter 6-digit OTP
+                        </label>
                       </div>
                     </motion.div>
                   )}
-                </AnimatePresence>
 
-                <motion.button
-                  type="submit"
-                  disabled={loading}
-                  whileTap={{ scale: 0.98 }}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className={`w-full mt-6 py-4 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2
-                    ${loading
-                      ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
-                      : loginStatus === 'success'
-                        ? "bg-green-500 text-white"
-                        : "bg-indigo-600 text-white hover:bg-indigo-700 active:scale-[0.98]"
-                    }`}
-                >
-                  {loading ? (
-                    <Spinner size={24} className="text-neutral-400" />
-                  ) : loginStatus === 'success' ? (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                      Success!
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </motion.button>
-              </form>
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-red-50 text-red-600 text-sm font-medium px-4 py-3 rounded-xl flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                          {error}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="mt-8 text-center"
-              >
-                <button className="text-neutral-500 font-medium text-sm hover:text-indigo-600 transition-colors">
-                  Forgot your password?
-                </button>
-              </motion.div>
+                  <motion.button
+                    type="submit"
+                    disabled={loading}
+                    whileTap={{ scale: 0.98 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className={`w-full mt-6 py-4 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2
+                      ${loading
+                        ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+                        : loginStatus === 'success'
+                          ? "bg-green-500 text-white"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700 active:scale-[0.98]"
+                      }`}
+                  >
+                    {loading ? (
+                      <Spinner size={24} className="text-neutral-400" />
+                    ) : loginStatus === 'success' ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Success!
+                      </>
+                    ) : (
+                      step === 'phone' ? "Get OTP" : "Verify & Login"
+                    )}
+                  </motion.button>
+                </form>
+
+                {step === 'otp' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                    className="mt-8 text-center"
+                  >
+                    {canResend ? (
+                      <button
+                        onClick={() => handleSendOtp()}
+                        className="text-indigo-600 font-medium text-sm hover:text-indigo-700 transition-colors"
+                      >
+                        Resend OTP
+                      </button>
+                    ) : (
+                      <p className="text-neutral-400 text-sm">
+                        Resend OTP in {timer}s
+                      </p>
+                    )}
+                    <div className="mt-4">
+                      <button
+                        onClick={() => setStep('phone')}
+                        className="text-neutral-500 font-medium text-sm hover:text-neutral-700 transition-colors"
+                      >
+                        Change Phone Number
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1"></div>
+
+              {/* Legal Footer */}
+              <div className="px-6 pb-6 pt-4 text-center">
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[10px] text-neutral-400 font-medium">
+                  <button onClick={() => navigate('/terms')} className="hover:text-neutral-600 transition-colors">Terms</button>
+                  <span className="text-neutral-300">•</span>
+                  <button onClick={() => navigate('/refund-policy')} className="hover:text-neutral-600 transition-colors">Refunds</button>
+                  <span className="text-neutral-300">•</span>
+                  <button onClick={() => navigate('/shipping-policy')} className="hover:text-neutral-600 transition-colors">Shipping</button>
+                  <span className="text-neutral-300">•</span>
+                  <button onClick={() => navigate('/contact-us')} className="hover:text-neutral-600 transition-colors">Contact</button>
+                </div>
+                <p className="text-[9px] text-neutral-300 text-center mt-2">
+                  Roovo Hospitality Private Limited
+                </p>
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Toast Component */}
           <Toast message={toastMessage} show={showToast} onClose={() => setShowToast(false)} />

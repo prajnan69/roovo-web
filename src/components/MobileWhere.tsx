@@ -5,10 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const destinations = [
   { name: "Bengaluru", img: "/bengaluru.png" },
-  { name: "Mumbai", img: "/mumbai.png" },
-  { name: "Pondicherry", img: "/pondicherry.png" },
-  { name: "Goa", img: "/goa.png" },
-  { name: "Chennai", img: "/chennai.png" },
+  { name: "Chikkamagaluru", img: "/chikkamagaluru.png" },
+  { name: "Uttara Kannada", img: "/uttara-kannada.png" },
+  { name: "Udupi - Mangaluru", img: "/udupi-manglore.png" },
 ];
 
 interface MobileWhereProps {
@@ -19,13 +18,6 @@ interface MobileWhereProps {
 const MobileWhere: React.FC<MobileWhereProps> = ({ selectedCity, setSelectedCity }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Automatically expand if a city is already selected
-  React.useEffect(() => {
-    if (selectedCity.name !== 'Anywhere') {
-      setIsExpanded(true);
-    }
-  }, [selectedCity.name]);
-
   const handleCityClick = (city: typeof destinations[0]) => {
     setSelectedCity(city);
     setIsExpanded(true);
@@ -33,14 +25,14 @@ const MobileWhere: React.FC<MobileWhereProps> = ({ selectedCity, setSelectedCity
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-3">
         {destinations.map((city) => (
           <motion.div
             key={city.name}
             onClick={() => handleCityClick(city)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className={`cursor-pointer p-2 rounded-lg relative transition-colors duration-200 font-semibold text-center ${selectedCity.name === city.name ? "text-white bg-indigo-600" : "bg-slate-100 hover:bg-slate-200 text-slate-800"}`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`cursor-pointer px-4 py-3 rounded-xl relative transition-all duration-200 font-medium text-sm text-center flex items-center justify-center min-h-[3rem] shadow-sm border ${selectedCity.name === city.name ? "text-white bg-indigo-600 border-indigo-600 shadow-indigo-200" : "bg-white border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50"}`}
           >
             {city.name}
           </motion.div>

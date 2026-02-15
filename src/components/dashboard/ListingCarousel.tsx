@@ -1,6 +1,6 @@
 "use client";
 
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface Listing {
   id: string;
@@ -22,7 +22,7 @@ const ListingCarousel = ({
   onSelectListing,
 }: ListingCarouselProps) => {
   const handleSelect = async (listing: Listing) => {
-    await Haptics.impact({ style: ImpactStyle.Light });
+    await triggerHaptic();
     onSelectListing(listing);
   };
 
@@ -32,8 +32,8 @@ const ListingCarousel = ({
         <button
           key={listing.id}
           className={`flex-shrink-0 px-4 py-2 rounded-full cursor-pointer transition-all duration-300 text-sm font-semibold ${selectedListing?.id === listing.id
-              ? "bg-indigo-500 text-white shadow-md shadow-indigo-200"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            ? "bg-indigo-500 text-white shadow-md shadow-indigo-200"
+            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           onClick={() => handleSelect(listing)}
         >

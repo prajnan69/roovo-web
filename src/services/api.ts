@@ -9,9 +9,9 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export const fetchListings = async () => {
   const response = await fetch(`${API_BASE_URL}/api/listings`);
@@ -63,6 +63,12 @@ export const fetchListingById = async (id: string) => {
   const data = await response.json();
   console.log(`Successfully fetched listing ${id}:`, data);
   return data;
+};
+
+export const fetchBookingsByListingId = async (listingId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/bookings/listing/${listingId}`);
+  if (!response.ok) throw new Error('Failed to fetch bookings');
+  return response.json();
 };
 
 export const getListingsByHostId = async (hostId: string) => {
@@ -129,6 +135,14 @@ export const fetchConversationsByGuestId = async (guestId: string) => {
   return response.json();
 };
 
+export const fetchBookingsByGuestId = async (guestId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/bookings/guest/${guestId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch guest bookings');
+  }
+  return response.json();
+};
+
 export const fetchPayoutsByHostId = async (hostId: string) => {
   const url = `${API_BASE_URL}/api/payouts/${hostId}`;
   console.log(`[API] Fetching payouts from: ${url}`);
@@ -143,16 +157,220 @@ export const fetchPayoutsByHostId = async (hostId: string) => {
 };
 
 export const addRecentlyViewed = async (userId: string, listingId: string) => {
-  const { data, error } = await supabase
-    .from('recently_viewed')
-    .insert([{ user_id: userId, listing_id: listingId }]);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/recently-viewed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, listingId }),
+    });
 
-  if (error) {
+    console.log('[api] addRecentlyViewed response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[api] Failed to add recently viewed: ${response.status}`, errorText);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log('[api] addRecentlyViewed success:', result);
+    return result;
+  } catch (error) {
     console.error('Error adding to recently viewed:', error);
     return null;
   }
+};
 
+export const createSupportTicket = async (userId: string, message: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/support/tickets`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, message }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to create support ticket: ${response.status}`, errorText);
+    throw new Error('Failed to create support ticket');
+  }
+
+  return response.json();
+};
+
+export const updateListing = async (id: string, updates: any) => {
+  const response = await fetch(`${API_BASE_URL}/api/listings/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to update listing ${id}: ${response.status} ${response.statusText}`, errorText);
+    throw new Error('Failed to update listing');
+  }
+  const data = await response.json();
+  console.log(`Successfully updated listing ${id}:`, data);
   return data;
 };
 
+export const fetchAmenities = async () => {
+  const response = await fetch(`${API_BASE_URL}/api/listings/amenities`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch amenities');
+  }
+  return response.json();
+};
+
+export const fetchHostState = async (hostId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/hosts/${hostId}/trial`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to fetch host state: ${response.status}`, errorText);
+    throw new Error('Failed to fetch host state');
+  }
+  return response.json();
+};
+
+export const updatePayoutMethod = async (userId: string, payoutMethod: string, payoutDetails: any) => {
+  const response = await fetch(`${API_BASE_URL}/api/payouts`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, payoutMethod, payoutDetails }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to update payout method: ${response.status}`, errorText);
+    throw new Error('Failed to update payout method');
+  }
+  return response.json();
+};
+
+export const completeUserProfile = async (
+  userId: string,
+  data: { name: string; email?: string; gender: string; dob: string }
+) => {
+  const response = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId, ...data }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to complete profile: ${response.status}`, errorText);
+    throw new Error('Failed to complete profile');
+  }
+
+  return response.json();
+};
+
+export const initiateRPD = async (name: string, userId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/payouts/verify-initiate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, userId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to initiate verification');
+  }
+
+  return response.json();
+};
+
+export const getRPDStatus = async (verificationId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/payouts/verify-status/${verificationId}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to get verification status');
+  }
+
+  return response.json();
+};
+
+export const fetchPriceOverrides = async (listingId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/price-overrides/${listingId}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch price overrides');
+  }
+  return response.json();
+};
+
+export const batchCreatePriceOverrides = async (overrides: any[]) => {
+  const response = await fetch(`${API_BASE_URL}/api/price-overrides/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ overrides }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to batch create price overrides: ${response.status}`, errorText);
+    throw new Error('Failed to batch create price overrides');
+  }
+  return response.json();
+};
+
+export const fetchHostDrafts = async (hostId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/airbnb/host/${hostId}/drafts`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch host drafts');
+  }
+  return response.json();
+};
+
+export const updateFcmToken = async (userId: string, token: string, platform: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/fcm/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, token, platform }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update FCM token');
+  }
+  return response.json();
+};
+
+export const acceptInvitationByCode = async (code: string, userId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/cohosts/accept-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, userId })
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      throw new Error(json.error || 'Failed to accept invitation');
+    } catch (e) {
+      throw new Error(text || 'Failed to accept invitation');
+    }
+  }
+  return response.json();
+};
+
 export default supabase;
+export const syncIcal = async (listingId: string, icalUrl?: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/ical/sync/${listingId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ icalUrl }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to sync iCal');
+  }
+  return response.json();
+};

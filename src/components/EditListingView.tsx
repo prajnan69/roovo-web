@@ -3,33 +3,28 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft,
   X,
   Check,
-  Minus,
-  Plus,
   Clock,
   DollarSign,
-  IndianRupee,
   Home,
-  MapPin,
-  Wifi,
-  Utensils,
-  Droplets,
-  Wind,
-  Tv,
-  Car,
-  Coffee,
-  Search,
   ChevronDown,
   ChevronUp,
-  Shield,
   Zap,
   Star,
-  FileText,
-  Info,
-  Map
+  Search,
+  Plus
 } from "lucide-react";
+import { fetchAmenities } from "@/services/api";
+
+// --- Helper Functions ---
+
+const decodeHtml = (html: string) => {
+  if (typeof window === 'undefined') return html;
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+};
 
 // --- Constants ---
 
@@ -48,75 +43,129 @@ const PROPERTY_TYPES = [
   "Tiny home"
 ];
 
-const AMENITIES_CATEGORIES = {
-  "Essentials": [
-    "Wifi", "Kitchen", "Air conditioning", "Heating", "Washer", "Dryer", "TV", "Iron", "Hair dryer", "Essentials"
-  ],
-  "Features": [
-    "Pool", "Hot tub", "Patio", "BBQ grill", "Fire pit", "Pool table", "Indoor fireplace", "Outdoor dining area", "Exercise equipment"
-  ],
-  "Location": [
-    "Beach access", "Lake access", "Ski-in/Ski-out", "Waterfront", "Mountain view"
-  ],
-  "Safety": [
-    "Smoke alarm", "Carbon monoxide alarm", "Fire extinguisher", "First aid kit", "Lock on bedroom door"
-  ],
-  "Services": [
-    "Self check-in", "Free parking", "Breakfast", "Cleaning before checkout", "Luggage dropoff allowed", "Long term stays allowed"
-  ]
-};
+const AMENITIES_CATEGORIES: Record<string, string[]> = {};
 
 // Flattened list for search
-const ALL_AMENITIES = Object.values(AMENITIES_CATEGORIES).flat();
+// Flattened list for search - moved inside component or derived from state
+// const ALL_AMENITIES = Object.values(AMENITIES_CATEGORIES).flat();
 
-// --- Helper Component: Auto-Resizing Textarea ---
-const AutoResizeTextarea = ({ value, onChange, placeholder, className, minHeight = "100px" }: any) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+import { Calendar as CalendarIcon, RefreshCw, Copy, Globe } from "lucide-react";
+import { API_BASE_URL, syncIcal } from "@/services/api";
+
+// --- Helper Component: ContentEditable for Description ---
+const ContentEditable = ({ value, onChange, className, placeholder }: any) => {
+  const contentEditableRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    if (contentEditableRef.current && value !== contentEditableRef.current.innerHTML) {
+      // Only update if the content is different to avoid cursor jumping
+      contentEditableRef.current.innerHTML = value || "";
     }
   }, [value]);
 
+  const handleInput = (e: any) => {
+    onChange(e.currentTarget.innerHTML);
+  };
+
   return (
-    <textarea
-      ref={textareaRef}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
+    <div
+      ref={contentEditableRef}
+      contentEditable
+      onInput={handleInput}
       className={className}
-      style={{ minHeight, overflow: "hidden" }}
-      rows={1}
+      suppressContentEditableWarning={true}
+      data-placeholder={placeholder}
+      style={{ minHeight: "160px", outline: "none" }}
     />
   );
 };
 
 export default function EditListingView({ listing, onClose, onSave }: { listing: any; onClose: () => void; onSave: (data: any) => void }) {
+  const [amenitiesCategories, setAmenitiesCategories] = useState<Record<string, string[]>>(AMENITIES_CATEGORIES);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadAmenities = async () => {
+      try {
+        const data = await fetchAmenities();
+        if (data && Object.keys(data).length > 0) {
+          setAmenitiesCategories(data);
+        }
+      } catch (err) {
+        console.error("Failed to load amenities", err);
+      }
+    };
+    loadAmenities();
+  }, []);
+
+  // Helper to extract amenities from structured data
+  const getFlatAmenities = (amenitiesData: any) => {
+    if (Array.isArray(amenitiesData)) {
+      // Handle the flat structure with { title, available, groupName }
+      if (amenitiesData.length > 0 && typeof amenitiesData[0] === 'object' && 'title' in amenitiesData[0]) {
+        return amenitiesData
+          .filter((item: any) => item.available)
+          .map((item: any) => item.title);
+      }
+
+      // Handle the Nested structure { category, items }
+      return amenitiesData.reduce((acc: string[], curr: any) => [...acc, ...(curr.items || [])], []);
+    }
+    return [];
+  };
+
   // Local state for form handling
   const [formData, setFormData] = useState({
     ...listing,
-    // Normalizing data structure
-    guests: listing.guests || listing.max_guests || 1,
-    checkIn: listing.booking_and_availability?.houseRules?.checkIn || "14:00",
-    checkOut: listing.booking_and_availability?.houseRules?.checkOut || "11:00",
-    // Ensure weekend_price is a number if it exists, otherwise null
-    weekend_price: listing.weekend_price ? Number(listing.weekend_price) : null,
-    price_per_night: Number(listing.price_per_night) || 0,
-    included_amenities: listing.included_amenities || [],
-    additional_rules: listing.additional_rules || "",
-    guest_access: listing.guest_access || "",
-    getting_around: listing.getting_around || "",
-    neighborhood_description: listing.neighborhood_description || "",
-    auto_bookable: listing.auto_bookable || false,
+    // Map existing columns to form fields
+    guests: listing.max_guests || 1,
+    checkIn: listing.operations_data?.checkInTime || "14:00",
+    checkOut: listing.operations_data?.checkOutTime || "11:00",
+    weekend_price: listing.base_price_weekend ? Number(listing.base_price_weekend) : null,
+    price_per_night: Number(listing.base_price_weekday) || 0,
+    included_amenities: getFlatAmenities(listing.amenities_data),
+    additional_rules: (listing.house_rules || []).find((r: any) => typeof r === 'string') || "",
+    guest_access: listing.operations_data?.guest_access || "",
+    getting_around: listing.operations_data?.getting_around || "",
+    neighborhood_description: listing.neighborhood_desc || "",
+    auto_bookable: listing.is_auto_bookable || false,
     pets_allowed: listing.pets_allowed || false,
+    description: decodeHtml(listing.description || ""),
+    title: listing.title || "",
+    property_type: listing.property_type || "Apartment",
+    ical_import_url: listing.ical_import_url || ""
   });
 
   const [hasChanges, setHasChanges] = useState(false);
   const [showAmenitiesModal, setShowAmenitiesModal] = useState(false);
   const [showPropertyTypeDropdown, setShowPropertyTypeDropdown] = useState(false);
   const [amenitySearch, setAmenitySearch] = useState("");
+
+  const handleSync = async () => {
+    if (!listing.id) return;
+    setIsSyncing(true);
+    setSyncStatus("Syncing...");
+    try {
+      await syncIcal(listing.id, formData.ical_import_url);
+      setSyncStatus("Success!");
+      setTimeout(() => setSyncStatus(null), 3000);
+    } catch (err: any) {
+      setSyncStatus("Failed");
+      console.error(err);
+      setTimeout(() => setSyncStatus(null), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const copyExportUrl = () => {
+    let url = `${API_BASE_URL}/api/ical/export/${listing.id}`;
+    // Ensure production domain is used if the current setup is pointing to localhost
+    url = url.replace('localhost:3002', 'roovo.in').replace('127.0.0.1:3002', 'roovo.in').replace('localhost', 'roovo.in');
+    navigator.clipboard.writeText(url);
+    alert("Export URL copied to clipboard!");
+  };
 
   // Helper to update state
   const updateField = (field: string, value: any) => {
@@ -142,11 +191,54 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
     updateField('included_amenities', updated);
   };
 
+  const handleSave = () => {
+    // Construct the payload matching listings_new schema
+    const payload = {
+      id: listing.id, // Preserve ID
+      max_guests: formData.guests,
+      base_price_weekday: formData.price_per_night,
+      base_price_weekend: formData.weekend_price || formData.price_per_night,
+      is_auto_bookable: formData.auto_bookable,
+      pets_allowed: formData.pets_allowed,
+      neighborhood_desc: formData.neighborhood_description,
+      title: formData.title,
+      description: formData.description,
+      property_type: formData.property_type,
+      ical_import_url: formData.ical_import_url,
+
+      // Operations Data
+      operations_data: {
+        ...(listing.operations_data || {}),
+        checkInTime: formData.checkIn,
+        checkOutTime: formData.checkOut,
+        guest_access: formData.guest_access,
+        getting_around: formData.getting_around,
+      },
+
+      // House Rules: Ensure array of strings
+      house_rules: [
+        ...(formData.additional_rules ? [formData.additional_rules] : [])
+      ],
+
+      // Amenities: Flatten to [{ title, groupName, available }] format
+      amenities_data: Object.entries(amenitiesCategories).flatMap(([groupName, items]) =>
+        items.map(title => ({
+          title,
+          groupName,
+          available: formData.included_amenities.includes(title),
+          subTitle: ""
+        }))
+      )
+    };
+
+    onSave(payload);
+  };
+
   // Filter amenities based on search
   const filteredAmenities = useMemo(() => {
-    if (!amenitySearch) return AMENITIES_CATEGORIES;
+    if (!amenitySearch) return amenitiesCategories;
     const filtered: Record<string, string[]> = {};
-    Object.entries(AMENITIES_CATEGORIES).forEach(([category, items]) => {
+    Object.entries(amenitiesCategories).forEach(([category, items]) => {
       const matchingItems = items.filter(item =>
         item.toLowerCase().includes(amenitySearch.toLowerCase())
       );
@@ -155,7 +247,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
       }
     });
     return filtered;
-  }, [amenitySearch]);
+  }, [amenitySearch, amenitiesCategories]);
 
   return (
     <motion.div
@@ -177,10 +269,10 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
         <span className="text-base font-bold text-gray-900">Edit Listing</span>
 
         <button
-          onClick={() => onSave(formData)}
+          onClick={handleSave}
           disabled={!hasChanges}
           className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${hasChanges
-            ? "bg-black text-white shadow-md hover:bg-gray-800 active:scale-95"
+            ? "bg-indigo-600 text-white shadow-md hover:bg-indigo-700 active:scale-95 shadow-indigo-200"
             : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
         >
@@ -213,7 +305,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
                 onClick={() => setShowPropertyTypeDropdown(!showPropertyTypeDropdown)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                     <Home size={20} />
                   </div>
                   <div>
@@ -242,7 +334,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
                           updateField('property_type', type);
                           setShowPropertyTypeDropdown(false);
                         }}
-                        className={`p-3 rounded-xl flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors ${formData.property_type === type ? "bg-blue-50 text-blue-600" : "text-gray-700"}`}
+                        className={`p-3 rounded-xl flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors ${formData.property_type === type ? "bg-indigo-50 text-indigo-600" : "text-gray-700"}`}
                       >
                         <span className="text-sm font-medium">{type}</span>
                         {formData.property_type === type && <Check size={16} />}
@@ -255,66 +347,90 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
           </div>
         </div>
 
-        {/* Pricing Section */}
+        {/* Pricing Section (Redirect to Calendar) */}
         <div className="space-y-3">
           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Pricing</label>
-          <div className="bg-white rounded-3xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100">
-            <div className="p-4 flex items-center justify-between border-b border-gray-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                  <IndianRupee size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Base Price</p>
-                  <p className="text-xs text-gray-500">Per night</p>
-                </div>
+          <div className="bg-white rounded-3xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <DollarSign size={24} />
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400 font-medium">₹</span>
-                <input
-                  type="number"
-                  value={formData.price_per_night}
-                  onChange={(e) => updateField('price_per_night', parseFloat(e.target.value))}
-                  className="w-20 text-right text-xl font-bold text-gray-900 outline-none bg-transparent p-0"
-                />
+              <div>
+                <p className="text-base font-bold text-gray-900">Base Price</p>
+                <p className="text-sm text-gray-500">₹{formData.price_per_night} / night</p>
               </div>
             </div>
 
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600">
-                  <DollarSign size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Weekend Price</p>
-                  <p className="text-xs text-gray-500">Fri & Sat nights</p>
-                </div>
-              </div>
+            <button
+              onClick={() => {
+                // Navigate to Calendar with deep link
+                // Need to use window.location or custom hook if available in parent
+                // Since this is a modal, we might need to close it first?
+                // Just rely on history push.
+                window.history.pushState({}, '', `/hosting/calendar?listingId=${listing.id}`);
+                const navEvent = new PopStateEvent('popstate');
+                window.dispatchEvent(navEvent);
+              }}
+              className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-sm hover:bg-indigo-100 transition-colors"
+            >
+              Manage Pricing
+            </button>
+          </div>
+        </div>
 
-              {formData.weekend_price ? (
-                <div className="flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-xl h-9">
-                  <span className="text-purple-400 font-medium text-sm">₹</span>
-                  <input
-                    type="number"
-                    value={formData.weekend_price}
-                    onChange={(e) => updateField('weekend_price', parseFloat(e.target.value))}
-                    className="w-16 text-right text-lg font-bold text-purple-700 outline-none bg-transparent p-0"
-                  />
-                  <button
-                    onClick={() => updateField('weekend_price', null)}
-                    className="ml-2 w-5 h-5 rounded-full bg-white/50 flex items-center justify-center text-purple-700 hover:bg-white transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
+        {/* Calendar Sync Section */}
+        <div className="space-y-3">
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Calendar Synchronization</label>
+          <div className="bg-white rounded-3xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 space-y-6">
+            {/* Import Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarIcon size={16} className="text-indigo-600" />
+                <span className="text-sm font-bold text-gray-900">Import Airbnb Calendar</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Paste your Airbnb iCal link to sync availability to Roovo.</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.ical_import_url}
+                  onChange={(e) => updateField('ical_import_url', e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-indigo-500 transition-all font-mono"
+                  placeholder="https://www.airbnb.com/calendar/ical/..."
+                />
+              </div>
+              {formData.ical_import_url && listing.id && (
                 <button
-                  onClick={() => updateField('weekend_price', (formData.price_per_night * 1.1).toFixed(0))}
-                  className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-colors h-9 flex items-center"
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="mt-3 flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg active:scale-95 transition-all"
                 >
-                  Add Custom Price
+                  <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                  {syncStatus || "Sync Now"}
                 </button>
               )}
+            </div>
+
+            <div className="h-px bg-gray-100" />
+
+            {/* Export Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Globe size={16} className="text-indigo-600" />
+                <span className="text-sm font-bold text-gray-900">Export to Airbnb</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Use this link in Airbnb's "Import Calendar" settings to sync Roovo bookings back.</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap font-mono">
+                  {`${API_BASE_URL}/api/ical/export/${listing.id}`.replace('localhost:3002', 'roovo.in').replace('127.0.0.1:3002', 'roovo.in').replace('localhost', 'roovo.in')}
+                </div>
+                <button
+                  onClick={copyExportUrl}
+                  className="p-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-xl active:scale-90 transition-all"
+                  title="Copy Link"
+                >
+                  <Copy size={18} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -330,16 +446,16 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => handleDecrement('guests', 1)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300 active:scale-90 transition-all bg-white shadow-sm"
+                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-200 bg-white text-black hover:bg-gray-100 hover:border-gray-300 active:scale-90 transition-all shadow-sm"
                 >
-                  <Minus size={18} strokeWidth={2.5} />
+                  <span className="text-lg font-bold leading-none pb-0.5">&#10094;</span>
                 </button>
                 <span className="font-bold text-xl w-8 text-center text-gray-900">{formData.guests}</span>
                 <button
                   onClick={() => handleIncrement('guests', 20)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300 active:scale-90 transition-all bg-white shadow-sm"
+                  className="w-10 h-10 flex items-center justify-center rounded-full border-2 border-gray-200 bg-white text-black hover:bg-gray-100 hover:border-gray-300 active:scale-90 transition-all shadow-sm"
                 >
-                  <Plus size={18} strokeWidth={2.5} />
+                  <span className="text-lg font-bold leading-none pb-0.5">&#10095;</span>
                 </button>
               </div>
             </div>
@@ -375,7 +491,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
             {/* Auto-bookable */}
             <div className="p-5 flex items-center justify-between border-b border-gray-50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600">
+                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                   <Zap size={20} />
                 </div>
                 <div>
@@ -385,7 +501,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
               </div>
               <div
                 onClick={() => updateField('auto_bookable', !formData.auto_bookable)}
-                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer flex items-center ${formData.auto_bookable ? "bg-green-500" : "bg-gray-200"}`}
+                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer flex items-center ${formData.auto_bookable ? "bg-indigo-600" : "bg-gray-200"}`}
               >
                 <motion.div
                   animate={{ x: formData.auto_bookable ? 20 : 0 }}
@@ -398,7 +514,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
             {/* Pets Allowed */}
             <div className="p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
+                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
                   <Star size={20} />
                 </div>
                 <div>
@@ -408,7 +524,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
               </div>
               <div
                 onClick={() => updateField('pets_allowed', !formData.pets_allowed)}
-                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer flex items-center ${formData.pets_allowed ? "bg-green-500" : "bg-gray-200"}`}
+                className={`w-12 h-7 rounded-full p-1 transition-colors cursor-pointer flex items-center ${formData.pets_allowed ? "bg-indigo-600" : "bg-gray-200"}`}
               >
                 <motion.div
                   animate={{ x: formData.pets_allowed ? 20 : 0 }}
@@ -465,79 +581,16 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
         <div className="space-y-3">
           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Description</label>
           <div className="bg-white rounded-3xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100">
-            <AutoResizeTextarea
-              value={formData.the_space || formData.description}
-              onChange={(e: any) => updateField('description', e.target.value)}
-              className="w-full p-5 text-sm leading-relaxed text-gray-700 resize-none outline-none bg-transparent rounded-3xl"
+            <ContentEditable
+              value={formData.description}
+              onChange={(html: string) => updateField('description', html)}
+              className="w-full p-5 text-sm leading-relaxed text-gray-700 resize-none outline-none bg-transparent rounded-3xl [&_b]:font-bold [&_strong]:font-bold"
               placeholder="Tell guests what makes your place unique..."
-              minHeight="160px"
             />
           </div>
         </div>
 
-        {/* Additional Details - Separated */}
-        <div className="space-y-3">
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Additional Details</label>
-          <div className="bg-white rounded-3xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden divide-y divide-gray-50">
 
-            <div className="p-5">
-              <div className="flex items-center gap-2 mb-2 text-gray-900 font-semibold text-sm">
-                <FileText size={16} className="text-gray-400" />
-                Additional Rules
-              </div>
-              <AutoResizeTextarea
-                value={formData.additional_rules}
-                onChange={(e: any) => updateField('additional_rules', e.target.value)}
-                className="w-full text-sm text-gray-600 resize-none outline-none bg-transparent placeholder-gray-300"
-                placeholder="E.g. No smoking, No parties..."
-                minHeight="80px"
-              />
-            </div>
-
-            <div className="p-5">
-              <div className="flex items-center gap-2 mb-2 text-gray-900 font-semibold text-sm">
-                <Info size={16} className="text-gray-400" />
-                Guest Access
-              </div>
-              <AutoResizeTextarea
-                value={formData.guest_access}
-                onChange={(e: any) => updateField('guest_access', e.target.value)}
-                className="w-full text-sm text-gray-600 resize-none outline-none bg-transparent placeholder-gray-300"
-                placeholder="Which parts of the property can guests access?"
-                minHeight="80px"
-              />
-            </div>
-
-            <div className="p-5">
-              <div className="flex items-center gap-2 mb-2 text-gray-900 font-semibold text-sm">
-                <Map size={16} className="text-gray-400" />
-                Getting Around
-              </div>
-              <AutoResizeTextarea
-                value={formData.getting_around}
-                onChange={(e: any) => updateField('getting_around', e.target.value)}
-                className="w-full text-sm text-gray-600 resize-none outline-none bg-transparent placeholder-gray-300"
-                placeholder="Public transport, parking, etc."
-                minHeight="80px"
-              />
-            </div>
-
-            <div className="p-5">
-              <div className="flex items-center gap-2 mb-2 text-gray-900 font-semibold text-sm">
-                <MapPin size={16} className="text-gray-400" />
-                Neighborhood
-              </div>
-              <AutoResizeTextarea
-                value={formData.neighborhood_description}
-                onChange={(e: any) => updateField('neighborhood_description', e.target.value)}
-                className="w-full text-sm text-gray-600 resize-none outline-none bg-transparent placeholder-gray-300"
-                placeholder="What's the neighborhood like?"
-                minHeight="80px"
-              />
-            </div>
-
-          </div>
-        </div>
 
       </div>
 
@@ -624,7 +677,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
               <div className="p-4 border-t border-gray-100 bg-white safe-bottom">
                 <button
                   onClick={() => setShowAmenitiesModal(false)}
-                  className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-transform"
+                  className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-transform shadow-lg shadow-indigo-200"
                 >
                   Save Amenities
                 </button>

@@ -25,7 +25,7 @@ interface Profile {
 
 // Interface for our new reusable InputField component's props
 interface InputFieldProps {
-  name: keyof Profile; // Ensures name is one of the keys from the Profile interface
+  name: keyof Profile;
   label: string;
   value: string;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -35,29 +35,35 @@ interface InputFieldProps {
   placeholder?: string;
 }
 
-// A reusable, modern, and typed InputField component
+// Modern Minimalist Input
 const InputField: FC<InputFieldProps> = ({ name, label, value, onChange, icon, type = 'text', as = 'input', placeholder }) => {
   const InputComponent = as;
   return (
-    <div>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
+    <div className="relative group">
+      {/* Icon */}
+      <div className="absolute top-[26px] left-0 text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+        {icon}
+      </div>
+
+      {/* Input */}
+      <InputComponent
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        type={type}
+        rows={as === 'textarea' ? 3 : undefined}
+        placeholder=" "
+        className="peer w-full pl-8 pr-2 pt-6 pb-2 bg-transparent border-b border-slate-200 focus:border-indigo-600 text-slate-900 font-medium placeholder-transparent focus:outline-none transition-colors resize-none"
+      />
+
+      {/* Floating Label */}
+      <label
+        htmlFor={name}
+        className="absolute left-8 top-6 text-slate-400 text-base transition-all peer-focus:-top-1 peer-focus:text-xs peer-focus:text-indigo-600 peer-[:not(:placeholder-shown)]:-top-1 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:text-slate-500 cursor-text"
+      >
         {label}
       </label>
-      <div className="relative">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-          {icon}
-        </span>
-        <InputComponent
-          id={name}
-          name={name}
-          value={value}
-          onChange={onChange}
-          type={type}
-          rows={as === 'textarea' ? 4 : undefined}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-3 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-        />
-      </div>
     </div>
   );
 };
@@ -76,8 +82,8 @@ const PersonalDetailsDrawer: FC<PersonalDetailsDrawerProps> = ({
   };
 
   const drawerVariants = {
-    visible: { x: 0, transition: { type: 'spring' as const, damping: 25, stiffness: 200 } },
-    hidden: { x: '100%', transition: { type: 'spring' as const, damping: 25, stiffness: 200 } },
+    visible: { y: 0, transition: { type: 'spring' as const, damping: 25, stiffness: 200 } },
+    hidden: { y: '100%', transition: { type: 'spring' as const, damping: 25, stiffness: 200 } },
   };
 
   return (
@@ -86,81 +92,93 @@ const PersonalDetailsDrawer: FC<PersonalDetailsDrawerProps> = ({
         <>
           {/* Backdrop Overlay */}
           <motion.div
-            className="fixed inset-0 bg-black/40 z-40"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
             variants={backdropVariants}
             initial="hidden"
             animate="visible"
             exit="hidden"
             onClick={onClose}
           />
-          {/* Drawer */}
+          {/* Bottom Sheet Drawer (Mobile Style) */}
           <motion.div
-            className="fixed top-0 right-0 w-full max-w-md h-full bg-white shadow-lg z-50 flex flex-col"
+            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[2rem] shadow-2xl z-50 flex flex-col max-h-[90vh]"
             variants={drawerVariants}
             initial="hidden"
             animate="visible"
             exit="hidden"
           >
+            {/* Handle Bar */}
+            <div className="flex justify-center pt-3 pb-1" onClick={onClose}>
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
+            </div>
+
             {/* Header */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 shrink-0">
-              <h2 className="text-2xl font-bold text-gray-900">Personal Details</h2>
-              <button onClick={onClose} className="p-1 rounded-full text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors">
-                <FiX size={24} />
+            <div className="flex justify-between items-center px-6 py-4 shrink-0">
+              <h2 className="text-xl font-bold text-slate-900">Edit Profile</h2>
+              <button onClick={onClose} className="p-2 rounded-full bg-slate-50 text-slate-500 hover:bg-slate-100 transition-colors">
+                <FiX size={20} />
               </button>
             </div>
 
-            {/* Form Content (Scrollable) */}
-            <div className="p-6 space-y-5 grow overflow-y-auto">
-              <InputField label="Full Name" name="name" value={profile.name} onChange={handleInputChange} icon={<FiUser />} placeholder="e.g., Jane Doe" />
+            {/* Form Content */}
+            <div className="px-6 pb-6 space-y-6 overflow-y-auto">
+              <InputField label="Full Name" name="name" value={profile.name} onChange={handleInputChange} icon={<FiUser size={18} />} />
+
               {!profile.dob ? (
                 <>
                   {profile.email !== 'imorted@roovo.com' && (
-                    <InputField label="Email Address" name="email" value={profile.email} onChange={handleInputChange} icon={<FiMail />} type="email" />
+                    <InputField label="Email" name="email" value={profile.email} onChange={handleInputChange} icon={<FiMail size={18} />} type="email" />
                   )}
-                  <div className="text-center p-4 border border-dashed rounded-lg">
-                    <p className="text-gray-600">Complete KYC to display all the personal information</p>
+                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3 mt-2">
+                    <FiInfo className="text-indigo-600 mt-1 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-900">Complete Verification</p>
+                      <p className="text-xs text-indigo-700 mt-0.5">Verify your identity to unlock full profile editing.</p>
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <InputField label="Date of Birth" name="dob" value={profile.dob} onChange={handleInputChange} icon={<FiCalendar />} type="date" />
-                  <InputField label="Gender" name="gender" value={profile.gender} onChange={handleInputChange} icon={<FiUsers />} placeholder="e.g., Female" />
-                  <InputField label="Address" name="address" value={profile.address} onChange={handleInputChange} icon={<FiMapPin />} placeholder="e.g., 123 Main St, Anytown" />
-                  
-                  {/* Conditionally render the email field */}
+                  <InputField label="Date of Birth" name="dob" value={profile.dob} onChange={handleInputChange} icon={<FiCalendar size={18} />} type="date" />
+                  <InputField label="Gender" name="gender" value={profile.gender} onChange={handleInputChange} icon={<FiUsers size={18} />} />
+                  <InputField label="Address" name="address" value={profile.address} onChange={handleInputChange} icon={<FiMapPin size={18} />} />
+
                   {profile.email !== 'imorted@roovo.com' && (
-                    <InputField label="Email Address" name="email" value={profile.email} onChange={handleInputChange} icon={<FiMail />} type="email" />
+                    <InputField label="Email" name="email" value={profile.email} onChange={handleInputChange} icon={<FiMail size={18} />} type="email" />
                   )}
-                  
-                  <InputField label="Phone Number" name="phone" value={profile.phone} onChange={handleInputChange} icon={<FiPhone />} type="tel" />
-                  <InputField label="About You" name="about" value={profile.about} onChange={handleInputChange} icon={<FiInfo />} as="textarea" placeholder="Tell us something about yourself..." />
+
+                  <InputField label="Phone" name="phone" value={profile.phone} onChange={handleInputChange} icon={<FiPhone size={18} />} type="tel" />
+                  <InputField label="Bio" name="about" value={profile.about} onChange={handleInputChange} icon={<FiInfo size={18} />} as="textarea" />
                 </>
               )}
             </div>
 
-            {/* Footer / Action Button */}
-            <div className="p-6 border-t border-gray-200 shrink-0">
+            {/* Sticky Save Button */}
+            <div className="p-5 border-t border-slate-100 shrink-0 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
               <button
-                className="w-full bg-indigo-600 text-white py-3 font-bold rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 disabled:bg-indigo-400"
+                className="w-full bg-slate-900 text-white py-3.5 font-bold rounded-xl shadow-lg shadow-slate-200 flex items-center justify-center hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 onClick={handleSaveProfile}
-                disabled={!!saveStatus} // Disable button when saveStatus is active
+                disabled={!!saveStatus}
               >
                 <AnimatePresence mode="wait">
-                  <motion.span
-                    key={saveStatus || 'save'}
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    className="flex items-center"
-                  >
-                    {saveStatus ? (
-                      <>
-                        <FiCheck className="mr-2" /> {saveStatus}
-                      </>
-                    ) : (
-                      'Save Profile'
-                    )}
-                  </motion.span>
+                  {saveStatus ? (
+                    <motion.div
+                      key="saved"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center gap-2 text-emerald-300"
+                    >
+                      <FiCheck /> {saveStatus}
+                    </motion.div>
+                  ) : (
+                    <motion.span
+                      key="save"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      Save Changes
+                    </motion.span>
+                  )}
                 </AnimatePresence>
               </button>
             </div>

@@ -1,21 +1,10 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
-import supabase from "@/services/api";
-import { Home, Search, MessageSquare, UserCircle2, LogIn, Repeat } from "lucide-react";
+import { Home, Search, MessageSquare, UserCircle2, Repeat, Building2 } from "lucide-react";
 import { useNavigation } from "@/hooks/useNavigation";
 import { triggerHaptic } from "@/lib/haptics";
-
-// Define nav items with Lucide icons
-const getNavItems = (isLoggedIn: boolean) => [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/search", label: "Search", icon: Search },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  isLoggedIn
-    ? { href: "/profile", label: "Profile", icon: UserCircle2 }
-    : { href: "/login", label: "Login", icon: LogIn },
-];
+import { usePreloadedData } from "@/context/PreloadContext";
 
 interface BottomNavBarProps {
   show: boolean;
@@ -24,138 +13,150 @@ interface BottomNavBarProps {
   openLogin: () => void;
   onSwitchToHost?: () => void;
   onSwitchToTraveling?: () => void;
+  onMessagesClick: () => void;
 }
 
-const BottomNavBar: React.FC<BottomNavBarProps> = ({ show, isChatOpen, onSearchClick, openLogin, onSwitchToHost, onSwitchToTraveling }) => {
+const BottomNavBar: React.FC<BottomNavBarProps> = ({
+  show,
+  onSearchClick,
+  openLogin,
+  onSwitchToHost,
+  onSwitchToTraveling,
+  onMessagesClick
+}) => {
   const { pathname, navigate } = useNavigation();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isHost, setIsHost] = useState(false);
+  const { profileData } = usePreloadedData();
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsLoggedIn(!!session);
-      if (session) {
-        const { data: hostData } = await supabase
-          .from('hosts')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .single();
-        setIsHost(!!hostData);
-      }
-    };
-    checkSession();
-  }, []);
+  const isLoggedIn = !!profileData;
+  const isHost = profileData?.is_host || false;
+  const isHostingPage = pathname.startsWith('/hosting');
 
-  const handleProfileClick = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+  // Helper for click handling
+  const handleItemClick = (item: any, e: any) => {
     triggerHaptic();
-    if (!isLoggedIn) {
+    if (item.action) {
       e.preventDefault();
-      openLogin();
+      item.action();
     } else {
-      navigate("/profile");
+      navigate(item.href);
     }
   };
 
-  const isHostingPage = pathname.startsWith('/hosting');
-  const navLinks = getNavItems(isLoggedIn);
-
-  // Add Hosting link if applicable - Center it
-  if (isHost && !isHostingPage) {
-    if (!navLinks.find(item => item.label === 'Hosting')) {
-      // Insert at index 2 (middle of 5 items: 0, 1, [2], 3, 4)
-      navLinks.splice(2, 0, {
-        href: "/hosting",
-        label: "Hosting",
-        icon: Repeat,
-      });
+  // Define Items Groups
+  const getItems = () => {
+    if (isHostingPage) {
+      // Hosting Mode - Only switch button
+      return {
+        left: [],
+        center: { href: "#", label: "Travel", icon: Repeat, action: onSwitchToTraveling },
+        right: []
+      };
+    } else {
+      // Guest Mode
+      return {
+        left: [
+          { href: "/", label: "Explore", icon: Home },
+          { label: "Search", icon: Search, action: onSearchClick },
+        ],
+        center: isHost
+          ? { href: "/hosting", label: "Hosting", icon: Repeat, action: onSwitchToHost }
+          : { href: "/become-host", label: "Roovo your home", icon: Building2, action: () => navigate('/import-listing') },
+        right: [
+          { label: "Messages", icon: MessageSquare, action: onMessagesClick },
+          { href: isLoggedIn ? "/profile" : "/login", label: isLoggedIn ? "Profile" : "Log in", icon: UserCircle2, action: isLoggedIn ? undefined : openLogin },
+        ]
+      };
     }
-  }
+  };
 
-  // Special Hosting Mode Footer - Glassmorphic
-  if (isHostingPage) {
-    if (!show) return null; // Respect the show prop
+  const { left, center, right } = getItems();
+
+  const renderItem = (item: any, isCenter = false, isPill = false) => {
+    const isActive = pathname === item.href;
     return (
-      <motion.footer
-        initial={{ y: 100 }}
-        animate={{ y: isChatOpen ? 100 : 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.25rem)] left-1/2 -translate-x-1/2 z-50 md:hidden"
+      <motion.button
+        key={item.label}
+        whileTap={{ scale: 0.9 }}
+        onClick={(e) => handleItemClick(item, e)}
+        className={`relative flex flex-col items-center justify-center h-full ${isCenter ? 'w-16 -mt-6' : 'flex-1'}`}
       >
-        <button
-          onClick={() => {
-            triggerHaptic();
-            if (onSwitchToTraveling) onSwitchToTraveling();
-          }}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-slate-900 font-medium shadow-lg shadow-black/5 active:scale-95 transition-transform"
-          style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)' }} // Fallback/Adjustment for visibility
-        >
-          <Repeat className="w-4 h-4" />
-          <span>Switch to Traveling</span>
-        </button>
-      </motion.footer>
+        {isCenter ? (
+          // Center Floating Button
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-4 ring-white">
+              <item.icon size={22} strokeWidth={2} />
+            </div>
+            <span className="text-[10px] font-medium text-slate-500 mt-1">{item.label}</span>
+          </div>
+        ) : (
+          // Standard Button
+          <>
+            <div className={`transition-colors duration-200 ${isActive ? 'text-black' : 'text-slate-400'}`}>
+              <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+            </div>
+            <span className={`text-[10px] font-medium mt-0.5 ${isActive ? 'text-black' : 'text-slate-400'}`}>
+              {item.label}
+            </span>
+            {isActive && !isCenter && (
+              <motion.div
+                layoutId="active-indicator"
+                className="absolute top-1 w-1 h-1 bg-black rounded-full"
+              />
+            )}
+          </>
+        )}
+      </motion.button>
     );
-  }
+  };
 
   return (
     <AnimatePresence>
       {show && (
-        <motion.nav
-          initial={{ y: 100, opacity: 0, x: "-50%" }}
-          animate={{ y: 0, opacity: 1, x: "-50%" }}
-          exit={{ y: 100, opacity: 0, x: "-50%" }}
-          transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-50 w-[94%] max-w-md bg-white/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12)] rounded-2xl md:hidden"
-        >
-          <div className="flex items-center justify-around p-1.5">
-            {navLinks.map((item) => {
-              const isActive = pathname === item.href;
-              const isSearchButton = item.label === "Search";
-              const isHostingButton = item.label === "Hosting";
+        <>
+          {isHostingPage ? (
+            // Hosting Mode - Floating Icon Button at Bottom Right (above wheel)
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 280, damping: 24 }}
+              className="fixed bottom-[88px] right-4 z-50"
+            >
+              <button
+                onClick={center.action}
+                className="w-14 h-14 bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-4 ring-white active:scale-95 transition-all"
+              >
+                <center.icon size={24} strokeWidth={2} />
+              </button>
+            </motion.div>
+          ) : (
+            // Traveling Mode - Full nav bar with background
+            <motion.nav
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={{ type: "spring", stiffness: 280, damping: 24 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-100 pb-[env(safe-area-inset-bottom)] md:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.03)]"
+            >
+              <div className="flex items-center justify-between h-16 px-2 max-w-md mx-auto relative">
+                {/* Left Items */}
+                <div className="flex flex-1 justify-around">
+                  {left.map((item) => renderItem(item))}
+                </div>
 
-              const handleClick = (e: any) => {
-                triggerHaptic();
-                if (isSearchButton) {
-                  onSearchClick();
-                } else if (item.label === "Profile" || item.label === "Login") {
-                  handleProfileClick(e);
-                } else if (isHostingButton) {
-                  if (onSwitchToHost) onSwitchToHost();
-                } else {
-                  navigate(item.href);
-                }
-              };
+                {/* Center Space for Floating Button */}
+                <div className="w-16 flex justify-center">
+                  {renderItem(center, true)}
+                </div>
 
-              return (
-                <button
-                  key={item.label}
-                  onClick={handleClick}
-                  className="relative flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-colors"
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="nav-pill"
-                      className="absolute inset-0 bg-indigo-50 rounded-xl -z-10"
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-
-                  <motion.div
-                    animate={{ scale: isActive ? 1 : 0.9 }}
-                    whileTap={{ scale: 0.8 }}
-                    className={`flex flex-col items-center justify-center ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}
-                  >
-                    <item.icon className={`${isHostingButton ? 'w-5 h-5' : 'w-6 h-6'} mb-0.5`} strokeWidth={isActive ? 2.5 : 2} />
-
-                    <span className="text-[10px] font-medium tracking-tight">
-                      {item.label}
-                    </span>
-                  </motion.div>
-                </button>
-              );
-            })}
-          </div>
-        </motion.nav>
+                {/* Right Items */}
+                <div className="flex flex-1 justify-around">
+                  {right.map((item) => renderItem(item))}
+                </div>
+              </div>
+            </motion.nav>
+          )}
+        </>
       )}
     </AnimatePresence>
   );

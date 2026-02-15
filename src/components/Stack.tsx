@@ -1,6 +1,6 @@
 import { motion, useMotionValue, useTransform } from 'motion/react';
 import { useState } from 'react';
-import { triggerHaptic } from '@/lib/haptics';
+
 
 interface CardRotateProps {
   children: React.ReactNode;
@@ -45,6 +45,7 @@ interface StackProps {
   sendToBackOnClick?: boolean;
   cardsData?: { id: number; img: string }[];
   animationConfig?: { stiffness: number; damping: number };
+  showBorder?: boolean;
   onSwipe?: () => void;
 }
 
@@ -55,33 +56,34 @@ export default function Stack({
   cardsData = [],
   animationConfig = { stiffness: 260, damping: 20 },
   sendToBackOnClick = false,
+  showBorder = false,
   onSwipe
 }: StackProps) {
   const [cards, setCards] = useState(
     cardsData.length
       ? [...cardsData]
       : [
-          {
-            id: 1,
-            img: 'https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?q=80&w=500&auto=format'
-          },
-          {
-            id: 2,
-            img: 'https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=500&auto=format'
-          },
-          {
-            id: 3,
-            img: 'https://images.unsplash.com/photo-1452626212852-811d58933cae?q=80&w=500&auto=format'
-          },
-          {
-            id: 4,
-            img: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?q=80&w=500&auto=format'
-          }
-        ]
+        {
+          id: 1,
+          img: 'https://images.unsplash.com/photo-1480074568708-e7b720bb3f09?q=80&w=500&auto=format'
+        },
+        {
+          id: 2,
+          img: 'https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=500&auto=format'
+        },
+        {
+          id: 3,
+          img: 'https://images.unsplash.com/photo-1452626212852-811d58933cae?q=80&w=500&auto=format'
+        },
+        {
+          id: 4,
+          img: 'https://images.unsplash.com/photo-1572120360610-d971b9d7767c?q=80&w=500&auto=format'
+        }
+      ]
   );
 
   const sendToBack = (id: number) => {
-    triggerHaptic();
+
     if (onSwipe) {
       onSwipe();
     }
@@ -109,7 +111,7 @@ export default function Stack({
         return (
           <CardRotate key={card.id} onSendToBack={() => sendToBack(card.id)} sensitivity={sensitivity}>
             <motion.div
-              className="rounded-2xl overflow-hidden border-4 border-white"
+              className="relative"
               onClick={() => sendToBackOnClick && sendToBack(card.id)}
               animate={{
                 rotateZ: (cards.length - index - 1) * 4 + randomRotate,
@@ -127,7 +129,11 @@ export default function Stack({
                 height: cardDimensions.height
               }}
             >
-              <img src={card.img} alt={`card-${card.id}`} className="w-full h-full object-cover pointer-events-none" />
+              <div className={`rounded-2xl w-full h-full overflow-hidden ${showBorder ? 'p-[3px] bg-linear-to-tr from-[#FFD700] via-[#FCEDA5] to-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.3)]' : 'border-4 border-white'}`}>
+                <div className={`w-full h-full rounded-[14px] overflow-hidden ${showBorder ? 'bg-white' : ''}`}>
+                  <img src={card.img} alt={`card-${card.id}`} className="w-full h-full object-cover pointer-events-none" />
+                </div>
+              </div>
             </motion.div>
           </CardRotate>
         );
