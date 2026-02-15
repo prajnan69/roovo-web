@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { Share as CapShare } from '@capacitor/share';
 import RoovoLoader from "@/components/RoovoLoader";
 import { fetchListingById, addRecentlyViewed, fetchBookingsByListingId } from "@/services/api";
@@ -32,7 +32,7 @@ import ListingHouseRules from "@/components/listing-details/ListingHouseRules";
 import ListingMap from "@/components/listing-details/ListingMap";
 import GiftBoxAnimation from "@/components/animations/GiftBoxAnimation";
 
-const ListingDetailsPage = ({ match, onOpenChat }: { match: any, onOpenChat?: (conversation: any) => void }) => {
+const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, onOpenChat?: (conversation: any) => void, onOpenLogin?: (subtitle?: string) => void }) => {
   const [listing, setListing] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -167,11 +167,11 @@ const ListingDetailsPage = ({ match, onOpenChat }: { match: any, onOpenChat?: (c
   }
   if (!listing) return <div className="p-4 text-center">Listing not found</div>;
 
-  return <ListingContent listing={listing} setListing={setListing} id={id} bookings={bookings} onOpenChat={onOpenChat} />;
+  return <ListingContent listing={listing} setListing={setListing} id={id} bookings={bookings} onOpenChat={onOpenChat} onOpenLogin={onOpenLogin} />;
 };
 
 // Sub-component that handles the scrolling view and UI interaction
-const ListingContent = ({ listing, setListing, id, bookings, onOpenChat }: { listing: any, setListing: any, id: string, bookings: any[], onOpenChat?: (c: any) => void }) => {
+const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenLogin }: { listing: any, setListing: any, id: string, bookings: any[], onOpenChat?: (c: any) => void, onOpenLogin?: (subtitle?: string) => void }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: containerRef });
 
@@ -393,7 +393,11 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat }: { lis
 
   const handleReserveClick = () => {
     if (bookingDetails && priceDetails && showPrice) {
-      if (currentUserId && listing?.host_id && currentUserId === listing.host_id) {
+      if (!currentUserId) {
+        onOpenLogin?.("Login to secure your stay!");
+        return;
+      }
+      if (listing?.host_id && currentUserId === listing.host_id) {
         const wittyMessage = getRandomHostSelfReservationMessage();
         setToastMessage(wittyMessage);
         setShowToast(true);
@@ -480,7 +484,12 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat }: { lis
       setShowChat(true);
       checkAirbnbPrice(dFrom.toDate(), dTo.toDate(), guests);
 
-      if (currentUserId && listing?.host_id && currentUserId === listing.host_id) {
+      if (!currentUserId) {
+        setIsDrawerOpen(false);
+        onOpenLogin?.("Almost there! Login to book.");
+        return;
+      }
+      if (listing?.host_id && currentUserId === listing.host_id) {
         const wittyMessage = getRandomHostSelfReservationMessage();
         setToastMessage(wittyMessage);
         setShowToast(true);

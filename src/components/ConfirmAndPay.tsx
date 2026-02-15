@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { ArrowLeft, Star } from "lucide-react";
 import { API_BASE_URL } from "../services/api";
 import SlideToReserve from "./SlideToReserve";

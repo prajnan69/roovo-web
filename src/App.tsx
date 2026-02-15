@@ -40,6 +40,7 @@ function AppContent() {
   const { isNavBarVisible } = useBottomNavBar();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [loginSubtitle, setLoginSubtitle] = useState<string | undefined>(undefined);
   const [isSwitchingToHost, setIsSwitchingToHost] = useState(false);
   const [isHostStatusResolved, setIsHostStatusResolved] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<'host' | 'traveling'>('host');
@@ -148,8 +149,14 @@ function AppContent() {
         console.error('Failed to configure status bar:', e);
       }
     };
+
     configureStatusBar();
   }, []);
+
+  const handleOpenLogin = (subtitle?: string) => {
+    setLoginSubtitle(subtitle);
+    setIsLoginOpen(true);
+  };
 
   // ✅ Handle Android back button
   useEffect(() => {
@@ -444,6 +451,7 @@ function AppContent() {
               setSelectedConversation(conversation);
               navigate('/messages');
             }}
+            onOpenLogin={handleOpenLogin}
           />
         )} />
         <Route path="/search" render={() => <SearchPage />} />
@@ -560,7 +568,7 @@ function AppContent() {
         show={showBottomNavBar}
         isChatOpen={!!selectedConversation}
         onSearchClick={() => setIsSearchOpen(true)}
-        openLogin={() => setIsLoginOpen(true)}
+        openLogin={() => handleOpenLogin()}
         onSwitchToHost={handleSwitchToHost}
         onSwitchToTraveling={handleSwitchToTraveling}
         onMessagesClick={() => setIsMessagesDrawerOpen(true)}
@@ -577,8 +585,15 @@ function AppContent() {
       {isLoginOpen && (
         <Login
           isOpen={isLoginOpen}
-          onClose={() => setIsLoginOpen(false)}
-          onLoginSuccess={() => setIsLoginOpen(false)}
+          subtitle={loginSubtitle}
+          onClose={() => {
+            setIsLoginOpen(false);
+            setLoginSubtitle(undefined);
+          }}
+          onLoginSuccess={() => {
+            setIsLoginOpen(false);
+            setLoginSubtitle(undefined);
+          }}
         />
       )}
 

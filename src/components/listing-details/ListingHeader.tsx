@@ -27,7 +27,7 @@ const ListingHeader = ({
     // Transform values for the Heart (Wishlist) button
     // Hide it when header becomes opaque (scrolled up) to give space to the title
     const heartOpacity = useTransform(headerBgOpacity, [0.6, 0.9], [1, 0]);
-    const heartWidth = useTransform(headerBgOpacity, [0.6, 0.9], [40, 0]);
+    const heartWidth = useTransform(headerBgOpacity, [0.6, 0.9], [52, 0]);
     const heartScale = useTransform(headerBgOpacity, [0.6, 0.9], [1, 0]);
 
     return (
@@ -41,10 +41,18 @@ const ListingHeader = ({
             <div className="relative flex items-center justify-between w-full z-50 pointer-events-auto">
                 <motion.button
                     onClick={onBack}
-                    className="p-2.5 rounded-full transition-all active:scale-95 flex-shrink-0"
-                    style={{ backgroundColor: headerIconBg, color: headerTextColor }}
+                    className="transition-all active:scale-95 flex-shrink-0 flex items-center justify-center p-0"
+                    style={{
+                        backgroundColor: headerIconBg,
+                        color: headerTextColor,
+                        width: '48px',
+                        height: '48px',
+                        minWidth: '48px',
+                        minHeight: '48px',
+                        borderRadius: '999px'
+                    }}
                 >
-                    <ArrowLeft className="w-6 h-6" />
+                    <ArrowLeft size={32} strokeWidth={2.5} style={{ width: '32px', height: '32px' }} />
                 </motion.button>
 
                 {/* Left-Aligned Title & Badge (Next to Back Button) */}
@@ -63,20 +71,36 @@ const ListingHeader = ({
                 <motion.div className="flex gap-3 flex-shrink-0 ml-2">
                     <motion.button
                         onClick={onShare}
-                        className="p-2.5 rounded-full transition-all active:scale-95"
-                        style={{ backgroundColor: headerIconBg, color: headerTextColor }}
+                        className="transition-all active:scale-95 flex items-center justify-center p-0"
+                        style={{
+                            backgroundColor: headerIconBg,
+                            color: headerTextColor,
+                            width: '48px',
+                            height: '48px',
+                            minWidth: '48px',
+                            minHeight: '48px',
+                            borderRadius: '999px'
+                        }}
                     >
-                        <Share className="w-5 h-5" />
+                        <Share size={28} strokeWidth={2.5} style={{ width: '28px', height: '28px' }} />
                     </motion.button>
 
                     {/* Animated Wrapper for Heart Button */}
-                    <motion.div style={{ width: heartWidth, opacity: heartOpacity, scale: heartScale, overflow: "hidden" }}>
+                    <motion.div style={{ width: heartWidth, opacity: heartOpacity, scale: heartScale, overflow: "hidden" }} className="flex justify-center">
                         <motion.button
                             onClick={onLike}
-                            className="p-2.5 rounded-full transition-all active:scale-95 block"
-                            style={{ backgroundColor: headerIconBg, color: headerTextColor }}
+                            className="transition-all active:scale-95 flex items-center justify-center p-0"
+                            style={{
+                                backgroundColor: headerIconBg,
+                                color: headerTextColor,
+                                width: '48px',
+                                height: '48px',
+                                minWidth: '48px',
+                                minHeight: '48px',
+                                borderRadius: '999px'
+                            }}
                         >
-                            <Heart className={`w-5 h-5 transition-colors ${isLiked ? 'fill-rose-500 text-rose-500' : 'currentColor'}`} />
+                            <Heart size={28} strokeWidth={2.5} style={{ width: '28px', height: '28px' }} className={isLiked ? 'fill-rose-500 text-rose-500' : ''} />
                         </motion.button>
                     </motion.div>
                 </motion.div>
