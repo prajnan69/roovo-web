@@ -231,7 +231,9 @@ function AnimatedText({ text, className }: { text: string; className?: string })
 
 
 export default function ImportListingPage({ onClose, onSuccess, draftId: initialDraftId, isAuthenticated = false, onLoginClick }: ImportListingPageProps) {
-    const { navigate, back } = useNavigation();
+    const { navigate, back, search } = useNavigation();
+    const urlParams = new URLSearchParams(search);
+    const draftIdFromUrl = urlParams.get('draftId');
     const [url, setUrl] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -245,6 +247,51 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [legalData, setLegalData] = useState<any>(null);
     const [photoAssignments, setPhotoAssignments] = useState<Record<string, string>>({});
+
+
+    // Proactive check when URL changes
+    useEffect(() => {
+        const checkDuplicate = async () => {
+            if (!url) return;
+            const urlMatch = url.match(/\/rooms\/(\d+)/);
+            if (!urlMatch) return;
+
+            const roomId = urlMatch[1];
+
+            try {
+                // Check Live
+                const { data: liveData } = await supabase
+                    .from('listings_new')
+                    .select('id')
+                    .eq('airbnb_listing_id', roomId)
+                    .maybeSingle();
+
+                if (liveData) {
+                    showToast("Listing already live! Redirecting...", "error");
+                    setError("Listing already live on Roovo.");
+                    return;
+                }
+
+                // Check Drafts
+                const { data: drafts } = await supabase
+                    .from('listing_scrape_draft')
+                    .select('id')
+                    .eq('listing_id', roomId)
+                    .limit(1);
+
+                if (drafts && drafts.length > 0) {
+                    const id = drafts[0].id;
+                    showToast("Already in drafts! Please continue from there...", "error");
+                    setDraftId(id);
+                }
+            } catch (err) {
+                console.error("Proactive check error:", err);
+            }
+        };
+
+        const timer = setTimeout(checkDuplicate, 500); // Debounce
+        return () => clearTimeout(timer);
+    }, [url]);
 
 
     // Toast State
@@ -263,7 +310,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
         setTimeout(() => setToast(null), 3000);
     };
 
-    const [draftId, setDraftId] = useState<string | null>(initialDraftId || null);
+    const [draftId, setDraftId] = useState<string | null>(initialDraftId || draftIdFromUrl || null);
 
     // Host Profile Modal State
     const [showHostModal, setShowHostModal] = useState(false);
@@ -301,9 +348,13 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
             if (!str) return null;
             if (typeof str === 'object') return str;
             try {
-                return JSON.parse(str);
+                // If it's already an object but passed as string somehow
+                if (typeof str === 'string' && (str.startsWith('{') || str.startsWith('['))) {
+                    return JSON.parse(str);
+                }
+                return str;
             } catch (e) {
-                console.error("JSON parse error", e);
+                console.error("JSON parse error", e, "for string:", str);
                 return null;
             }
         };
@@ -406,39 +457,39 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
         }
 
         return {
-            id: data.listing_id || data.id,
-            title: data.public_name || data.title,
-            description: data.description || "",
-            starRating: parseFloat(data.rating || data.starRating || "0"),
-            reviewsCount: parseInt(data.review_count || data.reviewsCount || "0"),
-            maxGuestCapacity: parseInt(data.max_guest_capacity || data.maxGuestCapacity || "0"),
+            id: data?.listing_id || data?.id || "unknown",
+            title: data?.public_name || data?.title || "Untitled Listing",
+            description: data?.description || "",
+            starRating: parseFloat(data?.rating || data?.starRating || "0"),
+            reviewsCount: parseInt(data?.review_count || data?.reviewsCount || "0"),
+            maxGuestCapacity: parseInt(data?.max_guest_capacity || data?.maxGuestCapacity || "0"),
             pricing: {
-                price: pricing.price || data.price || "0",
-                currency: pricing.currency || "INR",
-                rateType: pricing.rateType || pricing.rate_type || "nightly",
-                discountedPrice: pricing.discountedPrice,
-                originalPrice: pricing.originalPrice,
-                breakdown: pricing.breakdown
+                price: pricing?.price || data?.price || "0",
+                currency: pricing?.currency || "INR",
+                rateType: pricing?.rateType || pricing?.rate_type || "nightly",
+                discountedPrice: pricing?.discountedPrice,
+                originalPrice: pricing?.originalPrice,
+                breakdown: pricing?.breakdown
             },
             location: {
-                address: location.address || "",
-                latitude: parseFloat(location.latitude || "0"),
-                longitude: parseFloat(location.longitude || "0")
+                address: location?.address || "",
+                latitude: parseFloat(location?.latitude || "0"),
+                longitude: parseFloat(location?.longitude || "0")
             },
             photos,
             amenities,
             hostDetails: {
-                id: hostRaw.id,
-                name: hostRaw.name,
-                isSuperhost: hostRaw.isSuperhost || hostRaw.is_superhost || false
+                id: hostRaw?.id || "unknown",
+                name: hostRaw?.name || "Host",
+                isSuperhost: hostRaw?.isSuperhost || hostRaw?.is_superhost || false
             },
-            houseRules: Array.isArray(rulesRaw) ? rulesRaw.map((r: any) => r.title || r) : [],
+            houseRules: Array.isArray(rulesRaw) ? rulesRaw.map((r: any) => r?.title || r) : [],
             ratings: ratingsObj,
-            cohosts: data.cohosts || data.coHosts || [],
-            propertyType: data.propertyType || data.property_type || data.roomType || data.room_type || "Entire house",
-            bedrooms: parseInt(data.bedrooms || "1"),
-            bathrooms: parseInt(data.bathrooms || "1"),
-            beds: parseInt(data.beds || "1"),
+            cohosts: data?.cohosts || data?.coHosts || [],
+            propertyType: data?.propertyType || data?.property_type || data?.roomType || data?.room_type || "Entire house",
+            bedrooms: parseInt(data?.bedrooms || "1"),
+            bathrooms: parseInt(data?.bathrooms || "1"),
+            beds: parseInt(data?.beds || "1"),
             rawScrapedData: data // Keep raw data for photo sorting if needed
         };
     };
@@ -446,25 +497,33 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
     // Load draft if provided
     useEffect(() => {
         const fetchDraft = async () => {
-            if (!initialDraftId) return;
+            if (!draftId) return;
 
             setIsLoading(true);
             try {
-                const response = await axios.get(`${API_BASE_URL}/api/airbnb/draft/${initialDraftId}`);
+                const response = await axios.get(`${API_BASE_URL}/api/airbnb/draft/${draftId}`);
                 const draft = response.data;
 
                 if (draft) {
+                    console.log("Draft loaded successfully:", draft.id);
+                    setDraftId(draft.id); // Sync state with loaded draft
+
                     // Restore state from draft
                     if (draft.raw) {
-                        const baseData = transformListingData(draft.raw);
-                        // Override with saved draft details if they exist (user might have edited them)
-                        if (draft.bedrooms) baseData.bedrooms = typeof draft.bedrooms === 'string' ? parseInt(draft.bedrooms) : draft.bedrooms;
-                        if (draft.bathrooms) baseData.bathrooms = typeof draft.bathrooms === 'string' ? parseInt(draft.bathrooms) : draft.bathrooms;
-                        if (draft.beds) baseData.beds = typeof draft.beds === 'string' ? parseInt(draft.beds) : draft.beds;
-                        if (draft.property_type) baseData.propertyType = draft.property_type;
-                        if (draft.max_guest_capacity) baseData.maxGuestCapacity = typeof draft.max_guest_capacity === 'string' ? parseInt(draft.max_guest_capacity) : draft.max_guest_capacity;
+                        try {
+                            const baseData = transformListingData(draft.raw);
+                            // Override with saved draft details if they exist (user might have edited them)
+                            if (draft.bedrooms) baseData.bedrooms = typeof draft.bedrooms === 'string' ? parseInt(draft.bedrooms) : draft.bedrooms;
+                            if (draft.bathrooms) baseData.bathrooms = typeof draft.bathrooms === 'string' ? parseInt(draft.bathrooms) : draft.bathrooms;
+                            if (draft.beds) baseData.beds = typeof draft.beds === 'string' ? parseInt(draft.beds) : draft.beds;
+                            if (draft.property_type) baseData.propertyType = draft.property_type;
+                            if (draft.max_guest_capacity) baseData.maxGuestCapacity = typeof draft.max_guest_capacity === 'string' ? parseInt(draft.max_guest_capacity) : draft.max_guest_capacity;
 
-                        setListingData(baseData);
+                            setListingData(baseData);
+                        } catch (transformErr) {
+                            console.error("Error transforming draft raw data:", transformErr);
+                            // Fallback or show error?
+                        }
                     }
 
                     if (draft.pricing_data) setPricingData(draft.pricing_data);
@@ -511,7 +570,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
         };
 
         fetchDraft();
-    }, [initialDraftId]);
+    }, [draftId]);
 
     const saveDraftProgress = async (step: string, data: any) => {
         if (!draftId) return;
@@ -595,6 +654,40 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                 d.setDate(d.getDate() + 1);
                 checkOut = d.toISOString().split('T')[0];
             }
+        }
+
+        // Start Pre-Check Promise (Parallel to Auth if needed, but let's do it first for clarity)
+        try {
+            // Check Live Listings
+            const { data: liveData } = await supabase
+                .from('listings_new')
+                .select('id')
+                .eq('airbnb_listing_id', roomId)
+                .maybeSingle();
+
+            if (liveData) {
+                showToast("This listing is already live on Roovo!", "error");
+                setError("This listing is already live on Roovo!");
+                setIsLoading(false);
+                return;
+            }
+
+            // Check Drafts
+            const { data: drafts } = await supabase
+                .from('listing_scrape_draft')
+                .select('id')
+                .eq('listing_id', roomId)
+                .limit(1);
+
+            if (drafts && drafts.length > 0) {
+                const id = drafts[0].id;
+                showToast("Already in drafts! Please continue from there...", "error");
+                setDraftId(id);
+                return;
+            }
+        } catch (checkErr) {
+            console.error("Duplicate check error:", checkErr);
+            // Continue with import if check fails (fallback to backend check)
         }
 
         // Start Import Promise
@@ -693,6 +786,19 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
 
         } catch (err: any) {
             console.error("Import error:", err);
+
+            if (err.response?.status === 409) {
+                const { type, message, id } = err.response.data;
+                if (type === 'draft' && id) {
+                    showToast("Already in drafts! Please continue from there...", "error");
+                    setDraftId(id);
+                    return;
+                }
+                showToast(message, "error");
+                setError(message);
+                return;
+            }
+
             const errorMessage = err.response?.data?.message || err.message || "Failed to import listing";
             setError(errorMessage);
             showToast(errorMessage, "error");
@@ -983,10 +1089,13 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                             </div>
 
                             <motion.button
-                                whileTap={{ scale: 0.98 }}
+                                whileTap={(!url || isLoading) ? {} : { scale: 0.98 }}
                                 onClick={handleImport}
                                 disabled={!url || isLoading}
-                                className="w-full py-4 rounded-2xl font-bold bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2 transition-all text-base hover:bg-indigo-700 active:bg-indigo-800"
+                                className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all text-base ${(!url || isLoading)
+                                        ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none"
+                                        : "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:bg-indigo-800"
+                                    }`}
                             >
                                 {isLoading ? (
                                     <InfinityCheckLoader isLoading={true} size="w-8 h-8" color="white" />

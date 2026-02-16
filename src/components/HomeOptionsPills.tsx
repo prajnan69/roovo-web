@@ -19,6 +19,7 @@ const HomeOptionsPills: React.FC = () => {
 
     const autoCloseTimer = React.useRef<NodeJS.Timeout | null>(null);
     const [currentUserId, setCurrentUserId] = React.useState<string>('');
+    const [isSpecialsEnabled, setIsSpecialsEnabled] = React.useState(false);
 
     React.useEffect(() => {
         setIsOpen(true);
@@ -38,8 +39,17 @@ const HomeOptionsPills: React.FC = () => {
             }, 400);
         }, 2500);
 
+        const checkSpecials = () => {
+            const enabled = localStorage.getItem('roovo_specials_enabled') === 'true';
+            setIsSpecialsEnabled(enabled);
+        };
+        checkSpecials();
+
+        // Optional: listen for storage changes if they happen in other tabs
+        window.addEventListener('storage', checkSpecials);
         return () => {
             if (autoCloseTimer.current) clearTimeout(autoCloseTimer.current);
+            window.removeEventListener('storage', checkSpecials);
         };
     }, []);
 
@@ -139,6 +149,8 @@ const HomeOptionsPills: React.FC = () => {
             transition: { duration: 0.8, ease: "easeInOut", times: [0, 0.3, 0.5, 0.7, 1] }
         }
     };
+
+    if (!isSpecialsEnabled) return null;
 
     return (
         <>
