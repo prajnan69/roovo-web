@@ -477,7 +477,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                     // Set step based on current_step or infer
                     if (draft.current_step) {
                         let nextStep: Step = 'url';
-                        if (draft.current_step === 'confirmation') nextStep = 'confirmation';
+                        if (draft.current_step === 'import' || draft.current_step === 'confirmation') nextStep = 'confirmation';
                         if (draft.current_step === 'pricing') nextStep = 'pricing';
                         if (draft.current_step === 'photo_sorting' || draft.current_step === 'photo_assignments') nextStep = 'photo_sorting';
                         if (draft.current_step === 'operations') nextStep = 'operations';
@@ -499,7 +499,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                                 setStep('operations');
                             }
                         }
-                        else if (draft.raw) setStep('pricing');
+                        else if (draft.raw) setStep('confirmation');
                     }
                 }
             } catch (err) {
