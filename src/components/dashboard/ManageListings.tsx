@@ -346,7 +346,7 @@ export default function ManageListings() {
           <AnimatePresence mode="popLayout">
             {filteredListings.length > 0 ? (
               filteredListings.map((listing, index) => (
-                <motion.div
+                <motion.button
                   key={listing.id}
                   layout
                   initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -354,7 +354,7 @@ export default function ManageListings() {
                   exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
                   transition={{ type: "spring", damping: 25, stiffness: 300, delay: index * 0.05 }}
                   onClick={() => openListing(listing)}
-                  className="group relative bg-white border border-gray-200 rounded-3xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200 shadow-lg shadow-gray-200/50"
+                  className="w-full text-left appearance-none group relative bg-white border border-gray-200 rounded-3xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200 shadow-lg shadow-gray-200/50"
                 >
                   {/* Card Image Area */}
                   <div className="relative h-52 w-full bg-gray-200">
@@ -382,13 +382,17 @@ export default function ManageListings() {
                             Verified
                           </div>
                         ) : (
-                          <div
-                            onClick={(e) => handleOpenSubscription(e, listing)}
-                            className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-white/90 border-gray-200 text-gray-600 flex items-center gap-1 shadow-sm cursor-pointer hover:bg-white transition-colors backdrop-blur-md"
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSubscription(e, listing);
+                            }}
+                            className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-white/90 border-gray-200 text-gray-600 flex items-center gap-1 shadow-sm cursor-pointer hover:bg-white transition-colors backdrop-blur-md appearance-none"
                           >
                             <img src="/verified.png" alt="Get Verified" className="w-3 h-3 object-contain grayscale opacity-50" />
                             Get Verified Badge
-                          </div>
+                          </button>
                         )}
                       </div>
                     )}
@@ -428,7 +432,7 @@ export default function ManageListings() {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </motion.button>
               ))
             ) : (
               <motion.div

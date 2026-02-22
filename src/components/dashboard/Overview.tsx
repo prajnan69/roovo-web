@@ -317,12 +317,13 @@ const Overview = () => {
                   <span className="text-xs font-semibold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">{drafts.length} drafts</span>
                 </div>
 
-                <div
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setSelectedDraftId(drafts[0].id);
                     setShowImportModal(true);
                   }}
-                  className="bg-white border border-gray-200 rounded-3xl p-4 shadow-sm active:scale-[0.98] transition-transform cursor-pointer flex gap-4"
+                  className="w-full text-left bg-white border border-gray-200 rounded-3xl p-4 shadow-sm transition-transform cursor-pointer flex gap-4 appearance-none"
                 >
                   <div className="w-20 h-20 rounded-2xl bg-gray-100 overflow-hidden shrink-0 relative">
                     {drafts[0].picture_url ? (
@@ -343,7 +344,7 @@ const Overview = () => {
                     <p className="text-xs text-gray-500 mt-1 mb-3 line-clamp-1">{drafts[0].property_type || "Entire home"} · Last edited today</p>
                     <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">Continue Setup &rarr;</span>
                   </div>
-                </div>
+                </motion.button>
               </motion.div>
             )}
 
