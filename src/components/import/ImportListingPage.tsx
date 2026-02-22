@@ -235,7 +235,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
     const urlParams = new URLSearchParams(search);
     const draftIdFromUrl = urlParams.get('draftId');
     const [url, setUrl] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(!!(initialDraftId || draftIdFromUrl));
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState<Step>('url');
 
@@ -958,7 +958,14 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                 key="confirmation"
                 data={listingData}
                 onConfirm={handleListingConfirm}
-                onCancel={() => setListingData(null)}
+                onCancel={() => {
+                    if (draftId && onClose) {
+                        onClose();
+                    } else {
+                        setListingData(null);
+                        setStep('url');
+                    }
+                }}
                 confirmLabel="Next: Set Pricing"
             />
         );
@@ -1029,6 +1036,16 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                 onBack={() => setStep('extras')}
             />
         );
+    } else if (isLoading && draftId) {
+        // Show loading state while draft is being fetched — prevents URL input flash
+        content = (
+            <div key="draft-loading" className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <InfinityCheckLoader isLoading={true} size="w-12 h-12" color="#6366f1" />
+                    <p className="text-sm text-gray-500 mt-4 font-medium">Loading your draft...</p>
+                </div>
+            </div>
+        );
     } else {
         content = (
             <div key="import-input" className="min-h-screen bg-gray-50 pb-safe-bottom">
@@ -1093,8 +1110,8 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                                 onClick={handleImport}
                                 disabled={!url || isLoading}
                                 className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all text-base ${(!url || isLoading)
-                                        ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none"
-                                        : "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:bg-indigo-800"
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none"
+                                    : "bg-indigo-600 text-white shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:bg-indigo-800"
                                     }`}
                             >
                                 {isLoading ? (
