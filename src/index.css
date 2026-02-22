@@ -3,6 +3,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* iOS touch fix - ensure buttons and interactive elements respond to taps */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

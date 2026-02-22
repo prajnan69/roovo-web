@@ -51,8 +51,8 @@ const ActionCard: React.FC<ActionCardProps> = ({
   index,
   priority = 'normal',
 }) => {
-  const handlePress = async () => {
-    await triggerHaptic();
+  const handlePress = () => {
+    triggerHaptic().catch(() => { });
     onButtonClick();
   };
 
@@ -272,7 +272,7 @@ const Overview = () => {
 
       {/* 2. Scrollable Sheet Layer */}
       <div className="relative z-10">
-        <div className="h-[55vh] w-full pointer-events-none" /> {/* Transparent spacer */}
+        <div className="h-[55vh] w-full" style={{ pointerEvents: 'none', touchAction: 'none' }} /> {/* Transparent spacer */}
 
         <motion.div
           style={{

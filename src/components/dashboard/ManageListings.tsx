@@ -171,7 +171,7 @@ export default function ManageListings() {
 
   // Handle Opening Detail
   const openListing = async (listing: ListingData) => {
-    await triggerHaptic();
+    triggerHaptic().catch(() => { });
 
     if (listing.is_scrape_draft) {
       setSelectedDraftId(String(listing.id));
@@ -241,8 +241,8 @@ export default function ManageListings() {
     }
   };
 
-  const handleTabSwitch = async (tab: "all" | "active" | "draft") => {
-    await triggerHaptic();
+  const handleTabSwitch = (tab: "all" | "active" | "draft") => {
+    triggerHaptic().catch(() => { });
     setActiveTab(tab);
   };
 
@@ -256,14 +256,14 @@ export default function ManageListings() {
     setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: newStatus } : l));
 
     try {
-      await triggerHaptic();
+      triggerHaptic().catch(() => { });
       await updateListing(String(listing.id), { is_enabled: checked });
       showToast(checked ? "Listing active" : "Listing unlisted", "success");
     } catch (err) {
       console.error("Failed to toggle status", err);
       // Revert
       setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: oldStatus } : l));
-      await triggerHaptic();
+      triggerHaptic().catch(() => { });
     }
   };
 
@@ -290,7 +290,7 @@ export default function ManageListings() {
 
 
   return (
-    <div className="relative w-full h-screen bg-gray-50 text-gray-900 overflow-hidden flex flex-col">
+    <div className="relative w-full h-[100dvh] bg-gray-50 text-gray-900 overflow-hidden flex flex-col">
 
       {/* --- Modern Header with Tabs --- */}
       <header className="px-4 pt-4 pb-2">
@@ -343,15 +343,14 @@ export default function ManageListings() {
             <RoovoLoader />
           </div>
         ) : (
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence mode="sync">
             {filteredListings.length > 0 ? (
               filteredListings.map((listing, index) => (
                 <motion.button
                   key={listing.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
                   transition={{ type: "spring", damping: 25, stiffness: 300, delay: index * 0.05 }}
                   onClick={() => openListing(listing)}
                   className="w-full text-left appearance-none group relative bg-white border border-gray-200 rounded-3xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-200 shadow-lg shadow-gray-200/50"
