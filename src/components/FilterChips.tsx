@@ -7,18 +7,42 @@ import {
   IconBed,
   IconPaw,
   IconKey,
+  IconBuilding,
+  IconTractor,
+  IconHotelService,
+  IconSun,
+  IconTent,
+  IconUsers,
+  IconMountain,
+  IconPool
 } from '@tabler/icons-react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
-const filters = [
-  { label: 'All', value: 'all', icon: IconAdjustmentsHorizontal },
-  { label: 'Apartment', value: 'apartment', icon: IconBuildingSkyscraper },
-  { label: 'House', value: 'house', icon: IconHome },
-  { label: 'Villa', value: 'villa', icon: IconHome2 },
-  { label: '1 Bed', value: '1_bed', icon: IconBed },
-  { label: '2+ Beds', value: '2_plus_beds', icon: IconBed },
-  { label: 'Pets', value: 'pet_friendly', icon: IconPaw },
-  { label: 'Self Check-in', value: 'self_check_in', icon: IconKey },
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+const ICON_MAP: Record<string, any> = {
+  'Apartment': IconBuildingSkyscraper,
+  'House': IconHome,
+  'Villa': IconHome2,
+  'Farmhouse': IconTractor,
+  'Flat': IconBuilding,
+  'Hotel': IconHotelService,
+  'Resort': IconSun,
+  'Cottage': IconTent,
+  'Homestay': IconUsers,
+  'Cabin': IconMountain,
+  'Tiny Home': IconHome,
+  'Beachfront': IconSun,
+  'Amazing Pools': IconPool,
+  '1_bed': IconBed,
+  '2_plus_beds': IconBed,
+  'pet_friendly': IconPaw,
+  'self_check_in': IconKey
+};
+
+const DEFAULT_ICON = IconHome;
+
 
 interface FilterChipsProps {
   activeFilter: string;
@@ -29,18 +53,44 @@ const FilterChips: React.FC<FilterChipsProps> = ({
   activeFilter,
   setActiveFilter,
 }) => {
+  const [categories, setCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/listings/categories`);
+        if (response.data.categories) {
+          setCategories(response.data.categories);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  const dynamicFilters = [
+    { label: 'All', value: 'all', icon: IconAdjustmentsHorizontal },
+    ...categories.map(cat => ({
+      label: cat,
+      value: cat.toLowerCase().replace(/ /g, '_'),
+      icon: ICON_MAP[cat] || DEFAULT_ICON,
+      originalValue: cat
+    }))
+  ];
+
   return (
     <div className="relative px-4 pt-1 mb-2">
       <div className="flex items-center gap-3 overflow-x-auto py-2 -mx-4 px-4 no-scrollbar">
-        {filters.map((filter) => {
-          const isActive = activeFilter === filter.value;
+        {dynamicFilters.map((filter) => {
+          const isActive = activeFilter === filter.value || (filter as any).originalValue === activeFilter;
           const Icon = filter.icon;
           const isAll = filter.value === 'all';
 
           return (
             <motion.button
               key={filter.value}
-              onClick={() => setActiveFilter(filter.value)}
+              onClick={() => setActiveFilter((filter as any).originalValue || filter.value)}
               whileTap={{ scale: 0.94 }}
               transition={{ type: 'spring', stiffness: 280, damping: 18 }}
               className={`

@@ -669,8 +669,8 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
 
           <ListingMap
             place={listing.place}
-            latitude={listing.latitude}
-            longitude={listing.longitude}
+            latitude={listing.fuzzy_lat || listing.latitude}
+            longitude={listing.fuzzy_lng || listing.longitude}
           />
 
           <div className="h-px w-full bg-slate-100 mb-8" />

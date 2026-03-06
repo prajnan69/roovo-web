@@ -56,7 +56,7 @@ export default function ConfirmAndPay({
     const initializeSDK = async () => {
       try {
         const cf = await load({
-          mode: "sandbox" // Change to "production" for live
+          mode: import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox"
         });
         setCashfree(cf);
       } catch (err) {
@@ -201,10 +201,10 @@ export default function ConfirmAndPay({
   }
 
   return (
-    <div className="h-full bg-neutral-50 text-neutral-900 relative font-inter overflow-y-auto pb-32">
+    <div className="h-full flex flex-col bg-neutral-50 text-neutral-900 relative font-inter overflow-hidden">
 
       {/* Header */}
-      <div className="sticky top-0 z-40 backdrop-blur-md bg-white/80 border-b border-neutral-200 flex items-center px-4 py-3 shadow-sm">
+      <div className="flex-shrink-0 z-40 backdrop-blur-md bg-white/80 border-b border-neutral-200 flex items-center px-4 py-3 shadow-sm">
         <button
           onClick={onBack}
           className="p-2 rounded-full hover:bg-neutral-100 transition-all active:scale-95"
@@ -219,80 +219,86 @@ export default function ConfirmAndPay({
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="max-w-md mx-auto px-5 py-6 space-y-6"
+        className="flex-1 overflow-y-auto w-full"
       >
-        {/* Listing Info */}
-        <div className="bg-white rounded-2xl p-4 border border-neutral-200 shadow-sm">
-          <div className="flex items-center gap-4">
-            <img
-              src={listing.primary_image_url}
-              alt={listing.title}
-              className="w-20 h-20 rounded-xl object-cover"
-            />
-            <div>
-              <h2 className="text-lg font-semibold text-neutral-800">{listing.title}</h2>
-              <div className="flex items-center text-sm text-neutral-600 mt-1">
-                <Star className="w-4 h-4 text-yellow-500 mr-1" />
-                <span>{listing.overall_rating}</span>
-                <span className="ml-1 text-neutral-500">
-                  ({listing.total_reviews})
-                </span>
+        <div className="max-w-md mx-auto px-5 py-6 space-y-6 pb-8">
+          {/* Listing Info */}
+          <div className="bg-white rounded-2xl p-4 border border-neutral-200 shadow-sm">
+            <div className="flex items-center gap-4">
+              <img
+                src={listing.primary_image_url}
+                alt={listing.title}
+                className="w-20 h-20 rounded-xl object-cover"
+              />
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-800">{listing.title}</h2>
+                <div className="flex items-center text-sm text-neutral-600 mt-1">
+                  <Star className="w-4 h-4 text-yellow-500 mr-1" />
+                  <span>{listing.overall_rating}</span>
+                  <span className="ml-1 text-neutral-500">
+                    ({listing.total_reviews})
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Booking Summary */}
-        <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
-          <div className="flex justify-between text-sm mb-3">
-            <span className="text-neutral-500">Dates</span>
-            <span>{formattedStartDate} – {formattedEndDate}</span>
-          </div>
-          <div className="flex justify-between text-sm mb-3">
-            <span className="text-neutral-500">Guests</span>
-            <span>{bookingDetails.guests} guest{bookingDetails.guests > 1 ? "s" : ""}</span>
-          </div>
-          <div className="border-t border-neutral-200 my-4" />
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>{bookingDetails.nights} nights × ₹{priceDetails.pricePerNight.toFixed(2)}</span>
-              <span>₹{priceDetails.totalPrice.toFixed(2)}</span>
+          {/* Booking Summary */}
+          <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
+            <div className="flex justify-between text-sm mb-3">
+              <span className="text-neutral-500">Dates</span>
+              <span>{formattedStartDate} – {formattedEndDate}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Taxes</span>
-              <span>₹{priceDetails.taxes.toFixed(2)}</span>
+            <div className="flex justify-between text-sm mb-3">
+              <span className="text-neutral-500">Guests</span>
+              <span>{bookingDetails.guests} guest{bookingDetails.guests > 1 ? "s" : ""}</span>
+            </div>
+            <div className="border-t border-neutral-200 my-4" />
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>{bookingDetails.nights} nights × ₹{priceDetails.pricePerNight.toFixed(2)}</span>
+                <span>₹{priceDetails.totalPrice.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Taxes</span>
+                <span>₹{priceDetails.taxes.toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="border-t border-neutral-200 my-4" />
+            <div className="flex justify-between text-base font-semibold text-neutral-800">
+              <span>Total</span>
+              <span>₹{(priceDetails.totalPrice + priceDetails.taxes).toFixed(2)}</span>
             </div>
           </div>
-          <div className="border-t border-neutral-200 my-4" />
-          <div className="flex justify-between text-base font-semibold text-neutral-800">
-            <span>Total</span>
-            <span>₹{(priceDetails.totalPrice + priceDetails.taxes).toFixed(2)}</span>
+
+          {/* Cancellation Policy */}
+          <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
+            <h3 className="font-semibold mb-2 text-neutral-800">Cancellation Policy</h3>
+            <p className="text-sm text-neutral-600 leading-relaxed">
+              {listing.cancellation_policy || "This booking is non-refundable. Please review the host's policy for more details."}
+            </p>
           </div>
-        </div>
 
-        {/* Cancellation Policy */}
-        <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
-          <h3 className="font-semibold mb-2 text-neutral-800">Cancellation Policy</h3>
-          <p className="text-sm text-neutral-600 leading-relaxed">
-            {listing.cancellation_policy || "This booking is non-refundable. Please review the host's policy for more details."}
-          </p>
-        </div>
-
-        {/* Ground Rules */}
-        <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
-          <h3 className="font-semibold mb-2 text-neutral-800">Ground Rules</h3>
-          <p className="text-sm text-neutral-600 leading-relaxed">
-            Please follow the house rules and treat the place with respect.
-          </p>
-        </div>
-
-        {/* Slide to Reserve component */}
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-2 border border-neutral-200 shadow-lg">
-          <SlideToReserve
-            onSlide={handleBooking}
-          />
+          {/* Ground Rules */}
+          <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
+            <h3 className="font-semibold mb-2 text-neutral-800">Ground Rules</h3>
+            <p className="text-sm text-neutral-600 leading-relaxed">
+              Please follow the house rules and treat the place with respect.
+            </p>
+          </div>
         </div>
       </motion.div>
+
+      {/* Fixed Footer for Slide to Reserve */}
+      <div className="flex-shrink-0 bg-white border-t border-neutral-100 px-5 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] w-full shadow-[0_-8px_20px_-8px_rgba(0,0,0,0.08)] z-40">
+        <div className="max-w-md mx-auto">
+          <div className="bg-white rounded-[2rem]">
+            <SlideToReserve
+              onSlide={handleBooking}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

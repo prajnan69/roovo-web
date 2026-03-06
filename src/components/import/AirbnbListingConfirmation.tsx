@@ -48,6 +48,7 @@ interface AirbnbListingData {
     beds?: number;
     bathrooms?: number;
     propertyType?: string;
+    category?: string;
     enableRoomSplitting?: boolean;
 }
 
@@ -90,6 +91,7 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
     const [beds, setBeds] = useState(data.beds || 1);
     const [bathrooms, setBathrooms] = useState(data.bathrooms || 1);
     const [propertyType, setPropertyType] = useState(data.propertyType || "Entire house");
+    const [category, setCategory] = useState(data.category || "Apartment");
 
     // Room Splitting State
     const [enableRoomSplitting, setEnableRoomSplitting] = useState(initialRoomSplit);
@@ -118,6 +120,7 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
                 beds,
                 bathrooms,
                 propertyType,
+                category,
                 enableRoomSplitting: finalRoomSplitState
             });
         }, 1500);
@@ -312,6 +315,37 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
                                 <option value="Shared room">Shared room</option>
                                 <option value="Hotel">Hotel</option>
                                 <option value="Farm stay">Farm stay</option>
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                        </div>
+                    </div>
+
+                    {/* Category Dropdown */}
+                    <div className="mb-4">
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-2">
+                            <Sparkles className="w-4 h-4 text-indigo-500" />
+                            Category
+                        </label>
+                        <div className="relative">
+                            <select
+                                value={category}
+                                onChange={(e) => {
+                                    setCategory(e.target.value);
+                                    triggerHaptic();
+                                }}
+                                className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-900 text-sm font-semibold rounded-2xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                            >
+                                <option value="Apartment">Apartment</option>
+                                <option value="Flat">Flat</option>
+                                <option value="House">House</option>
+                                <option value="Villa">Villa</option>
+                                <option value="Farmhouse">Farmhouse</option>
+                                <option value="Cottage">Cottage</option>
+                                <option value="Homestay">Homestay</option>
+                                <option value="Resort">Resort</option>
+                                <option value="Hotel">Hotel</option>
+                                <option value="Cabin">Cabin</option>
+                                <option value="Tiny Home">Tiny Home</option>
                             </select>
                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                         </div>

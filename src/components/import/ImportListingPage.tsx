@@ -893,6 +893,7 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
             const payload = {
                 hostId: session.user.id,
                 listingData,
+                category: listingData.category,
                 pricingData: {
                     basePrice: pricingData?.basePrice,
                     weekendPrice: pricingData?.weekendPrice,

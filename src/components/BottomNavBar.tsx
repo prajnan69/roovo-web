@@ -71,39 +71,33 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
   const { left, center, right } = getItems();
 
-  const renderItem = (item: any, isCenter = false, isPill = false) => {
+  const renderItem = (item: any, isCenter = false) => {
     const isActive = pathname === item.href;
     return (
       <motion.button
         key={item.label}
         whileTap={{ scale: 0.9 }}
         onClick={(e) => handleItemClick(item, e)}
-        className={`relative flex flex-col items-center justify-center h-full ${isCenter ? 'w-16 -mt-6' : 'flex-1'}`}
+        className={`relative flex flex-col items-center justify-center h-full px-1 ${isCenter ? '-mt-6' : 'flex-1 max-w-[80px]'}`}
       >
+        {/* Add the label and active dot */}
         {isCenter ? (
           // Center Floating Button
           <div className="flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-4 ring-white">
-              <item.icon size={22} strokeWidth={2} />
+            <div className="w-14 h-14 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-[0_8px_30px_rgba(255,255,255,0.1),0_8px_30px_rgba(79,70,229,0.3)] ring-4 ring-white/50 backdrop-blur-md hover:scale-105 transition-transform duration-300">
+              <item.icon size={26} strokeWidth={2.5} />
             </div>
-            <span className="text-[10px] font-medium text-slate-500 mt-1">{item.label}</span>
           </div>
         ) : (
           // Standard Button
-          <>
-            <div className={`transition-colors duration-200 ${isActive ? 'text-black' : 'text-slate-400'}`}>
+          <div className="flex flex-col items-center justify-center w-full h-full pt-1">
+            <div className={`transition-all duration-300 ease-out ${isActive ? 'text-indigo-600 scale-110 drop-shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
               <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
             </div>
-            <span className={`text-[10px] font-medium mt-0.5 ${isActive ? 'text-black' : 'text-slate-400'}`}>
+            <span className={`text-[10px] font-semibold mt-1 tracking-wide whitespace-nowrap transition-colors duration-300 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>
               {item.label}
             </span>
-            {isActive && !isCenter && (
-              <motion.div
-                layoutId="active-indicator"
-                className="absolute top-1 w-1 h-1 bg-black rounded-full"
-              />
-            )}
-          </>
+          </div>
         )}
       </motion.button>
     );
@@ -131,30 +125,26 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
             </motion.div>
           ) : (
             // Traveling Mode - Full nav bar with background
-            <motion.nav
-              initial={{ y: 100 }}
-              animate={{ y: 0 }}
-              exit={{ y: 100 }}
-              transition={{ type: "spring", stiffness: 280, damping: 24 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-100 pb-[env(safe-area-inset-bottom)] md:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.03)]"
+            <motion.div
+              initial={{ y: 150, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 150, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 26 }}
+              className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none"
             >
-              <div className="flex items-center justify-between h-16 px-2 max-w-md mx-auto relative">
-                {/* Left Items */}
-                <div className="flex flex-1 justify-around">
+              <nav className="pointer-events-auto w-full max-w-[420px] bg-white/85 backdrop-blur-3xl border border-white/80 rounded-full shadow-[0_8px_40px_rgba(0,0,0,0.12)] px-4 py-2.5">
+                <div className="grid grid-cols-5 items-center justify-items-center h-14 relative w-full">
+                  {/* Left Items */}
                   {left.map((item) => renderItem(item))}
-                </div>
 
-                {/* Center Space for Floating Button */}
-                <div className="w-16 flex justify-center">
+                  {/* Center Space for Floating Button */}
                   {renderItem(center, true)}
-                </div>
 
-                {/* Right Items */}
-                <div className="flex flex-1 justify-around">
+                  {/* Right Items */}
                   {right.map((item) => renderItem(item))}
                 </div>
-              </div>
-            </motion.nav>
+              </nav>
+            </motion.div>
           )}
         </>
       )}

@@ -84,15 +84,14 @@ const HomeFeed: React.FC<{
     const weekendHomes = filteredListings.slice(8, 16);
     const newHomes = listings.length < 5 ? listings : listings.slice(4, 12);
 
-    const fetchListings = async (city?: string, forceRefresh = false) => {
+    const fetchListings = async (city?: string) => {
       setError(null);
       setLoading(true);
 
-      let listingsToProcess: Listing[] = [];
       const cachedListings = getCachedListings();
 
-      if (cachedListings && !forceRefresh) {
-        listingsToProcess = cachedListings;
+      // Temporarily bypass cache to force fresh fetch and clear old 'room' listings from user's view.
+      if (cachedListings) {
         setListings(cachedListings);
         setFilteredListings(cachedListings);
       }
@@ -107,7 +106,6 @@ const HomeFeed: React.FC<{
           rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
         }));
 
-        listingsToProcess = listingsWithExtras;
         setListings(listingsWithExtras);
         setFilteredListings(listingsWithExtras);
         setCachedListings(listingsWithExtras);
@@ -227,11 +225,17 @@ const HomeFeed: React.FC<{
           combinedRecentlyViewed.push(...localItems);
         }
 
-        // 3. Keep first occurrence (newest) of each listing
+        // 3. Keep first occurrence (newest) of each listing, and filter out individual rooms
         const seen = new Set();
         const uniqueRecentlyViewed = combinedRecentlyViewed.filter(item => {
-          if (!item || seen.has(item.id)) return false;
-          seen.add(item.id);
+          if (!item || !item.id) return false;
+
+          // Filter out private rooms from home page Recently Viewed
+          if (item.inventory_type === 'private_room') return false;
+
+          const idString = String(item.id);
+          if (seen.has(idString)) return false;
+          seen.add(idString);
           return true;
         }).slice(0, 10);
 
@@ -243,13 +247,21 @@ const HomeFeed: React.FC<{
 
     useEffect(() => {
       const applyFilters = () => {
+        console.log('[HomeFeed] Applying filters. Active Filter:', activeFilter);
         if (activeFilter === 'all') {
           setFilteredListings(listings);
         } else {
           const filtered = listings.filter(listing => {
+            // Check category first (Exact match with activeFilter value)
+            const matches = listing.category === activeFilter;
+            if (matches) return true;
+
+            // Fallback to legacy/property_type filters
             if (activeFilter === 'apartment') return listing.property_type === 'Apartment';
             if (activeFilter === 'house') return listing.property_type === 'House';
             if (activeFilter === 'villa') return listing.property_type === 'Villa';
+
+            // Feature filters
             if (activeFilter === '1_bed') return listing.total_beds === 1;
             if (activeFilter === '2_plus_beds') return (listing.total_beds || 0) >= 2;
             if (activeFilter === 'pet_friendly') return listing.pets_allowed;
@@ -274,7 +286,7 @@ const HomeFeed: React.FC<{
         );
       }
 
-      if (listings.length === 0) {
+      if (!loading && listings.length === 0) {
         return (
           <div className="flex items-center justify-center text-center py-12 h-64">
             <p className="text-slate-600">No homes available at the moment. Please check back later!</p>

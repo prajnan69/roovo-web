@@ -131,6 +131,10 @@ export interface ListingData {
   is_enabled?: boolean;
   is_scrape_draft?: boolean;
   status?: string;
+  inventory_type?: string;
+  category?: string;
+  fuzzy_lat?: number;
+  fuzzy_lng?: number;
 }
 
 export interface Image {
