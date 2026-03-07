@@ -81,7 +81,6 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
             </div>
           </div>
 
-
           <Button
             onClick={() => {
               triggerHaptic();
@@ -89,8 +88,9 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
             }}
             className="mt-auto w-full bg-indigo-500 hover:bg-indigo-600 text-white"
           >
-            Reserve
+            Check availability
           </Button>
+
         </div>
         <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
           <AlertDialogContent>

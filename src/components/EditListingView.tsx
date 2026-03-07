@@ -84,9 +84,11 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
   const [amenitiesCategories, setAmenitiesCategories] = useState<Record<string, string[]>>(AMENITIES_CATEGORIES);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [isLoadingAmenities, setIsLoadingAmenities] = useState(true);
 
   useEffect(() => {
     const loadAmenities = async () => {
+      setIsLoadingAmenities(true);
       try {
         const data = await fetchAmenities();
         if (data && Object.keys(data).length > 0) {
@@ -94,6 +96,8 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
         }
       } catch (err) {
         console.error("Failed to load amenities", err);
+      } finally {
+        setIsLoadingAmenities(false);
       }
     };
     loadAmenities();
@@ -122,7 +126,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
     guests: listing.max_guests || 1,
     checkIn: listing.operations_data?.checkInTime || "14:00",
     checkOut: listing.operations_data?.checkOutTime || "11:00",
-    weekend_price: listing.base_price_weekend ? Number(listing.base_price_weekend) : null,
+    weekend_price: (listing.base_price_weekend !== undefined && listing.base_price_weekend !== null) ? Number(listing.base_price_weekend) : null,
     price_per_night: Number(listing.base_price_weekday) || 0,
     included_amenities: getFlatAmenities(listing.amenities_data),
     additional_rules: (listing.house_rules || []).find((r: any) => typeof r === 'string') || "",
@@ -197,7 +201,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
       id: listing.id, // Preserve ID
       max_guests: formData.guests,
       base_price_weekday: formData.price_per_night,
-      base_price_weekend: formData.weekend_price || formData.price_per_night,
+      base_price_weekend: (formData.weekend_price !== null && formData.weekend_price !== undefined) ? formData.weekend_price : formData.price_per_night,
       is_auto_bookable: formData.auto_bookable,
       pets_allowed: formData.pets_allowed,
       neighborhood_desc: formData.neighborhood_description,
@@ -347,33 +351,63 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
           </div>
         </div>
 
-        {/* Pricing Section (Redirect to Calendar) */}
+        {/* Pricing Section */}
         <div className="space-y-3">
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Pricing</label>
-          <div className="bg-white rounded-3xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <DollarSign size={24} />
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Base Price Management</label>
+          <div className="bg-white rounded-3xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100">
+
+            <div className="p-5 flex items-center justify-between border-b border-gray-50">
+              <div className="flex items-center gap-4 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                  <DollarSign size={20} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-tight mb-0.5">Weekday Price</label>
+                  <div className="flex items-baseline">
+                    <span className="text-lg font-bold text-gray-900 mr-1">₹</span>
+                    <input
+                      type="number"
+                      value={formData.price_per_night}
+                      onChange={(e) => updateField('price_per_night', Number(e.target.value))}
+                      className="w-full text-xl font-bold text-gray-900 outline-none bg-transparent placeholder-gray-200"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-base font-bold text-gray-900">Base Price</p>
-                <p className="text-sm text-gray-500">₹{formData.price_per_night} / night</p>
+            </div>
+
+            <div className="p-5 flex items-center justify-between border-b border-gray-50">
+              <div className="flex items-center gap-4 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                  <Star size={20} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-tight mb-0.5">Weekend Price (Fri/Sat)</label>
+                  <div className="flex items-baseline">
+                    <span className="text-lg font-bold text-gray-900 mr-1">₹</span>
+                    <input
+                      type="number"
+                      value={formData.weekend_price !== null ? formData.weekend_price : formData.price_per_night}
+                      onChange={(e) => updateField('weekend_price', Number(e.target.value))}
+                      className="w-full text-xl font-bold text-gray-900 outline-none bg-transparent placeholder-gray-200"
+                      placeholder="Same as weekday"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
             <button
               onClick={() => {
-                // Navigate to Calendar with deep link
-                // Need to use window.location or custom hook if available in parent
-                // Since this is a modal, we might need to close it first?
-                // Just rely on history push.
                 window.history.pushState({}, '', `/hosting/calendar?listingId=${listing.id}`);
                 const navEvent = new PopStateEvent('popstate');
                 window.dispatchEvent(navEvent);
               }}
-              className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-sm hover:bg-indigo-100 transition-colors"
+              className="w-full py-4 text-sm font-bold text-indigo-600 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
             >
-              Manage Pricing
+              <CalendarIcon size={16} />
+              Open Smart Pricing Calendar
             </button>
           </div>
         </div>
@@ -637,36 +671,43 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
 
               {/* List */}
               <div className="flex-1 overflow-y-auto p-5 space-y-8">
-                {Object.entries(filteredAmenities).map(([category, items]) => (
-                  <div key={category} className="space-y-3">
-                    <h4 className="text-sm font-bold text-gray-900">{category}</h4>
-                    <div className="space-y-2">
-                      {items.map((amenity) => {
-                        const isSelected = (formData.included_amenities || []).includes(amenity);
-                        return (
-                          <div
-                            key={amenity}
-                            onClick={() => toggleAmenity(amenity)}
-                            className="flex items-center justify-between py-2 cursor-pointer group"
-                          >
-                            <span className={`text-base ${isSelected ? "text-gray-900 font-medium" : "text-gray-600"}`}>
-                              {amenity}
-                            </span>
-                            <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${isSelected
-                              ? "bg-indigo-600 border-indigo-600"
-                              : "border-gray-300 bg-white group-hover:border-gray-400"
-                              }`}>
-                              {isSelected && <Check size={14} className="text-white" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="h-px bg-gray-100" />
+                {isLoadingAmenities ? (
+                  <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                    <div className="w-10 h-10 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin" />
+                    <p className="text-sm font-medium text-gray-500">Loading amenities...</p>
                   </div>
-                ))}
+                ) : (
+                  Object.entries(filteredAmenities).map(([category, items]) => (
+                    <div key={category} className="space-y-3">
+                      <h4 className="text-sm font-bold text-gray-900">{category}</h4>
+                      <div className="space-y-2">
+                        {items.map((amenity) => {
+                          const isSelected = (formData.included_amenities || []).includes(amenity);
+                          return (
+                            <div
+                              key={amenity}
+                              onClick={() => toggleAmenity(amenity)}
+                              className="flex items-center justify-between py-2 cursor-pointer group"
+                            >
+                              <span className={`text-base ${isSelected ? "text-gray-900 font-medium" : "text-gray-600"}`}>
+                                {amenity}
+                              </span>
+                              <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${isSelected
+                                ? "bg-indigo-600 border-indigo-600"
+                                : "border-gray-300 bg-white group-hover:border-gray-400"
+                                }`}>
+                                {isSelected && <Check size={14} className="text-white" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="h-px bg-gray-100" />
+                    </div>
+                  ))
+                )}
 
-                {Object.keys(filteredAmenities).length === 0 && (
+                {!isLoadingAmenities && Object.keys(filteredAmenities).length === 0 && (
                   <div className="text-center py-10 text-gray-500">
                     No amenities found matching "{amenitySearch}"
                   </div>

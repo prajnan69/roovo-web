@@ -21,8 +21,7 @@ const ContactUs = () => {
                     <h3>Registered Office</h3>
                     <address className="not-italic text-slate-600">
                         <strong>Roovo Hospitality Private Limited</strong><br />
-                        [Add Registered Address Here]<br />
-                        [City, State, Zip Code]<br />
+
                         India
                     </address>
                 </div>
@@ -30,8 +29,7 @@ const ContactUs = () => {
                 <div>
                     <h3>Phone Support</h3>
                     <p>
-                        <a href="tel:+919999999999" className="no-underline text-slate-900 font-semibold">+91 [Insert Number]</a><br />
-                        <span className="text-sm text-slate-500">Mon-Fri, 9:00 AM - 6:00 PM IST</span>
+                        <a href="tel:+917996090696" className="no-underline text-slate-900 font-semibold">+91 7996090696</a><br />
                     </p>
                 </div>
             </div>

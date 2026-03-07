@@ -10,9 +10,10 @@ import {
   Edit2,
 
   Eye,
-  Users
+  Users,
+  Sparkles
 } from "lucide-react";
-import supabase, { getListingsByHostId, fetchListingById, updateListing } from "@/services/api";
+import supabase, { getListingsByHostId, fetchListingById, updateListing, reimportAmenities } from "@/services/api";
 import type { ListingData } from "@/types";
 import { useBottomNavBar } from "@/context/BottomNavBarContext";
 import EditListingView from "../EditListingView";
@@ -460,6 +461,11 @@ export default function ManageListings() {
               setListingToInvite(selectedListing);
               setShowInviteModal(true);
             }}
+            onRefresh={async () => {
+              await fetchHostListings();
+              const fullDetails = await fetchListingById(String(selectedListing.id));
+              setSelectedListing((prev: any) => ({ ...prev, ...fullDetails }));
+            }}
             loading={isDetailLoading}
           />
         )}
@@ -537,8 +543,21 @@ export default function ManageListings() {
 
 // --- Sub-Component: Detailed View ---
 
-function DetailView({ listing, onClose, onEdit, onInvite, loading }: { listing: any; onClose: () => void; onEdit: () => void; onInvite: () => void; loading: boolean; }) {
+function DetailView({ listing, onClose, onEdit, onInvite, onRefresh, loading }: { listing: any; onClose: () => void; onEdit: () => void; onInvite: () => void; onRefresh: () => void; loading: boolean; }) {
   const [isVerifiedDrawerOpen, setIsVerifiedDrawerOpen] = useState(false);
+  const [isReimporting, setIsReimporting] = useState(false);
+
+  const resolveAmenities = () => {
+    if (listing.included_amenities && listing.included_amenities.length > 0) return listing.included_amenities;
+    if (Array.isArray(listing.amenities_data)) {
+      if (listing.amenities_data.length > 0 && typeof listing.amenities_data[0] === 'object' && 'title' in listing.amenities_data[0]) {
+        return listing.amenities_data.filter((item: any) => item.available).map((item: any) => item.title);
+      }
+      return listing.amenities_data.reduce((acc: string[], curr: any) => [...acc, ...(curr.items || [])], []);
+    }
+    return [];
+  };
+  const activeAmenities = resolveAmenities();
 
   return (
     <motion.div
@@ -621,45 +640,73 @@ function DetailView({ listing, onClose, onEdit, onInvite, loading }: { listing: 
           </div>
         </div>
 
-        {/* Amenities (Mock) */}
+        {/* Amenities */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-gray-900">What this place offers</h3>
           <div className="flex flex-wrap gap-3">
-            {['Wifi', 'Kitchen', 'Washer', 'Air Conditioning', 'Pool'].map((item) => (
-              <span key={item} className="px-4 py-2 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-700">
-                {item}
-              </span>
-            ))}
+            {activeAmenities.length > 0 ? (
+              activeAmenities.map((item: string) => (
+                <span key={item} className="px-4 py-2 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-700">
+                  {item}
+                </span>
+              ))
+            ) : (
+              <div className="w-full flex flex-col gap-3">
+                <p className="text-sm text-gray-500 italic">No amenities listed.</p>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (isReimporting) return;
+                    setIsReimporting(true);
+                    try {
+                      triggerHaptic().catch(() => { });
+                      await reimportAmenities(String(listing.id));
+                      triggerHaptic().catch(() => { });
+                      onRefresh();
+                    } catch (err) {
+                      console.error("Failed to reimport amenities", err);
+                    } finally {
+                      setIsReimporting(false);
+                    }
+                  }}
+                  disabled={isReimporting}
+                  className="flex items-center gap-2 text-indigo-600 font-semibold text-sm hover:text-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  <Sparkles size={16} className={isReimporting ? "animate-spin" : ""} />
+                  {isReimporting ? "Re-importing..." : "Re-import Amenities"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Sticky Bottom Action Bar - Elegant Single Row */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-xl border-t border-gray-200 pb-safe-bottom flex items-center gap-3 z-50">
+      {/* Sticky Bottom Action Bar */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-gray-100 pb-safe-bottom flex items-center gap-3 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
 
-        {/* Primary Action: Edit (Dominant) */}
+        {/* Primary Action: Edit */}
         <button
           onClick={onEdit}
-          className="flex-1 bg-gray-900 text-white font-semibold h-12 rounded-full transition-all active:scale-95 shadow-lg shadow-gray-200 flex items-center justify-center gap-2 text-[15px]"
+          className="flex-[1.5] bg-gray-900 text-white font-bold h-14 rounded-2xl transition-all active:scale-95 shadow-xl shadow-gray-900/10 flex items-center justify-center gap-2 text-base"
         >
-          <Edit2 size={16} strokeWidth={2.5} />
+          <Edit2 size={18} strokeWidth={2.5} />
           Edit Listing
         </button>
 
         <button
           onClick={onInvite}
-          className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold h-12 rounded-full transition-all active:scale-95 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-[15px]"
+          className="flex-1 bg-indigo-50 text-indigo-700 font-bold h-14 rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 text-sm"
         >
-          <Users size={16} strokeWidth={2.5} />
-          Invite Co-Host
+          <Users size={18} strokeWidth={2.5} />
+          Invite
         </button>
       </div>
 
-      {/* Floating Preview Button (Positioned above footer) */}
+      {/* Floating Preview Button */}
       <button
-        className="absolute bottom-[5.5rem] right-4 bg-white text-gray-900 border border-gray-100 p-3.5 rounded-full shadow-lg z-40 active:scale-95 transition-transform"
+        className="absolute bottom-32 right-6 bg-white text-gray-900 border border-gray-100 p-4 rounded-full shadow-2xl z-40 active:scale-90 transition-all border-indigo-50 group"
       >
-        <Eye size={22} className="text-gray-700" />
+        <Eye size={24} className="text-indigo-600 group-hover:scale-110 transition-transform" />
       </button>
 
       <VerifiedDrawer

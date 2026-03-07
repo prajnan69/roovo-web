@@ -30,6 +30,7 @@ interface ConfirmAndPayProps {
   onBack: () => void;
   host_id: string;
   auto_bookable?: boolean;
+  isFeeWaived?: boolean;
   guestDetails: {
     id: string;
     name: string;
@@ -44,6 +45,7 @@ export default function ConfirmAndPay({
   onBack,
   host_id,
   auto_bookable,
+  isFeeWaived,
   guestDetails,
 }: ConfirmAndPayProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -66,13 +68,29 @@ export default function ConfirmAndPay({
     initializeSDK();
   }, []);
 
+  const serviceFeePercent = isFeeWaived ? 0 : 0.03;
+  const basePricePerNight = priceDetails.pricePerNight;
+  const serviceFeePerNight = basePricePerNight * serviceFeePercent;
+
+  const nights = bookingDetails.nights;
+  const currentRoovoBaseTotal = basePricePerNight * nights;
+  const currentRoovoServiceFeeTotal = serviceFeePerNight * nights;
+  const currentRoovoTotal = isFeeWaived ? currentRoovoBaseTotal : (currentRoovoBaseTotal + currentRoovoServiceFeeTotal);
+
+  const roomGstRate = basePricePerNight > 7500 ? 0.18 : 0.12;
+  const roomGstTotal = currentRoovoBaseTotal * roomGstRate;
+  const serviceFeeGstTotal = currentRoovoServiceFeeTotal * 0.18;
+
+  const totalTax = roomGstTotal + serviceFeeGstTotal;
+  const grandTotal = currentRoovoTotal + totalTax;
+
   const handleBooking = async (): Promise<boolean> => {
     setIsLoading(true);
     setBookingStatus("loading");
 
     try {
       // 1. Create Order on Backend
-      const orderAmount = parseFloat((priceDetails.totalPrice + priceDetails.taxes).toFixed(2));
+      const orderAmount = parseFloat(grandTotal.toFixed(2));
       const customerPhone = guestDetails.phone || "9999999999"; // Fallback for dev
       const customerName = guestDetails.name || "Guest";
 
@@ -105,7 +123,11 @@ export default function ConfirmAndPay({
         host_id,
         start_date: bookingDetails.startDate,
         end_date: bookingDetails.endDate,
-        total_price: parseFloat((priceDetails.totalPrice + priceDetails.taxes).toFixed(2)),
+        total_price: parseFloat(grandTotal.toFixed(2)),
+        host_payout: parseFloat(currentRoovoBaseTotal.toFixed(2)),
+        taxes: parseFloat(totalTax.toFixed(2)),
+        our_fees: parseFloat(currentRoovoServiceFeeTotal.toFixed(2)),
+        host_fees: 0, // In case we want to track host-side fees later
         auto_bookable,
       }));
 
@@ -160,7 +182,11 @@ export default function ConfirmAndPay({
       host_id,
       start_date: bookingDetails.startDate,
       end_date: bookingDetails.endDate,
-      total_price: priceDetails.totalPrice + priceDetails.taxes,
+      total_price: grandTotal,
+      host_payout: currentRoovoBaseTotal,
+      taxes: totalTax,
+      our_fees: currentRoovoServiceFeeTotal,
+      host_fees: 0,
       auto_bookable,
       payment_order_id: paymentOrderId
     };

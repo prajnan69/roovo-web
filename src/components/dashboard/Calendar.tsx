@@ -18,6 +18,8 @@ interface Booking {
   end_date: string;
   status: string;
   guest_id: string;
+  guest?: { name: string; avatar_url: string | null };
+  payment_method?: string;
 }
 
 interface PriceOverride {
@@ -63,6 +65,10 @@ const Calendar = () => {
   // Property Switcher Modal State
   const [isPropertiesModalOpen, setIsPropertiesModalOpen] = useState(false);
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Booking Details Drawer State
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isBookingDrawerOpen, setIsBookingDrawerOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -318,6 +324,12 @@ const Calendar = () => {
     triggerHaptic();
   };
 
+  const handleBookingClick = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setIsBookingDrawerOpen(true);
+    triggerHaptic();
+  };
+
   if (!selectedListing && !isLoading && listings.length > 0) return null; // Wait for sync
 
   return (
@@ -435,6 +447,7 @@ const Calendar = () => {
             selectedDates={selectedDates}
             onToggleDate={handleToggleDate}
             onRangeSelect={handleRangeSelect}
+            onBookingClick={handleBookingClick}
           />
 
           {/* Bulk Edit Bar (Glass) */}
@@ -489,6 +502,89 @@ const Calendar = () => {
             onApplyHolidayPremium={handleApplyHolidayPremium}
             onApplyWeekendPremium={handleApplyWeekendPremium}
           />
+
+          {/* Booking Details Drawer */}
+          <AnimatePresence>
+            {isBookingDrawerOpen && selectedBooking && (
+              <>
+                {/* Backdrop */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+                  onClick={() => setIsBookingDrawerOpen(false)}
+                />
+
+                {/* Sheet */}
+                <motion.div
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                  className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-[32px] overflow-hidden max-h-[80vh] flex flex-col"
+                >
+                  <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                    <h3 className="text-lg font-bold text-gray-900 ml-2">Booking Details</h3>
+                    <button
+                      onClick={() => setIsBookingDrawerOpen(false)}
+                      className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="p-6 overflow-y-auto pb-safe-bottom">
+                    <div className="space-y-4">
+                      {/* Distinguish internal vs external */}
+                      {(selectedBooking.status === 'blocked' || selectedBooking.payment_method === 'external') ? (
+                        <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex items-start gap-4 ring-1 ring-amber-200/50">
+                          <div className="bg-amber-100 w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-amber-200">
+                            <span className="text-xl">📅</span>
+                          </div>
+                          <div>
+                            <h4 className="text-amber-900 font-bold text-lg leading-tight">Booked Externally</h4>
+                            <p className="text-amber-700 text-sm mt-1">This date is blocked by an external calendar sync (e.g. Airbnb, MakeMyTrip).</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 flex items-center gap-4 ring-1 ring-indigo-200/50">
+                          <div className="w-12 h-12 rounded-full bg-indigo-200 border-2 border-white shadow-sm flex items-center justify-center shrink-0">
+                            {selectedBooking.guest?.avatar_url ? (
+                              <img src={selectedBooking.guest.avatar_url} alt="Guest" className="w-full h-full rounded-full object-cover" />
+                            ) : (
+                              <span className="text-indigo-600 font-bold text-lg">{selectedBooking.guest?.name?.charAt(0) || 'G'}</span>
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-indigo-900 font-bold text-lg leading-tight">{selectedBooking.guest?.name || 'Guest'}</h4>
+                            <p className="text-indigo-700 text-sm mt-0.5 capitalize font-medium">Status: {selectedBooking.status.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 shadow-sm">
+                        <div className="flex justify-between items-center py-3 border-b border-slate-200/60 last:border-0">
+                          <span className="text-slate-500 text-sm font-medium">Check-in Date</span>
+                          <span className="text-slate-900 font-bold">{new Date(selectedBooking.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 border-b border-slate-200/60 last:border-0">
+                          <span className="text-slate-500 text-sm font-medium">Check-out Date</span>
+                          <span className="text-slate-900 font-bold">{new Date(selectedBooking.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 border-b border-slate-200/60 last:border-0">
+                          <span className="text-slate-500 text-sm font-medium">Nights</span>
+                          <span className="text-slate-900 font-bold">
+                            {Math.ceil((new Date(selectedBooking.end_date).getTime() - new Date(selectedBooking.start_date).getTime()) / (1000 * 3600 * 24))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
 
           {/* Property Selection Modal */}
           <AnimatePresence>

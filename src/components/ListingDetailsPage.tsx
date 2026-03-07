@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { useScroll, useTransform } from "framer-motion";
 import { Share as CapShare } from '@capacitor/share';
 import RoovoLoader from "@/components/RoovoLoader";
 import { fetchListingById, addRecentlyViewed, fetchBookingsByListingId } from "@/services/api";
@@ -742,6 +742,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
               }}
               host_id={listing.host_id}
               auto_bookable={listing.is_auto_bookable}
+              isFeeWaived={isFeeWaived}
               guestDetails={{
                 id: currentUserId,
                 name: currentUserName,

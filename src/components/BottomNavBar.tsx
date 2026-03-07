@@ -13,7 +13,7 @@ interface BottomNavBarProps {
   openLogin: () => void;
   onSwitchToHost?: () => void;
   onSwitchToTraveling?: () => void;
-  onMessagesClick: () => void;
+  onMessagesClick?: () => void;
 }
 
 const BottomNavBar: React.FC<BottomNavBarProps> = ({
@@ -22,7 +22,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
   openLogin,
   onSwitchToHost,
   onSwitchToTraveling,
-  onMessagesClick
+  onMessagesClick,
 }) => {
   const { pathname, navigate } = useNavigation();
   const { profileData } = usePreloadedData();
@@ -62,7 +62,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
           ? { href: "/hosting", label: "Hosting", icon: Repeat, action: onSwitchToHost }
           : { href: "/become-host", label: "Roovo your home", icon: Building2, action: () => navigate('/import-listing') },
         right: [
-          { label: "Messages", icon: MessageSquare, action: onMessagesClick },
+          { href: "/messages", label: "Messages", icon: MessageSquare, action: onMessagesClick },
           { href: isLoggedIn ? "/profile" : "/login", label: isLoggedIn ? "Profile" : "Log in", icon: UserCircle2, action: isLoggedIn ? undefined : openLogin },
         ]
       };

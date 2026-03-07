@@ -10,13 +10,15 @@ interface MessagesDrawerProps {
   onClose: () => void;
   guestConversations: Conversation[];
   hostConversations: Conversation[];
+  onConversationSelect?: (conversation: Conversation) => void;
 }
 
 const MessagesDrawer: React.FC<MessagesDrawerProps> = ({
   isOpen,
   onClose,
   guestConversations,
-  hostConversations
+  hostConversations,
+  onConversationSelect
 }) => {
   const [mounted, setMounted] = useState(false);
 
@@ -59,6 +61,12 @@ const MessagesDrawer: React.FC<MessagesDrawerProps> = ({
                 isDrawerMode={true}
                 guestConversations={guestConversations}
                 hostConversations={hostConversations}
+                onConversationClick={(conversation) => {
+                  if (onConversationSelect) {
+                    onConversationSelect(conversation);
+                  }
+                  onClose();
+                }}
               />
             </div>
           </motion.div>

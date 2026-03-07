@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronRight, ArrowLeft, LogIn } from "lucide-react";
-import supabase from "../../services/api";
+import supabase, { markConversationAsRead } from "../../services/api";
 import Chat from "../Chat";
 import { triggerHaptic } from "@/lib/haptics";
+import { useBottomNavBar } from "@/context/BottomNavBarContext";
+import { useNavigation } from "@/hooks/useNavigation";
 
 interface MessagesPageProps {
   conversations: any[];
@@ -25,6 +27,20 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   isAuthenticated = true,
 }) => {
   const [conversations, setConversations] = useState<any[]>(initialConversations);
+  const { setIsNavBarVisible } = useBottomNavBar();
+  const { back, pathname } = useNavigation();
+
+  useEffect(() => {
+    if (selectedConversation) {
+      setIsNavBarVisible(false);
+    } else {
+      setIsNavBarVisible(true);
+    }
+  }, [selectedConversation, setIsNavBarVisible]);
+
+  useEffect(() => {
+    return () => setIsNavBarVisible(true);
+  }, [setIsNavBarVisible]);
 
   // Handle real-time updates
   useEffect(() => {
@@ -45,9 +61,20 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
             const index = newConversations.findIndex(
               (c) => c.id === (payload.new as any).id
             );
-            if (index !== -1) newConversations.splice(index, 1);
-            newConversations.unshift(payload.new as any);
-            return newConversations;
+            if (index !== -1) {
+              // Update existing conversation with new data, prioritizing the most recent last_message_at
+              newConversations[index] = { ...newConversations[index], ...(payload.new as any) };
+            } else {
+              // Add new conversation
+              newConversations.push(payload.new as any);
+            }
+
+            // Sort to ensure the most recently updated are at top
+            return newConversations.sort((a, b) => {
+              const dateA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+              const dateB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+              return dateB - dateA; // Descending
+            });
           });
         }
       )
@@ -59,11 +86,24 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   const handleConversationSelect = async (convo: any) => {
     await triggerHaptic();
     onConversationSelect(convo);
+
+    // Mark as read in background
+    try {
+      await markConversationAsRead(convo.id, userType);
+      // locally update for immediate UI feedback
+      convo.unread_count = 0;
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+    }
   };
 
   const handleBack = async () => {
     await triggerHaptic();
-    onConversationSelect(null);
+    if (selectedConversation) {
+      onConversationSelect(null);
+    } else if (!pathname.includes("/hosting")) {
+      back();
+    }
   };
 
   const handleLoginClick = async () => {
@@ -109,9 +149,9 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
         {!selectedConversation && (
           <motion.div
             key="list"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="flex-1 flex flex-col h-full bg-white"
           >
@@ -140,8 +180,12 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
               ) : (
                 <div className="pb-48 pt-2">
                   {conversations.map((convo, i) => {
-                    const otherUser = userType === 'host' ? convo.guest : convo.host;
+                    const otherUser = (userType === 'host' ? convo.guest : convo.host) || {};
                     const isLast = i === conversations.length - 1;
+
+                    // Simple unread detection: if the last message wasn't sent by us (we don't have user id here easily without prop drilling, but we can assume bolding until opened)
+                    // Let's just use a more subtle styling for the last message
+                    const hasUnread = convo.unread_count > 0 || (!convo.last_message?.is_read && convo.last_message?.sender_id !== otherUser.id);
 
                     return (
                       <motion.div
@@ -150,12 +194,12 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05 }}
-                        className={`group active:bg-gray-50 transition-colors pl-4 pr-4 py-4 flex items-center gap-4 cursor-pointer ${!isLast ? 'border-b border-gray-50' : ''}`}
+                        className={`group active:bg-gray-50 transition-colors pl-4 pr-4 py-4 flex items-center gap-4 cursor-pointer ${!isLast ? 'border-b border-gray-50' : ''} ${hasUnread ? 'bg-indigo-50/30' : ''}`}
                       >
                         {/* Avatar with Image Fallback */}
                         <div className="relative flex-shrink-0">
                           <img
-                            src={otherUser.avatar_url || (convo.listing?.images_data?.[0]?.url) || (convo.listing?.all_image_urls?.[0]?.url) || "https://ui-avatars.com/api/?background=random"}
+                            src={otherUser?.avatar_url || (convo.listing?.images_data?.[0]?.url) || (convo.listing?.all_image_urls?.[0]?.url) || "https://ui-avatars.com/api/?background=random"}
                             alt="Avatar"
                             className="w-14 h-14 rounded-full object-cover border border-gray-100 shadow-sm"
                           />
@@ -165,10 +209,10 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
 
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-baseline mb-1">
-                            <h3 className="font-bold text-slate-900 truncate text-[16px]">
-                              {otherUser.name || "User"}
+                            <h3 className={`truncate text-[16px] ${hasUnread ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>
+                              {otherUser?.name || "User"}
                             </h3>
-                            <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap ml-2">
+                            <span className={`text-[11px] font-medium whitespace-nowrap ml-2 ${hasUnread ? 'text-indigo-600' : 'text-gray-400'}`}>
                               {convo.last_message_at
                                 ? new Date(convo.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                 : ''}
@@ -180,11 +224,14 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                               <p className="text-[12px] font-medium text-indigo-600 uppercase tracking-wide truncate mb-0.5">
                                 {convo.listing.title}
                               </p>
-                              <p className="text-[14px] text-gray-600 truncate leading-snug">
-                                {convo.last_message?.content || <span className="italic opacity-60">Drafting...</span>}
+                              <p className={`text-[14px] truncate leading-snug ${hasUnread ? 'font-medium text-slate-800' : 'text-gray-600'}`}>
+                                {convo.last_message?.content || <span className="italic opacity-60">Start a conversation...</span>}
                               </p>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-gray-300" />
+                            {hasUnread && (
+                              <div className="w-2 h-2 rounded-full bg-indigo-500 ml-2 shadow-sm shadow-indigo-200"></div>
+                            )}
+                            <ChevronRight className="w-4 h-4 text-gray-300 ml-2" />
                           </div>
                         </div>
                       </motion.div>
@@ -225,7 +272,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                 </div>
                 <div className="flex flex-col justify-center min-w-0">
                   <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">
-                    {userType === 'host' ? selectedConversation.guest.name : selectedConversation.host.name}
+                    {userType === 'host' ? selectedConversation.guest?.name || 'Guest' : selectedConversation.host?.name || 'Host'}
                   </h2>
                   <span className="text-[11px] text-gray-500 font-medium truncate">
                     {selectedConversation.listing?.title || 'Unknown Listing'}
@@ -236,7 +283,10 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
 
             {/* Chat Body */}
             <div className="flex-1 relative bg-slate-50 overflow-hidden">
-              <Chat conversationId={selectedConversation.id} />
+              <Chat
+                conversationId={selectedConversation.id}
+                otherUser={userType === 'host' ? selectedConversation.guest : selectedConversation.host}
+              />
             </div>
           </motion.div>
         )}

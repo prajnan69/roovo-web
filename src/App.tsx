@@ -14,7 +14,6 @@ import VerifyIdentity from './components/VerifyIdentity';
 import Router from './components/Router';
 import Route from './components/Route';
 import BottomNavBar from './components/BottomNavBar';
-import MessagesDrawer from './components/MessagesDrawer';
 import MobileSearchBar from './components/MobileSearchBar';
 import SearchPage from './components/SearchPage';
 import Login from './components/Login';
@@ -45,7 +44,6 @@ function AppContent() {
   const [isHostStatusResolved, setIsHostStatusResolved] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<'host' | 'traveling'>('host');
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
-  const [isMessagesDrawerOpen, setIsMessagesDrawerOpen] = useState(false);
   const [hostConversations, setHostConversations] = useState<any[]>([]);
   const [guestConversations, setGuestConversations] = useState<any[]>([]);
   const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
@@ -571,14 +569,10 @@ function AppContent() {
         openLogin={() => handleOpenLogin()}
         onSwitchToHost={handleSwitchToHost}
         onSwitchToTraveling={handleSwitchToTraveling}
-        onMessagesClick={() => setIsMessagesDrawerOpen(true)}
-      />
-
-      <MessagesDrawer
-        isOpen={isMessagesDrawerOpen}
-        onClose={() => setIsMessagesDrawerOpen(false)}
-        guestConversations={guestConversations}
-        hostConversations={hostConversations}
+        onMessagesClick={() => {
+          setSelectedConversation(null);
+          navigate('/messages');
+        }}
       />
 
       {isSearchOpen && <MobileSearchBar onClose={() => setIsSearchOpen(false)} />}

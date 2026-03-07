@@ -30,12 +30,14 @@ interface ConversationListProps {
   guestConversations?: Conversation[];
   hostConversations?: Conversation[];
   isDrawerMode?: boolean;
+  onConversationClick?: (conversation: Conversation) => void;
 }
 
-const ConversationList: React.FC<ConversationListProps> = ({ 
-  guestConversations: propGuestConversations, 
+const ConversationList: React.FC<ConversationListProps> = ({
+  guestConversations: propGuestConversations,
   hostConversations: propHostConversations,
-  isDrawerMode 
+  isDrawerMode,
+  onConversationClick
 }) => {
   const [internalGuestConversations, setInternalGuestConversations] = useState<Conversation[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -62,8 +64,8 @@ const ConversationList: React.FC<ConversationListProps> = ({
       try {
         const response = await fetch(`${API_BASE_URL}/api/chat/conversations/guest/${user.id}`);
         if (response.ok) {
-           const data = await response.json();
-           setInternalGuestConversations(data);
+          const data = await response.json();
+          setInternalGuestConversations(data);
         }
       } catch (e) {
         console.error("Failed to fetch conversations", e);
@@ -109,26 +111,24 @@ const ConversationList: React.FC<ConversationListProps> = ({
           <div className="text-xl font-bold">Messages</div>
         </div>
       )}
-      
+
       {/* Tabs */}
       <div className="flex border-b border-slate-100 px-4">
         <button
           onClick={() => setActiveTab('traveling')}
-          className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2 ${
-            activeTab === 'traveling' 
-              ? 'border-indigo-600 text-indigo-600' 
+          className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2 ${activeTab === 'traveling'
+              ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           Traveling
         </button>
         <button
           onClick={() => setActiveTab('hosting')}
-          className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2 ${
-            activeTab === 'hosting' 
-              ? 'border-indigo-600 text-indigo-600' 
+          className={`flex-1 py-3 text-sm font-semibold transition-colors border-b-2 ${activeTab === 'hosting'
+              ? 'border-indigo-600 text-indigo-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
+            }`}
         >
           Hosting
         </button>
@@ -136,14 +136,20 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
       <div className="divide-y divide-slate-100 overflow-y-auto h-[calc(100%-50px)]">
         {currentConversations.length === 0 ? (
-           <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-             <p>No messages yet.</p>
-           </div>
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+            <p>No messages yet.</p>
+          </div>
         ) : (
           currentConversations.map((conversation) => (
             <div
               key={conversation.id}
-              onClick={() => navigate(`/messages/${conversation.id}`)}
+              onClick={() => {
+                if (onConversationClick) {
+                  onConversationClick(conversation);
+                } else {
+                  navigate(`/messages/${conversation.id}`);
+                }
+              }}
               className="p-4 flex items-center space-x-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <img

@@ -24,7 +24,7 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
 
   const renderContent = () => {
     if (pathname === "/hosting/calendar") {
-      return <Calendar conversations={conversations} onConversationSelect={onConversationSelect} />;
+      return <Calendar />;
     }
     if (pathname === "/hosting/messages") {
       return <Messages conversations={conversations} selectedConversation={selectedConversation} onConversationSelect={onConversationSelect} userType="host" />;
@@ -38,9 +38,6 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
     if (pathname === "/hosting/payouts") {
       return <Payouts />;
     }
-    if (pathname === "/hosting/payouts") {
-      return <Payouts />;
-    }
     if (pathname === "/hosting/payout-methods") {
       return <PayoutMethods />;
     }
@@ -49,7 +46,7 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
 
   return (
     <div className="h-screen flex flex-col relative bg-gray-50">
-      {pathname !== "/hosting/payout-methods" && <HostBottomNavigation />}
+      {pathname !== "/hosting/payout-methods" && !selectedConversation && <HostBottomNavigation />}
       <AnimatePresence mode="wait">
         <motion.div
           key={pathname}

@@ -24,6 +24,7 @@ interface CalendarGridProps {
   selectedDates?: string[];
   onToggleDate?: (date: string) => void;
   onRangeSelect?: (dates: string[]) => void;
+  onBookingClick?: (booking: Booking) => void;
 }
 
 const CalendarGrid = ({
@@ -36,7 +37,8 @@ const CalendarGrid = ({
   priceMap = {},
   selectedDates = [],
   onToggleDate,
-  onRangeSelect
+  onRangeSelect,
+  onBookingClick
 }: CalendarGridProps) => {
   const isDragging = useRef(false);
   const dragStartDate = useRef<string | null>(null);
@@ -194,9 +196,7 @@ const CalendarGrid = ({
               const dateStr = localDate.toISOString().split("T")[0];
 
               const booking = bookings.find((b) => {
-                const startDate = new Date(b.start_date);
-                const endDate = new Date(b.end_date);
-                return date >= startDate && date <= endDate;
+                return dateStr >= b.start_date && dateStr < b.end_date;
               });
 
               // --- ORIGINAL STYLING LOGIC START ---
@@ -244,6 +244,12 @@ const CalendarGrid = ({
                   onPointerDown={() => {
                     // Only start drag if no booking and not past
                     if (!booking && !isPast) handlePointerDown(dateStr);
+                  }}
+                  onClick={() => {
+                    if (booking && onBookingClick) {
+                      triggerHaptic();
+                      onBookingClick(booking);
+                    }
                   }}
                   onPointerEnter={() => {
                     handlePointerEnter(dateStr);

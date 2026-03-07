@@ -8,7 +8,7 @@ import { Spinner } from "./ui/shadcn-io/spinner";
 import { triggerHaptic } from "@/lib/haptics";
 import { Keyboard } from "@capacitor/keyboard";
 
-const Chat = ({ conversationId }: { conversationId: string }) => {
+const Chat = ({ conversationId, otherUser }: { conversationId: string, otherUser?: any }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -189,7 +189,15 @@ const Chat = ({ conversationId }: { conversationId: string }) => {
                     <div className="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
                       {showAvatar ? (
                         <div className="w-8 h-8 rounded-full bg-gray-200 border border-white shadow-sm overflow-hidden">
-                          <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${msg.sender_id}`} alt="avatar" />
+                          {/* Use the user's explicit avatar URL if available, else derive initials from their name */}
+                          {otherUser?.avatar_url ? (
+                            <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            <img
+                              src={`https://ui-avatars.com/api/?background=c7d2fe&color=3730a3&name=${encodeURIComponent(otherUser?.name || 'User')}`}
+                              alt="avatar"
+                            />
+                          )}
                         </div>
                       ) : <div className="w-8" />}
                     </div>

@@ -369,21 +369,17 @@ const Calendar: React.FC<CalendarProps> = ({ conversations, onConversationSelect
               Array.from({ length: daysInMonth }).map((_, i) => {
                 const d = i + 1;
                 const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
+                const dateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+
                 const booking = bookings.find(b => {
-                  const s = new Date(b.start_date);
-                  const e = new Date(b.end_date);
-                  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-                  const sOnly = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-                  const eOnly = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-                  return dateOnly >= sOnly && dateOnly <= eOnly;
+                  return dateStr >= b.start_date && dateStr < b.end_date;
                 });
 
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 const originalPrice = isWeekend ? Number(selectedListing?.weekend_price || 0) : Number(selectedListing?.price_per_night || 0);
 
                 const override = selectedListing?.price_overrides.find(o => {
-                  const localDate = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
-                  return localDate >= o.start_date && localDate <= o.end_date;
+                  return dateStr >= o.start_date && dateStr <= o.end_date;
                 });
 
                 const dayPrice = override ? (isWeekend ? override.weekend_price : override.price_per_night) : originalPrice;

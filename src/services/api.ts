@@ -374,3 +374,28 @@ export const syncIcal = async (listingId: string, icalUrl?: string) => {
   }
   return response.json();
 };
+
+export const reimportAmenities = async (listingId: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/airbnb/reimport-amenities/${listingId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to re-import amenities for listing ${listingId}: ${response.status} ${response.statusText}`, errorText);
+    throw new Error('Failed to re-import amenities');
+  }
+  return response.json();
+};
+
+export const markConversationAsRead = async (conversationId: string, userType: 'host' | 'guest') => {
+  const response = await fetch(`${API_BASE_URL}/api/chat/mark-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversationId, userType })
+  });
+  if (!response.ok) {
+    throw new Error('Failed to mark conversation as read');
+  }
+  return response.json();
+};

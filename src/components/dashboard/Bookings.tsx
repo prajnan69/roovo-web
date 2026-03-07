@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import supabase, { getListingsWithBookingsByHostId } from "../../services/api";
 import RoovoLoader from "../RoovoLoader";
 import { triggerHaptic } from "@/lib/haptics";
-import { Calendar, MapPin, User, Clock, ArrowUpRight, Search, SlidersHorizontal, ChevronRight, X, Star, ChevronDown, ChevronUp, DollarSign } from "lucide-react";
+import { Calendar, MapPin, User, Clock, ArrowUpRight, Search, SlidersHorizontal, ChevronRight, X, Star, ChevronDown, ChevronUp, IndianRupee } from "lucide-react";
 
 const Bookings = () => {
   const [bookings, setBookings] = useState<any[]>([]);
@@ -196,12 +196,12 @@ const Bookings = () => {
                           <div className="flex items-center justify-between bg-green-50 rounded-xl p-3 border border-green-100">
                             <div className="flex items-center gap-2">
                               <div className="bg-green-100 p-1.5 rounded-lg">
-                                <DollarSign size={16} className="text-green-700" />
+                                <IndianRupee size={16} className="text-green-700" />
                               </div>
                               <span className="text-sm font-medium text-green-800">Total Earnings</span>
                             </div>
                             <span className="text-lg font-bold text-green-700">
-                              ${Number(booking.total_price).toLocaleString()}
+                              ₹{Number(booking.total_price).toLocaleString('en-IN')}
                             </span>
                           </div>
                         </div>
