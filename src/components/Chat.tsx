@@ -186,7 +186,30 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
     const ourFees = roovoFee + gstOnFee;
 
     try {
-      // 1. Create order
+      // We must get listing ID from conversation to validate and create the booking
+      const { data: convo } = await supabase.from('conversations').select('listing_id, host_id').eq('id', conversationId).single();
+      if (!convo) throw new Error("Can't find conversation details");
+
+      // 1. Validate Offer First
+      const validateRes = await fetch(`${API_BASE_URL}/api/bookings/validate-offer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listing_id: convo.listing_id,
+          message_id: selectedOffer.messageId,
+          start_date: selectedOffer.startDate,
+          end_date: selectedOffer.endDate,
+          price: selectedOffer.price
+        })
+      });
+
+      const validateData = await validateRes.json();
+      if (!validateRes.ok || !validateData.valid) {
+        alert(validateData.error || "This offer is no longer valid or available.");
+        return;
+      }
+
+      // 2. Create Cashfree order
       const guestPhone = session.user.identities?.[0]?.identity_data?.phone || "9999999999";
 
       const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
@@ -207,10 +230,6 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
       if (!orderRes.ok) throw new Error("Failed to create cashfree order");
       const orderData = await orderRes.json();
-
-      // We must get listing ID from conversation to create the booking
-      const { data: convo } = await supabase.from('conversations').select('listing_id, host_id').eq('id', conversationId).single();
-      if (!convo) throw new Error("Can't find conversation details");
 
       // Store pending booking
       localStorage.setItem(`pending_booking_${orderData.order_id}`, JSON.stringify({

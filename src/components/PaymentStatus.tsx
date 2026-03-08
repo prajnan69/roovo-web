@@ -60,34 +60,19 @@ const PaymentStatus = () => {
           if (bookingDataStr) {
             const bookingData = JSON.parse(bookingDataStr);
 
-            // Check if booking already exists (idempotency check)
-            const checkRes = await fetch(`${API_BASE_URL}/api/bookings?payment_order_id=${orderId}`);
-            let exists = false;
-            if (checkRes.ok) {
-              const existingBookings = await checkRes.json();
-              if (Array.isArray(existingBookings) && existingBookings.length > 0) {
-                exists = true;
-              }
-            }
+            // Create Booking unconditionally (backend handles duplicate db constraint)
+            const createRes = await fetch(`${API_BASE_URL}/api/bookings`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...bookingData, payment_order_id: orderId }),
+            });
 
-            if (!exists) {
-              // Create Booking
-              const createRes = await fetch(`${API_BASE_URL}/api/bookings`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...bookingData, payment_order_id: orderId }),
-              });
-
-              if (createRes.ok) {
-                setStatus("success");
-                localStorage.removeItem(`pending_booking_${orderId}`);
-              } else {
-                console.error("Booking creation failed");
-                setStatus("failed"); // Payment success but booking failed
-              }
-            } else {
-              setStatus("success"); // Already created
+            if (createRes.ok) {
+              setStatus("success");
               localStorage.removeItem(`pending_booking_${orderId}`);
+            } else {
+              console.error("Booking creation failed");
+              setStatus("failed"); // Payment success but booking failed
             }
           } else {
             // Maybe booking already created or lost data?
