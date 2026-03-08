@@ -87,6 +87,9 @@ export const PreloadProvider = ({ children }: { children: ReactNode }) => {
       '/chikkamagaluru.png',
       '/uttara-kannada.png',
       '/udupi-manglore.png',
+      '/icons/globe_t.png',
+      '/icons/man_t.png',
+      '/icons/man_h.png'
     ];
 
     imagesToPreload.forEach((src) => {

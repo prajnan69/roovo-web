@@ -28,6 +28,8 @@ import SplashScreen from './components/SplashScreen';
 import './index.css';
 import NotificationToast from './components/NotificationToast';
 import PaymentStatus from './components/PaymentStatus';
+import { useWebPush } from './hooks/useWebPush';
+import NotificationPromptDrawer from './components/NotificationPromptDrawer';
 
 import ImportListingPage from './components/import/ImportListingPage';
 import CohostInvitationPage from './components/invitation/CohostInvitationPage';
@@ -56,6 +58,10 @@ function AppContent() {
 
   const { pathname, back, navigate } = useNavigation();
   const isPushInitialized = useRef(false);
+
+  const { requestPermissionAndGetToken } = useWebPush();
+  const [isWebPushPromptOpen, setIsWebPushPromptOpen] = useState(false);
+  const [isWebPushPromptLoading, setIsWebPushPromptLoading] = useState(false);
 
   const showBottomNavBar =
     !pathname.startsWith('/listing/') &&
@@ -449,9 +455,15 @@ function AppContent() {
         getConversations();
         if (session?.user?.id && !isPushInitialized.current) {
           isPushInitialized.current = true;
-          import('./services/PushNotificationService').then(({ initPushNotifications }) => {
-            initPushNotifications(session.user.id);
-          });
+          if (Capacitor.isNativePlatform()) {
+            import('./services/PushNotificationService').then(({ initPushNotifications }) => {
+              initPushNotifications(session.user.id);
+            });
+          } else {
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+              setIsWebPushPromptOpen(true);
+            }
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         getConversations(); // This will clear state now
@@ -699,6 +711,18 @@ function AppContent() {
           <HomeOptionsPills />
         </div>
       )}
+
+      <NotificationPromptDrawer
+        isOpen={isWebPushPromptOpen}
+        onClose={() => setIsWebPushPromptOpen(false)}
+        isLoading={isWebPushPromptLoading}
+        onEnable={async () => {
+          setIsWebPushPromptLoading(true);
+          await requestPermissionAndGetToken();
+          setIsWebPushPromptLoading(false);
+          setIsWebPushPromptOpen(false);
+        }}
+      />
     </div>
   );
 }
