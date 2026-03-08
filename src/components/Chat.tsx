@@ -209,30 +209,9 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         return;
       }
 
-      // 2. Create Cashfree order
+      // Prepare booking data first so we can send it to the backend for intent tracking
       const guestPhone = session.user.identities?.[0]?.identity_data?.phone || "9999999999";
-
-      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_amount: orderAmount,
-          customer_details: {
-            customer_id: session.user.id,
-            customer_phone: guestPhone,
-            customer_name: session.user.user_metadata?.name || 'Guest',
-          },
-          order_meta: {
-            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-          }
-        })
-      });
-
-      if (!orderRes.ok) throw new Error("Failed to create cashfree order");
-      const orderData = await orderRes.json();
-
-      // Store pending booking
-      localStorage.setItem(`pending_booking_${orderData.order_id}`, JSON.stringify({
+      const bookingData = {
         listing_id: convo.listing_id,
         guest_id: session.user.id,
         host_id: convo.host_id, // Host ID
@@ -246,7 +225,31 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         auto_bookable: true, // Offers are auto confirmed
         is_special_offer: true,
         message_id: selectedOffer.messageId
-      }));
+      };
+
+      // 2. Create Cashfree order & store intent
+      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_amount: orderAmount,
+          customer_details: {
+            customer_id: session.user.id,
+            customer_phone: guestPhone,
+            customer_name: session.user.user_metadata?.name || 'Guest',
+          },
+          order_meta: {
+            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
+          },
+          bookingData: bookingData // Send to store in backend intent table
+        })
+      });
+
+      if (!orderRes.ok) throw new Error("Failed to create cashfree order");
+      const orderData = await orderRes.json();
+
+      // Store pending booking in local storage as well for immediate fallback
+      localStorage.setItem(`pending_booking_${orderData.order_id}`, JSON.stringify(bookingData));
 
       // 2. Checkout
       cashfree.checkout({
