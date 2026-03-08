@@ -19,9 +19,10 @@ interface AcceptOfferDrawerProps {
     guestId: string;
     guestPhone: string;
     listingId: string;
+    hostId: string;
 }
 
-export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, listingTitle, guestId, guestPhone, listingId }: AcceptOfferDrawerProps) {
+export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, listingTitle, guestId, guestPhone, listingId, hostId }: AcceptOfferDrawerProps) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSplitEnabled, setIsSplitEnabled] = useState(false);
     const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
@@ -66,12 +67,17 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                         bookingData: {
                             listing_id: listingId,
                             guest_id: guestId,
+                            host_id: hostId,
                             start_date: offer.startDate,
                             end_date: offer.endDate,
                             total_price: totalToPay,
+                            host_payout: offer.price,
+                            taxes: gstAmount,
+                            our_fees: 0,
+                            host_fees: 0,
                             status: 'pending',
                             offer_id: offer.id,
-                            listing_title: listingTitle // Added for notifications
+                            listing_title: listingTitle
                         },
                         participants: [guestPhone, ...splitParticipants],
                         primaryUserId: guestId,
@@ -107,9 +113,14 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
             const bookingData = {
                 listing_id: listingId,
                 guest_id: guestId,
+                host_id: hostId,
                 start_date: offer.startDate,
                 end_date: offer.endDate,
-                total_price: totalAmount, // Original total for logic
+                total_price: totalAmount,
+                host_payout: offer.price,
+                taxes: gstAmount,
+                our_fees: 0,
+                host_fees: 0,
                 status: 'pending',
                 offer_id: offer.id,
                 is_special_offer: true,

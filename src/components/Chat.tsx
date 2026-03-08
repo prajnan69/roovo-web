@@ -584,6 +584,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         guestId={session?.user?.id || ''}
         guestPhone={session?.user?.phone || ''}
         listingId={selectedOffer?.listingId || ''}
+        hostId={otherUser?.id || ''}
       />
     </div>
   );
