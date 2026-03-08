@@ -50,41 +50,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
     setConversations(initialConversations);
   }, [initialConversations]);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
 
-    const channel = supabase
-      .channel("conversations")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
-        (payload) => {
-          setConversations((prev) => {
-            const newConversations = [...prev];
-            const index = newConversations.findIndex(
-              (c) => c.id === (payload.new as any).id
-            );
-            if (index !== -1) {
-              // Update existing conversation with new data, prioritizing the most recent last_message_at
-              newConversations[index] = { ...newConversations[index], ...(payload.new as any) };
-            } else {
-              // Add new conversation
-              newConversations.push(payload.new as any);
-            }
-
-            // Sort to ensure the most recently updated are at top
-            return newConversations.sort((a, b) => {
-              const dateA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-              const dateB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-              return dateB - dateA; // Descending
-            });
-          });
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [isAuthenticated]);
 
   const handleConversationSelect = async (convo: any) => {
     await triggerHaptic();
@@ -267,62 +233,73 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
         )}
 
         {/* --- Chat Detail View --- */}
-        {selectedConversation && (
-          <motion.div
-            key="chat"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
-          >
-            {/* Chat Header */}
-            <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm">
-              <button
-                onClick={handleBack}
-                className="p-2 -ml-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
-              >
-                <ArrowLeft size={22} />
-              </button>
+        {selectedConversation && (() => {
+          const otherUser = (userType === 'host' ? selectedConversation.guest : selectedConversation.host) || {};
+          return (
+            <motion.div
+              key="chat"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
+            >
+              {/* Chat Header */}
+              <div className="bg-white/90 backdrop-blur-md border-b border-gray-100 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 px-4 flex items-center gap-3 z-20 sticky top-0 shadow-sm">
+                <button
+                  onClick={handleBack}
+                  className="p-2 -ml-2 rounded-full text-gray-800 hover:bg-gray-100 active:scale-90 transition-transform"
+                >
+                  <ArrowLeft size={22} />
+                </button>
 
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 flex-shrink-0">
-                  <img
-                    src={selectedConversation.listing?.images_data?.[0]?.url || selectedConversation.listing?.all_image_urls?.[0]?.url || "https://ui-avatars.com/api/?background=random"}
-                    className="w-full h-full object-cover"
-                    alt="Listing"
-                  />
-                </div>
-                <div className="flex flex-col justify-center min-w-0">
-                  <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">
-                    {userType === 'host' ? selectedConversation.guest?.name || 'Guest' : selectedConversation.host?.name || 'Host'}
-                  </h2>
-                  <span className="text-[11px] text-gray-500 font-medium truncate">
-                    {selectedConversation.listing?.title || 'Unknown Listing'}
-                  </span>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 flex-shrink-0">
+                    {otherUser?.avatar_url ? (
+                      <img
+                        src={otherUser.avatar_url}
+                        className="w-full h-full object-cover"
+                        alt="Avatar"
+                      />
+                    ) : (
+                      <img
+                        src={`https://ui-avatars.com/api/?background=random&name=${encodeURIComponent(otherUser?.name || 'User')}`}
+                        className="w-full h-full object-cover"
+                        alt="Avatar"
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-col justify-center min-w-0">
+                    <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">
+                      {otherUser.name || (userType === 'host' ? 'Guest' : 'Host')}
+                    </h2>
+                    <span className="text-[11px] text-gray-500 font-medium truncate">
+                      {selectedConversation.listing?.title || 'Unknown Listing'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Chat Body */}
-            <div className="flex-1 relative bg-slate-50 overflow-hidden">
-              <Chat
-                conversationId={selectedConversation.id}
-                otherUser={userType === 'host' ? selectedConversation.guest : selectedConversation.host}
-                onShowOfferDrawer={userType === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
-              />
-            </div>
+              {/* Chat Body */}
+              <div className="flex-1 relative bg-slate-50 overflow-hidden">
+                <Chat
+                  conversationId={selectedConversation.id}
+                  otherUser={userType === 'host' ? selectedConversation.guest : selectedConversation.host}
+                  onShowOfferDrawer={userType === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
+                />
+              </div>
 
-            {userType === 'host' && (
-              <SendOfferDrawer
-                isOpen={isOfferDrawerOpen}
-                onClose={() => setIsOfferDrawerOpen(false)}
-                onSend={handleSendOffer}
-                guestName={selectedConversation.guest?.name || 'Guest'}
-              />
-            )}
-          </motion.div>
-        )}
+              {userType === 'host' && (
+                <SendOfferDrawer
+                  isOpen={isOfferDrawerOpen}
+                  onClose={() => setIsOfferDrawerOpen(false)}
+                  onSend={handleSendOffer}
+                  guestName={selectedConversation.guest?.name || 'Guest'}
+                />
+              )}
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

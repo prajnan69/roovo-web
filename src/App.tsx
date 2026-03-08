@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { LiveUpdate } from '@capawesome/capacitor-live-update';
@@ -270,40 +270,22 @@ function AppContent() {
     init();
   }, []);
 
-  // ✅ Fetch host and guest conversations
-  useEffect(() => {
-    const getConversations = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        const { data: host } = await supabase
-          .from('hosts')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .single();
+  const getConversations = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      const { data: host } = await supabase
+        .from('hosts')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .single();
 
-        if (host) {
-          try {
-            const data = await fetchConversationsByHostId(host.id);
-            if (Array.isArray(data)) {
-              setHostConversations(
-                data.sort(
-                  (a, b) =>
-                    new Date(b.last_message_at).getTime() -
-                    new Date(a.last_message_at).getTime(),
-                ),
-              );
-            }
-          } catch (err) {
-            console.error('Error fetching host conversations:', err);
-          }
-        }
-
+      if (host) {
         try {
-          const data = await fetchConversationsByGuestId(session.user.id);
+          const data = await fetchConversationsByHostId(host.id);
           if (Array.isArray(data)) {
-            setGuestConversations(
+            setHostConversations(
               data.sort(
                 (a, b) =>
                   new Date(b.last_message_at).getTime() -
@@ -312,38 +294,83 @@ function AppContent() {
             );
           }
         } catch (err) {
-          console.error('Error fetching guest conversations:', err);
+          console.error('Error fetching host conversations:', err);
         }
-
-        // Fetch Real-time Bookings
-        try {
-          const bookings = await fetchBookingsByGuestId(session.user.id);
-          if (Array.isArray(bookings)) {
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-
-            const confirmed = bookings
-              .filter((b: any) => b.status === 'confirmed')
-              .filter((b: any) => new Date(b.start_date) >= now)
-              .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
-
-            if (confirmed.length > 0) {
-              setUpcomingBooking(confirmed[0]);
-            } else {
-              setUpcomingBooking(null);
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching guest bookings:', err);
-        }
-      } else {
-        setHostConversations([]);
-        setGuestConversations([]);
-        setUpcomingBooking(null);
       }
-      setIsHostStatusResolved(true);
+
+      try {
+        const data = await fetchConversationsByGuestId(session.user.id);
+        if (Array.isArray(data)) {
+          setGuestConversations(
+            data.sort(
+              (a, b) =>
+                new Date(b.last_message_at).getTime() -
+                new Date(a.last_message_at).getTime(),
+            ),
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching guest conversations:', err);
+      }
+
+      // Fetch Real-time Bookings
+      try {
+        const bookings = await fetchBookingsByGuestId(session.user.id);
+        if (Array.isArray(bookings)) {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+
+          const confirmed = bookings
+            .filter((b: any) => b.status === 'confirmed')
+            .filter((b: any) => new Date(b.start_date) >= now)
+            .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+
+          if (confirmed.length > 0) {
+            setUpcomingBooking(confirmed[0]);
+          } else {
+            setUpcomingBooking(null);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching guest bookings:', err);
+      }
+    } else {
+      setHostConversations([]);
+      setGuestConversations([]);
+      setUpcomingBooking(null);
+    }
+    setIsHostStatusResolved(true);
+  }, []);
+
+  // ✅ Global Subscription for Conversations
+  useEffect(() => {
+    let channel: any;
+
+    const setupSubscription = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      channel = supabase
+        .channel('global_conversations')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'conversations' },
+          () => {
+            console.log('Global conversation change detected, refetching...');
+            getConversations();
+          }
+        )
+        .subscribe();
     };
 
+    setupSubscription();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [getConversations]);
+
+  useEffect(() => {
     getConversations();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -356,24 +383,14 @@ function AppContent() {
           });
         }
       } else if (event === 'SIGNED_OUT') {
-        setHostConversations([]);
-        setGuestConversations([]);
-        setUpcomingBooking(null);
-        setIsHostStatusResolved(true);
-      }
-    });
-
-    // Initial check for authentication state
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        getConversations();
+        getConversations(); // This will clear state now
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [getConversations]);
 
   // Global Banner logic removed for now in favor of integrated Search UI
   useEffect(() => {

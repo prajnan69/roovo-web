@@ -490,8 +490,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       if (chatIntent) {
         setChatIntent(false);
         setTimeout(() => {
-          const msg = `Hi, I'm interested in booking this stay from ${dayjs(from).format('MMM D, YYYY')} to ${dayjs(to).format('MMM D, YYYY')}. Is it available?`;
-          handleChat(msg);
+          setIsChatDrawerOpen(true);
         }, 100);
       }
     }
@@ -506,7 +505,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
     });
   };
 
-  const handleChat = async (initialMessage?: string) => {
+  const handleChat = async () => {
     triggerHaptic();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -518,7 +517,6 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         body: JSON.stringify({
           listing_id: listing.id,
           guest_id: session.user.id,
-          message: initialMessage
         }),
       });
 
@@ -568,8 +566,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       } else {
         // No chat exists, ask for dates if not selected
         if (bookingDetails?.startDate && bookingDetails?.endDate) {
-          const msg = `Hi, I'm interested in booking this stay from ${dayjs(bookingDetails.startDate).format('MMM D, YYYY')} to ${dayjs(bookingDetails.endDate).format('MMM D, YYYY')}. Is it available?`;
-          handleChat(msg);
+          setIsChatDrawerOpen(true);
         } else {
           setChatIntent(true);
           setIsDrawerOpen(true);
@@ -579,8 +576,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       console.error("Error checking for existing conversation:", e);
       // Fallback
       if (bookingDetails?.startDate && bookingDetails?.endDate) {
-        const msg = `Hi, I'm interested in booking this stay from ${dayjs(bookingDetails.startDate).format('MMM D, YYYY')} to ${dayjs(bookingDetails.endDate).format('MMM D, YYYY')}. Is it available?`;
-        handleChat(msg);
+        setIsChatDrawerOpen(true);
       } else {
         setChatIntent(true);
         setIsDrawerOpen(true);
