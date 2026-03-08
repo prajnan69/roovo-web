@@ -399,3 +399,15 @@ export const markConversationAsRead = async (conversationId: string, userType: '
   }
   return response.json();
 };
+
+export const sendOfferMessage = async (conversationId: string, senderId: string, content: string, metadata: any) => {
+  const response = await fetch(`${API_BASE_URL}/api/chat/offer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversation_id: conversationId, sender_id: senderId, content, metadata })
+  });
+  if (!response.ok) {
+    throw new Error('Failed to send offer message');
+  }
+  return response.json();
+};

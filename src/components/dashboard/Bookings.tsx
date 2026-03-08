@@ -201,7 +201,7 @@ const Bookings = () => {
                               <span className="text-sm font-medium text-green-800">Total Earnings</span>
                             </div>
                             <span className="text-lg font-bold text-green-700">
-                              ₹{Number(booking.total_price).toLocaleString('en-IN')}
+                              ₹{Number(booking.host_payout || booking.total_price).toLocaleString('en-IN')}
                             </span>
                           </div>
                         </div>

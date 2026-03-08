@@ -8,6 +8,8 @@ import Chat from "../Chat";
 import { triggerHaptic } from "@/lib/haptics";
 import { useBottomNavBar } from "@/context/BottomNavBarContext";
 import { useNavigation } from "@/hooks/useNavigation";
+import SendOfferDrawer from "./SendOfferDrawer";
+import { sendOfferMessage } from "../../services/api";
 
 interface MessagesPageProps {
   conversations: any[];
@@ -27,6 +29,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   isAuthenticated = true,
 }) => {
   const [conversations, setConversations] = useState<any[]>(initialConversations);
+  const [isOfferDrawerOpen, setIsOfferDrawerOpen] = useState(false);
   const { setIsNavBarVisible } = useBottomNavBar();
   const { back, pathname } = useNavigation();
 
@@ -109,6 +112,26 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   const handleLoginClick = async () => {
     await triggerHaptic();
     if (onLoginClick) onLoginClick();
+  };
+
+  const handleSendOffer = async (offerDetails: { startDate: string, endDate: string, price: number }) => {
+    if (!selectedConversation) return;
+
+    // Use current session context or host ID. The host relies on session.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    try {
+      await sendOfferMessage(
+        selectedConversation.id,
+        session.user.id,
+        `I'd like to offer you a special price for your stay.`,
+        offerDetails
+      );
+    } catch (error) {
+      console.error('Failed to send offer:', error);
+      alert('Failed to send offer. Please try again.');
+    }
   };
 
   // Show login prompt if not authenticated
@@ -286,8 +309,18 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
               <Chat
                 conversationId={selectedConversation.id}
                 otherUser={userType === 'host' ? selectedConversation.guest : selectedConversation.host}
+                onShowOfferDrawer={userType === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
               />
             </div>
+
+            {userType === 'host' && (
+              <SendOfferDrawer
+                isOpen={isOfferDrawerOpen}
+                onClose={() => setIsOfferDrawerOpen(false)}
+                onSend={handleSendOffer}
+                guestName={selectedConversation.guest?.name || 'Guest'}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

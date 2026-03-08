@@ -188,6 +188,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
   const [showConfirmAndPay, setShowConfirmAndPay] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
+  const [chatIntent, setChatIntent] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserName, setCurrentUserName] = useState<string>('User');
@@ -484,19 +485,13 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       setShowChat(true);
       checkAirbnbPrice(dFrom.toDate(), dTo.toDate(), guests);
 
-      if (!currentUserId) {
-        setIsDrawerOpen(false);
-        onOpenLogin?.("Almost there! Login to book.");
-        return;
-      }
-      if (listing?.host_id && currentUserId === listing.host_id) {
-        const wittyMessage = getRandomHostSelfReservationMessage();
-        setToastMessage(wittyMessage);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
-        setIsDrawerOpen(false);
-      } else {
-        setShowConfirmAndPay(true);
+      setIsDrawerOpen(false);
+
+      if (chatIntent) {
+        setChatIntent(false);
+        setTimeout(() => {
+          handleChat();
+        }, 100);
       }
     }
   };
@@ -545,6 +540,15 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
     } catch (error) {
       console.error("Error checking conversation:", error);
       setIsChatDrawerOpen(true);
+    }
+  };
+
+  const handleChatRequest = () => {
+    if (bookingDetails?.startDate && bookingDetails?.endDate) {
+      handleChat();
+    } else {
+      setChatIntent(true);
+      setIsDrawerOpen(true);
     }
   };
 
@@ -678,6 +682,19 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
           <div className="space-y-8">
             <DetailedRatings ratings={listing} />
             <div className="h-px w-full bg-slate-100" />
+
+            <div className="flex flex-col gap-4">
+              <h3 className="font-bold text-lg text-slate-900">Any more questions?</h3>
+              <button
+                onClick={handleChatRequest}
+                className="w-full py-3.5 border-2 border-slate-900 rounded-xl font-bold text-slate-900 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                Chat with Host
+              </button>
+            </div>
+
+            <div className="h-px w-full bg-slate-100" />
             <Reviews ratings={listing} listingId={id} />
           </div>
 
@@ -721,6 +738,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         if (!open) {
           setIsDrawerOpen(false);
           setShowConfirmAndPay(false);
+          setChatIntent(false);
         }
       }}>
         <DrawerContent className={`bg-white rounded-t-[2rem] ${showConfirmAndPay ? 'h-[92vh]' : ''}`}>

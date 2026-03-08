@@ -26,6 +26,8 @@ const Payouts = () => {
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [upiId, setUpiId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
   useEffect(() => {
     const fetchHostAndPayouts = async () => {
@@ -39,7 +41,19 @@ const Payouts = () => {
           .single();
         if (hostData) {
           setHost(hostData);
-          setUpiId(hostData.payout_details || "");
+          // Fix UPI JSON bug: if payout_details is JSON, extract bank_name or similar, 
+          // but usually it should be a string. Based on screenshot it's a JSON string.
+          let displayUpi = hostData.payout_details || "";
+          try {
+            if (displayUpi.startsWith('{')) {
+              const parsed = JSON.parse(displayUpi);
+              displayUpi = parsed.upi_id || parsed.vpa || parsed.bank_name || displayUpi;
+            }
+          } catch (e) {
+            console.warn("Failed to parse payout_details as JSON", e);
+          }
+          setUpiId(displayUpi);
+
           try {
             const payouts = await fetchPayoutsByHostId(hostData.id);
             setTransactions(payouts || []);
@@ -77,12 +91,51 @@ const Payouts = () => {
     setIsSaving(false);
   };
 
+  const handleRequestPayout = async () => {
+    if (pendingPayouts <= 0) return;
+
+    setIsRequesting(true);
+    setRequestStatus(null);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/payouts/request`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: session.user.id
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          setRequestStatus({ type: 'success', message: 'Payout request sent successfully!' });
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => setRequestStatus(null), 3000);
+        } else {
+          setRequestStatus({ type: 'error', message: result.error || 'Failed to send request' });
+        }
+      } catch (e) {
+        setRequestStatus({ type: 'error', message: 'Network error occurred' });
+      }
+    }
+    setIsRequesting(false);
+  };
+
   const totalEarnings = transactions
-    .filter(t => t.status === 'Paid')
+    .filter(t => t.status === 'Completed' || t.status === 'Paid')
     .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
   const pendingPayouts = transactions
     .filter(t => t.status === 'Pending')
+    .reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+  const requestedPayouts = transactions
+    .filter(t => t.status === 'Requested')
     .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
   return (
@@ -119,13 +172,46 @@ const Payouts = () => {
                     ₹{totalEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
 
-                  <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-indigo-200" />
-                      <span className="text-sm text-indigo-100">Pending</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-indigo-200" />
+                        <span className="text-sm text-indigo-100">Ready to Payout</span>
+                      </div>
+                      <span className="font-semibold">₹{pendingPayouts.toFixed(2)}</span>
                     </div>
-                    <span className="font-semibold">₹{pendingPayouts.toFixed(2)}</span>
+
+                    {requestedPayouts > 0 && (
+                      <div className="flex items-center justify-between bg-white/5 rounded-xl p-3 backdrop-blur-sm border border-white/5">
+                        <div className="flex items-center gap-2">
+                          <ArrowUpRight className="h-4 w-4 text-indigo-200" />
+                          <span className="text-sm text-indigo-100">Pending Credit</span>
+                        </div>
+                        <span className="font-semibold text-indigo-50">₹{requestedPayouts.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
+
+                  {pendingPayouts > 0 && (
+                    <Button
+                      onClick={handleRequestPayout}
+                      disabled={isRequesting}
+                      className="w-full mt-4 bg-white text-indigo-600 hover:bg-indigo-50 border-none rounded-xl font-bold h-11 transition-all shadow-sm"
+                    >
+                      {isRequesting ? <Spinner className="text-indigo-600" /> : "Request Payout"}
+                    </Button>
+                  )}
+
+                  {requestStatus && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className={`mt-3 p-3 rounded-xl text-xs font-medium text-center ${requestStatus.type === 'success' ? 'bg-green-400/20 text-white' : 'bg-red-400/20 text-white'
+                        }`}
+                    >
+                      {requestStatus.message}
+                    </motion.div>
+                  )}
                 </div>
               </div>
 
@@ -179,9 +265,11 @@ const Payouts = () => {
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-gray-900">+₹{Number(tx.amount).toFixed(2)}</p>
-                          <p className={`text-xs font-medium ${tx.status === 'Paid' ? 'text-green-600' : 'text-yellow-600'
+                          <p className={`text-xs font-medium ${tx.status === 'Completed' || tx.status === 'Paid' ? 'text-green-600' :
+                            tx.status === 'Requested' ? 'text-indigo-600' : 'text-yellow-600'
                             }`}>
-                            {tx.status}
+                            {tx.status === 'Pending' ? 'Ready' :
+                              tx.status === 'Requested' ? 'Pending Credit' : 'Completed'}
                           </p>
                         </div>
                       </div>
@@ -220,7 +308,16 @@ const Payouts = () => {
               {host?.payout_method && (
                 <div className="bg-green-50 text-green-700 p-3 rounded-xl text-sm flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                  Currently linked: <span className="font-semibold">{host.payout_details}</span>
+                  Currently linked: <span className="font-semibold">{(() => {
+                    let d = host.payout_details;
+                    try {
+                      if (d && d.startsWith('{')) {
+                        const p = JSON.parse(d);
+                        return p.upi_id || p.vpa || p.bank_name || d;
+                      }
+                    } catch (e) { }
+                    return d;
+                  })()}</span>
                 </div>
               )}
             </div>
@@ -266,10 +363,12 @@ const Payouts = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-gray-900">+${Number(tx.amount).toFixed(2)}</p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tx.status === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                    <p className="font-bold text-gray-900">+₹{Number(tx.amount).toFixed(2)}</p>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tx.status === 'Completed' || tx.status === 'Paid' ? 'bg-green-100 text-green-700' :
+                      tx.status === 'Requested' ? 'bg-indigo-100 text-indigo-700' : 'bg-yellow-100 text-yellow-700'
                       }`}>
-                      {tx.status}
+                      {tx.status === 'Pending' ? 'Ready to Payout' :
+                        tx.status === 'Requested' ? 'Pending Credit' : 'Completed'}
                     </span>
                   </div>
                 </motion.div>

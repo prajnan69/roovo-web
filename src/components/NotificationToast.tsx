@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import supabase from '../services/api';
 
 interface NotificationData {
     title: string;
@@ -33,8 +34,46 @@ export default function NotificationToast() {
 
         window.addEventListener('in-app-notification', handleNotification);
 
+        // Supabase Realtime Listener for Web Notifications
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+
+        const setupRealtime = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+
+            channel = supabase.channel(`notifications:${session.user.id}`)
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${session.user.id}` },
+                    (payload) => {
+                        const newNotif = payload.new;
+                        // Avoid showing if they are already in the chat viewing it (handled by components)
+                        setNotification({
+                            title: newNotif.title,
+                            body: newNotif.body,
+                            data: newNotif.data || {},
+                        });
+
+                        setTimeout(() => {
+                            setNotification(null);
+                        }, 5000);
+                    }
+                )
+                .subscribe();
+        };
+
+        setupRealtime();
+
+        const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+            setupRealtime();
+        });
+
         return () => {
             window.removeEventListener('in-app-notification', handleNotification);
+            if (channel) {
+                supabase.removeChannel(channel);
+            }
+            authListener.subscription.unsubscribe();
         };
     }, []);
 
