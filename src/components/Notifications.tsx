@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import supabase from '@/services/api';
 import { API_BASE_URL } from '@/services/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigation } from '@/hooks/useNavigation';
+import { FiChevronLeft, FiBell, FiMessageSquare, FiCalendar, FiInfo } from 'react-icons/fi';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
 
 const Notifications = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const navigate = useNavigate();
+  const { back } = useNavigation();
 
   const fetchNotifications = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -23,7 +25,6 @@ const Notifications = () => {
           const data = await res.json();
           if (Array.isArray(data)) {
             setNotifications(data);
-            setUnreadCount(data.filter(n => !n.is_read).length);
           }
         }
       } catch (err) {
@@ -32,96 +33,95 @@ const Notifications = () => {
     }
   };
 
-  useEffect(() => {
-    setLoading(true);
-    fetchNotifications().finally(() => setLoading(false));
-    const interval = setInterval(fetchNotifications, 60000); // Poll every minute
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [dropdownRef]);
-
-  const handleIconClick = async () => {
-    setIsOpen(!isOpen);
-    if (!isOpen) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        try {
-          await fetch(`${API_BASE_URL}/api/notifications/${session.user.id}/read`, { method: 'POST' });
-          setUnreadCount(0);
-        } catch (err) {
-          console.error("Error marking notifications as read:", err);
-        }
+  const markAsRead = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      try {
+        await fetch(`${API_BASE_URL}/api/notifications/${session.user.id}/read`, { method: 'POST' });
+      } catch (err) {
+        console.error("Error marking notifications as read:", err);
       }
     }
   };
 
-  const handleNotificationClick = (notification: any) => {
-    if (notification.message_type === 'message') {
-      navigate('/messages');
+  useEffect(() => {
+    setLoading(true);
+    fetchNotifications().finally(() => {
+      setLoading(false);
+      markAsRead();
+    });
+  }, []);
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'message': return <FiMessageSquare className="text-blue-500" />;
+      case 'reminder': return <FiCalendar className="text-amber-500" />;
+      case 'booking': return <FiBell className="text-indigo-500" />;
+      default: return <FiInfo className="text-slate-400" />;
     }
-    setIsOpen(false);
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button onClick={handleIconClick} className="relative p-2 rounded-full hover:bg-gray-100">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-        </svg>
-        {unreadCount > 0 && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full"
-          />
-        )}
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]"
-          >
-            <div className="p-4">
-              <h3 className="font-semibold">Notifications</h3>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 flex items-center gap-4">
+        <button
+          onClick={back}
+          className="p-2 -ml-2 rounded-full hover:bg-slate-100 active:bg-slate-200 transition-colors"
+        >
+          <FiChevronLeft size={24} className="text-slate-700" />
+        </button>
+        <div className="text-xl font-bold text-slate-900 tracking-tight">Notifications</div>
+      </div>
+
+      <div className="max-w-md mx-auto px-5 py-6">
+        <AnimatePresence mode="popLayout">
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse bg-white rounded-2xl h-24 border border-slate-100" />
+              ))}
             </div>
-            <div className="border-t border-gray-200 max-h-96 overflow-y-auto">
-              {loading ? (
-                <div className="p-4 text-center">Loading...</div>
-              ) : notifications.length > 0 ? (
-                notifications.map((notification) => (
-                  <motion.div
-                    key={notification.id}
-                    onClick={() => handleNotificationClick(notification)}
-                    whileHover={{ backgroundColor: "#f9fafb" }}
-                    className={`p-4 border-b border-gray-200 cursor-pointer ${notification.is_read ? 'text-gray-400' : ''}`}
-                  >
-                    <p className="text-sm">{notification.message}</p>
-                    <span className="text-xs text-gray-400">{new Date(notification.created_at).toLocaleString()}</span>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-gray-500">No new notifications</div>
-              )}
+          ) : notifications.length > 0 ? (
+            <div className="space-y-3">
+              {notifications.map((notification, idx) => (
+                <motion.div
+                  key={notification.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className={`p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex gap-4 transition-all ${notification.is_read ? 'opacity-80' : 'ring-1 ring-indigo-50 bg-indigo-50/5'}`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${notification.is_read ? 'bg-slate-50' : 'bg-white shadow-sm'}`}>
+                    {getIcon(notification.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-0.5">
+                      <h4 className={`text-[15px] font-bold truncate ${notification.is_read ? 'text-slate-700' : 'text-slate-900'}`}>
+                        {notification.title}
+                      </h4>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-2 shrink-0">
+                        {dayjs(notification.created_at).fromNow()}
+                      </span>
+                    </div>
+                    <p className={`text-sm leading-relaxed ${notification.is_read ? 'text-slate-500' : 'text-slate-600 font-medium'}`}>
+                      {notification.message}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                <FiBell className="text-slate-300 text-3xl" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">All caught up!</h3>
+              <p className="text-slate-500 text-sm mt-1">No new notifications at the moment.</p>
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

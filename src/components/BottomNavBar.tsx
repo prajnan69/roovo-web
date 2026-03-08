@@ -14,6 +14,7 @@ interface BottomNavBarProps {
   onSwitchToHost?: () => void;
   onSwitchToTraveling?: () => void;
   onMessagesClick?: () => void;
+  unreadCount?: number;
 }
 
 const BottomNavBar: React.FC<BottomNavBarProps> = ({
@@ -23,6 +24,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
   onSwitchToHost,
   onSwitchToTraveling,
   onMessagesClick,
+  unreadCount = 0,
 }) => {
   const { pathname, navigate } = useNavigation();
   const { profileData } = usePreloadedData();
@@ -92,7 +94,14 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
           // Standard Button
           <div className="flex flex-col items-center justify-center w-full h-full pt-1">
             <div className={`transition-all duration-300 ease-out ${isActive ? 'text-indigo-600 scale-110 drop-shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+              <div className="relative">
+                <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                {item.label === 'Messages' && unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </div>
             </div>
             <span className={`text-[10px] font-semibold mt-1 tracking-wide whitespace-nowrap transition-colors duration-300 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>
               {item.label}

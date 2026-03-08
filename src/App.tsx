@@ -9,6 +9,8 @@ import HomeFeed from './components/HomeFeed';
 import ListingDetailsPage from './components/ListingDetailsPage';
 import Profile from './components/Profile';
 import HostDashboard from './components/dashboard/HostDashboard';
+import Notifications from './components/Notifications';
+import GlobalPreferences from './components/profile/GlobalPreferences';
 import Messages from './components/dashboard/Messages';
 import VerifyIdentity from './components/VerifyIdentity';
 import Router from './components/Router';
@@ -484,6 +486,8 @@ function AppContent() {
         <Route path="/import-listing" render={() => <ImportListingPage />} />
         <Route path="/invite/cohost" render={() => <CohostInvitationPage />} />
         <Route path="/payment/status" render={() => <PaymentStatus />} />
+        <Route path="/notifications" render={() => <Notifications />} />
+        <Route path="/preferences" render={() => <GlobalPreferences />} />
         <Route path="/trips" render={() => (
           <TripsPage
             onOpenChat={(conversation) => {
@@ -579,18 +583,28 @@ function AppContent() {
         <Route path="/refund-policy" render={() => <RefundsPolicy />} />
       </Router>
 
-      <BottomNavBar
-        show={showBottomNavBar}
-        isChatOpen={!!selectedConversation}
-        onSearchClick={() => setIsSearchOpen(true)}
-        openLogin={() => handleOpenLogin()}
-        onSwitchToHost={handleSwitchToHost}
-        onSwitchToTraveling={handleSwitchToTraveling}
-        onMessagesClick={() => {
-          setSelectedConversation(null);
-          navigate('/messages');
-        }}
-      />
+      {/* Calculate total unread messages */}
+      {(() => {
+        const guestUnread = guestConversations?.reduce((acc: number, convo: any) => acc + (convo.unread_count || 0), 0) || 0;
+        const hostUnread = hostConversations?.reduce((acc: number, convo: any) => acc + (convo.unread_count || 0), 0) || 0;
+        const totalUnread = guestUnread + hostUnread;
+
+        return (
+          <BottomNavBar
+            show={showBottomNavBar}
+            isChatOpen={!!selectedConversation}
+            onSearchClick={() => setIsSearchOpen(true)}
+            openLogin={() => handleOpenLogin()}
+            onSwitchToHost={handleSwitchToHost}
+            onSwitchToTraveling={handleSwitchToTraveling}
+            unreadCount={totalUnread}
+            onMessagesClick={() => {
+              setSelectedConversation(null);
+              navigate('/messages');
+            }}
+          />
+        );
+      })()}
 
       {isSearchOpen && <MobileSearchBar onClose={() => setIsSearchOpen(false)} />}
       {isLoginOpen && (

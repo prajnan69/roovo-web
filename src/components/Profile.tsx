@@ -8,7 +8,7 @@ import { usePreloadedData } from '@/context/PreloadContext';
 import PersonalDetailsDrawer from './PersonalDetailsDrawer';
 import {
   FiBell, FiChevronRight, FiCamera, FiLogOut, FiUser,
-  FiSettings, FiShield, FiHelpCircle, FiAlertCircle,
+  FiSettings, FiShield, FiAlertCircle,
   FiGlobe, FiFileText, FiPhone, FiUserCheck
 } from 'react-icons/fi';
 import { triggerHaptic } from '@/lib/haptics';
@@ -81,7 +81,6 @@ const Profile: FC = () => {
   });
 
   const [travelingProfilePicture, setTravelingProfilePicture] = useState('');
-  const [hostProfilePicture, setHostProfilePicture] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [kycVerified, setKycVerified] = useState(false);
 
@@ -89,7 +88,6 @@ const Profile: FC = () => {
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
   const [supportCategory, setSupportCategory] = useState('Technical Issue');
-  const [supportStatus, setSupportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
 
   const travelingFileInputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +108,6 @@ const Profile: FC = () => {
     });
 
     setTravelingProfilePicture(profileData.traveling_profile_picture_url || '');
-    setHostProfilePicture(profileData.host_profile_picture_url || '');
   }, [profileData]);
 
   /* -------------------- KYC SOURCE OF TRUTH -------------------- */
@@ -140,16 +137,14 @@ const Profile: FC = () => {
   };
 
   const handleProfilePictureUpload = (
-    e: ChangeEvent<HTMLInputElement>,
-    type: 'traveling' | 'hosting'
+    e: ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      if (type === 'traveling') setTravelingProfilePicture(reader.result as string);
-      else setHostProfilePicture(reader.result as string);
+      setTravelingProfilePicture(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -163,14 +158,12 @@ const Profile: FC = () => {
       if (!user) throw new Error();
 
       await createSupportTicket(user.id, `[${supportCategory}] ${supportMessage}`);
-      setSupportStatus('success');
       setSupportMessage('');
       setTimeout(() => {
         setIsSupportOpen(false);
-        setSupportStatus('idle');
       }, 2000);
     } catch {
-      setSupportStatus('error');
+      // Handle error visually if needed
     } finally {
       setIsSubmittingSupport(false);
     }
@@ -197,9 +190,9 @@ const Profile: FC = () => {
         {/* Avatar */}
         <div className="flex flex-col items-center">
           <input type="file" ref={travelingFileInputRef} className="hidden"
-            onChange={(e) => handleProfilePictureUpload(e, 'traveling')} />
+            onChange={(e) => handleProfilePictureUpload(e)} />
           <input type="file" ref={hostFileInputRef} className="hidden"
-            onChange={(e) => handleProfilePictureUpload(e, 'hosting')} />
+            onChange={(e) => handleProfilePictureUpload(e)} />
 
           <motion.div
             whileTap={{ scale: 0.96 }}
@@ -268,12 +261,7 @@ const Profile: FC = () => {
               label="Trips"
               onClick={() => navigate('/trips')}
             />
-            <MenuItem
-              icon={<FiUserCheck />}
-              label="Refer a Host"
-              sublabel="Earn rewards by inviting hosts"
-              onClick={() => navigate('/refer-host')}
-            />
+
           </div>
         </section>
 
@@ -283,7 +271,7 @@ const Profile: FC = () => {
             Support
           </div>
           <div className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm shadow-slate-100 overflow-hidden">
-            <MenuItem icon={<FiHelpCircle />} label="Get Help" onClick={() => { }} />
+
             <MenuItem icon={<FiAlertCircle />} label="Raise an Issue" onClick={() => setIsSupportOpen(true)} />
             <MenuItem icon={<FiPhone />} label="Contact Us" onClick={() => navigate('/contact-us')} />
             <MenuItem icon={<FiFileText />} label="Terms & Conditions" onClick={() => navigate('/terms')} />
