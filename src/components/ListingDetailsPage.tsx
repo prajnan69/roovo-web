@@ -543,12 +543,44 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
     }
   };
 
-  const handleChatRequest = () => {
-    if (bookingDetails?.startDate && bookingDetails?.endDate) {
-      handleChat();
-    } else {
-      setChatIntent(true);
-      setIsDrawerOpen(true);
+  const handleChatRequest = async () => {
+    triggerHaptic();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      if (onOpenLogin) onOpenLogin("Login to chat with the host");
+      return;
+    }
+
+    try {
+      // Check if conversation already exists
+      const { data: existingConvo } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('listing_id', listing.id)
+        .eq('guest_id', session.user.id)
+        .maybeSingle();
+
+      if (existingConvo) {
+        // Chat exists, just open it without asking for dates!
+        handleChat();
+      } else {
+        // No chat exists, ask for dates if not selected
+        if (bookingDetails?.startDate && bookingDetails?.endDate) {
+          handleChat();
+        } else {
+          setChatIntent(true);
+          setIsDrawerOpen(true);
+        }
+      }
+    } catch (e) {
+      console.error("Error checking for existing conversation:", e);
+      // Fallback
+      if (bookingDetails?.startDate && bookingDetails?.endDate) {
+        handleChat();
+      } else {
+        setChatIntent(true);
+        setIsDrawerOpen(true);
+      }
     }
   };
 

@@ -7,7 +7,7 @@ import supabase from "../services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
 import { triggerHaptic } from "@/lib/haptics";
 import { Keyboard } from "@capacitor/keyboard";
-import { Plus, Sparkles, AlertCircle } from "lucide-react";
+import { Plus, Sparkles, AlertCircle, ShieldCheck } from "lucide-react";
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
 import { load } from '@cashfreepayments/cashfree-js';
 import { API_BASE_URL } from "../services/api";
@@ -39,7 +39,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   const [cashfree, setCashfree] = useState<any>(null);
 
   // Offer State
-  const [selectedOffer, setSelectedOffer] = useState<{ startDate: string, endDate: string, price: number } | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<{ messageId: string, startDate: string, endDate: string, price: number } | null>(null);
   const [isAcceptDrawerOpen, setIsAcceptDrawerOpen] = useState(false);
 
   // --- Keyboard & Auth Setup ---
@@ -225,7 +225,8 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         our_fees: parseFloat(ourFees.toFixed(2)),
         host_fees: 0,
         auto_bookable: true, // Offers are auto confirmed
-        is_special_offer: true
+        is_special_offer: true,
+        message_id: selectedOffer.messageId
       }));
 
       // 2. Checkout
@@ -336,6 +337,9 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                 const checkOutDate = formatNiceDate(offer.endDate);
                 const nights = offer.startDate && offer.endDate ? Math.ceil((new Date(offer.endDate).getTime() - new Date(offer.startDate).getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
+                const isAccepted = offer.status === 'accepted';
+                const isExpired = !isAccepted && (Date.now() - new Date(msg.created_at).getTime() > 24 * 60 * 60 * 1000);
+
                 return (
                   <motion.div
                     key={msg.id}
@@ -370,7 +374,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                         <div className="relative z-10 flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-indigo-200" />
                           <h3 className="text-white font-bold text-[13px] tracking-wider uppercase">
-                            {isMe ? 'Special Offer Sent' : 'Special Offer'}
+                            {isAccepted ? 'Offer Accepted' : isExpired ? 'Offer Expired' : isMe ? 'Special Offer Sent' : 'Special Offer'}
                           </h3>
                         </div>
                         <p className="text-indigo-100 text-[15px] mt-1 relative z-10 tracking-tight leading-snug">{msg.content}</p>
@@ -400,13 +404,14 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                           </div>
                         </div>
 
-                        {!isMe && (
+                        {!isMe && !isAccepted && !isExpired && (
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.97 }}
                             className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-bold rounded-2xl shadow-[0_4px_15px_rgb(0,0,0,0.1)] transition-all flex items-center justify-center gap-2"
                             onClick={() => {
                               setSelectedOffer({
+                                messageId: msg.id,
                                 startDate: offer.startDate,
                                 endDate: offer.endDate,
                                 price: offer.price
@@ -417,12 +422,32 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                             Review & Accept <AlertCircle className="w-4 h-4 text-white/70" />
                           </motion.button>
                         )}
-                        {isMe && (
+                        {!isMe && isAccepted && (
+                          <div className="text-center mt-3 bg-green-50/50 border border-green-100 py-3 rounded-xl font-bold text-green-700 text-[13px] flex items-center justify-center gap-2">
+                            <ShieldCheck className="w-4 h-4" /> Offer Accepted
+                          </div>
+                        )}
+                        {!isMe && isExpired && (
+                          <div className="text-center mt-3 bg-red-50/50 border border-red-100 py-2.5 rounded-xl text-[11px] font-bold text-red-500 uppercase tracking-widest">
+                            Expired
+                          </div>
+                        )}
+                        {isMe && !isAccepted && !isExpired && (
                           <div className="text-center mt-3 bg-slate-50 border border-slate-100 py-2.5 rounded-xl">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
                               <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
                               Waiting for response
                             </span>
+                          </div>
+                        )}
+                        {isMe && isAccepted && (
+                          <div className="text-center mt-3 bg-green-50/50 border border-green-100 py-2.5 rounded-xl text-[10px] font-bold text-green-600 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                            Accepted by guest
+                          </div>
+                        )}
+                        {isMe && isExpired && (
+                          <div className="text-center mt-3 bg-red-50/50 border border-red-100 py-2.5 rounded-xl text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                            Offer Expired
                           </div>
                         )}
                       </div>
