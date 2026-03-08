@@ -55,6 +55,26 @@ const PaymentStatus = () => {
         const data = await res.json();
 
         if (data.status === "SUCCESS") {
+          // --- Split Payment Fallback ---
+          // Webhooks only fire to production. When returning from Cashfree,
+          // we directly mark the split as paid here as a reliable fallback.
+          try {
+            const splitRes = await fetch(`${API_BASE_URL}/api/payment-splits/mark-paid/${orderId}`, {
+              method: 'POST',
+            });
+            if (splitRes.ok) {
+              const splitData = await splitRes.json();
+              console.log('Split marked as paid:', splitData);
+              // If it was a split payment, navigate to home immediately
+              setStatus("success");
+              return;
+            }
+            // 404 means it wasn't a split order — continue to normal booking flow
+          } catch (splitErr) {
+            console.warn('Split mark-paid check failed (may not be a split order):', splitErr);
+          }
+          // --- End Split Payment Fallback ---
+
           // Retrieve pending booking data
           const bookingDataStr = localStorage.getItem(`pending_booking_${orderId}`);
           if (bookingDataStr) {

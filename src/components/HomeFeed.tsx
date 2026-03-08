@@ -16,19 +16,25 @@ import { AnimatePresence, motion, LayoutGroup } from 'framer-motion';
 import RoovoLogo from './RoovoLogo';
 import RoovoLoader from './RoovoLoader';
 import { getRandomQuote } from '@/data/travelQuotes';
+import SplitStatusDrawer from './SplitStatusDrawer';
 
 const HomeFeed: React.FC<{
   onSwitchToHost?: () => void;
   showBottomNavBar?: boolean;
   onLoadingChange?: (isLoading: boolean) => void;
   upcomingBooking?: any;
+  pendingSplit?: any;
 }> = ({
+  onSwitchToHost,
   showBottomNavBar,
   onLoadingChange,
   upcomingBooking,
+  pendingSplit,
 }) => {
+    console.log('HomeFeed Props - pendingSplit:', pendingSplit, 'upcomingBooking:', upcomingBooking);
     const { setIsNavBarVisible } = useBottomNavBar();
     const { navigate } = useNavigation();
+    const [isSplitStatusOpen, setIsSplitStatusOpen] = useState(false);
     const [listings, setListings] = useState<Listing[]>(() => getCachedListings() || []);
     const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
     const [recentlyViewed, setRecentlyViewed] = useState<Listing[]>([]);
@@ -394,7 +400,7 @@ const HomeFeed: React.FC<{
                 setIsSearchOpen(true);
                 setIsNavBarVisible(false);
               }}
-              className={`bg-white border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.06)] p-3 pr-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200 cursor-pointer w-full ${upcomingBooking ? 'rounded-t-[28px] rounded-b-none border-b-0' : 'rounded-full'
+              className={`bg-white border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.06)] p-3 pr-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200 cursor-pointer w-full ${(upcomingBooking || pendingSplit) ? 'rounded-t-[28px] rounded-b-none border-b-0' : 'rounded-full'
                 }`}
             >
               <div className="bg-indigo-50 rounded-full p-2.5 text-indigo-500">
@@ -421,23 +427,56 @@ const HomeFeed: React.FC<{
             </div>
 
             <AnimatePresence>
-              {upcomingBooking && (
+              {(pendingSplit || upcomingBooking) && (
                 <motion.div
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -5 }}
                   onClick={() => {
                     triggerHaptic();
-                    navigate('/trips');
+                    if (pendingSplit) {
+                      setIsSplitStatusOpen(true);
+                    } else {
+                      navigate('/trips');
+                    }
                   }}
-                  className="w-full flex items-center gap-2 py-2.5 px-5 bg-slate-50 border-x border-b border-slate-100 rounded-b-[28px] -mt-[1px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] cursor-pointer active:bg-slate-100/80 transition-colors"
+                  className={`w-full flex items-center gap-2 py-2.5 px-5 border-x border-b -mt-[1px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] cursor-pointer active:scale-[0.99] transition-all ${pendingSplit
+                    ? 'bg-indigo-600 text-white rounded-b-[24px] border-indigo-700'
+                    : 'bg-slate-50 border-slate-100 rounded-b-[28px] text-slate-900'
+                    }`}
                 >
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 whitespace-nowrap">Upcoming trip</span>
-                    <div className="w-[1px] h-3 bg-slate-200" />
-                    <p className="text-[11px] font-semibold text-indigo-600 truncate">
-                      {upcomingBooking.listing?.city || upcomingBooking.listing?.place || 'Your destination'} • {new Date(upcomingBooking.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(upcomingBooking.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </p>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {pendingSplit ? (
+                      <>
+                        <div className="bg-white/20 p-1.5 rounded-full animate-pulse">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                          </svg>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <p className="text-[11px] font-bold tracking-tight">
+                            {pendingSplit.is_primary_payer
+                              ? `Split Requested • ${pendingSplit.all_participants.length} people`
+                              : `Pay Your Share • ${pendingSplit.initiator_name || (pendingSplit.initiator_phone || '').replace(/\D/g, '').slice(-10)}`
+                            }
+                          </p>
+                          <p className="text-[10px] opacity-90 truncate">
+                            {pendingSplit.all_participants.filter((p: any) => p.status === 'paid').length} of {pendingSplit.all_participants.length} paid
+                          </p>
+                        </div>
+                        <div className="ml-auto text-[10px] font-bold bg-white/30 px-2 py-0.5 rounded-full">
+                          View Status
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 whitespace-nowrap">Upcoming trip</span>
+                        <div className="w-[1px] h-3 bg-slate-200" />
+                        <p className="text-[11px] font-semibold text-indigo-600 truncate">
+                          {upcomingBooking.listing?.city || upcomingBooking.listing?.place || 'Your destination'} • {new Date(upcomingBooking.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(upcomingBooking.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -458,6 +497,12 @@ const HomeFeed: React.FC<{
             setIsNavBarVisible(true);
           }} />
         )}
+
+        <SplitStatusDrawer
+          isOpen={isSplitStatusOpen}
+          onClose={() => setIsSplitStatusOpen(false)}
+          splitData={pendingSplit}
+        />
 
       </div>
     );

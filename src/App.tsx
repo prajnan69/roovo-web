@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { LiveUpdate } from '@capawesome/capacitor-live-update';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { preloadAllGuestChats } from './services/chatService';
-import supabase, { fetchConversationsByHostId, fetchConversationsByGuestId, fetchBookingsByGuestId } from './services/api';
+import supabase, { fetchConversationsByHostId, fetchConversationsByGuestId, fetchBookingsByGuestId, API_BASE_URL } from './services/api';
 import HomeFeed from './components/HomeFeed';
 import ListingDetailsPage from './components/ListingDetailsPage';
 import Profile from './components/Profile';
@@ -36,6 +36,7 @@ import ContactUs from './components/legal/ContactUs';
 import TermsAndConditions from './components/legal/TermsAndConditions';
 import RefundsPolicy from './components/legal/RefundsPolicy';
 import TripsPage from './components/TripsPage';
+import SplitPayPage from './components/SplitPayPage';
 
 function AppContent() {
   const { isNavBarVisible } = useBottomNavBar();
@@ -49,6 +50,7 @@ function AppContent() {
   const [hostConversations, setHostConversations] = useState<any[]>([]);
   const [guestConversations, setGuestConversations] = useState<any[]>([]);
   const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
+  const [pendingSplit, setPendingSplit] = useState<any>(null);
   const [showSplash, setShowSplash] = useState(!window.location.pathname.startsWith('/payment/status'));
   const [isHomeLoading, setIsHomeLoading] = useState(true);
 
@@ -336,10 +338,51 @@ function AppContent() {
       } catch (err) {
         console.error('Error fetching guest bookings:', err);
       }
+
+      // Fetch Pending Split Payments
+      try {
+        let phone = session.user?.phone || session.user?.user_metadata?.phone || '';
+
+        // Fallback: Fetch from public.users if not in session
+        if (!phone) {
+          console.log('App.tsx - Phone missing from session, fetching from public.users...');
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('phone')
+            .eq('id', session.user.id)
+            .single();
+
+          if (!userError && userData?.phone) {
+            phone = userData.phone;
+            console.log('App.tsx - Phone retrieved from public.users:', phone);
+          }
+        }
+
+        console.log('App.tsx - Final Phone for Split Fetch:', phone);
+        if (phone) {
+          const encodedPhone = encodeURIComponent(phone);
+          const res = await fetch(`${API_BASE_URL}/api/payment-splits/pending/${encodedPhone}`);
+          console.log('App.tsx - Split Fetch Result Status:', res.status);
+          if (res.ok) {
+            const splits = await res.json();
+            console.log('App.tsx - Pending Splits received:', splits);
+            if (splits && splits.length > 0) {
+              setPendingSplit(splits[0]);
+            } else {
+              setPendingSplit(null);
+            }
+          }
+        } else {
+          console.warn('App.tsx - Still no phone number found for split check');
+        }
+      } catch (err) {
+        console.error('App.tsx - Split fetch error:', err);
+      }
     } else {
       setHostConversations([]);
       setGuestConversations([]);
       setUpcomingBooking(null);
+      setPendingSplit(null);
     }
     setIsHostStatusResolved(true);
   }, []);
@@ -458,6 +501,7 @@ function AppContent() {
               showBottomNavBar={showBottomNavBar}
               onLoadingChange={setIsHomeLoading}
               upcomingBooking={upcomingBooking}
+              pendingSplit={pendingSplit}
             />
           )}
         />
@@ -486,6 +530,7 @@ function AppContent() {
         <Route path="/import-listing" render={() => <ImportListingPage />} />
         <Route path="/invite/cohost" render={() => <CohostInvitationPage />} />
         <Route path="/payment/status" render={() => <PaymentStatus />} />
+        <Route path="/split/pay" render={() => <SplitPayPage />} />
         <Route path="/notifications" render={() => <Notifications />} />
         <Route path="/preferences" render={() => <GlobalPreferences />} />
         <Route path="/trips" render={() => (
