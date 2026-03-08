@@ -467,13 +467,13 @@ const Calendar = () => {
                 )}
               </div>
 
-              <div className="flex-1 relative group max-w-[140px]">
+              <div className="flex-1 relative group max-w-[200px]">
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-400 text-xl font-bold group-focus-within:text-indigo-600 transition-colors">₹</span>
                 <input
                   type="number"
                   value={bulkPrice}
                   onChange={(e) => setBulkPrice(e.target.value)}
-                  className="w-full bg-transparent border-none p-0 pl-6 font-black text-slate-800 text-3xl outline-none placeholder:text-slate-200"
+                  className="w-full bg-transparent border-none p-0 pl-6 font-black text-slate-800 text-2xl outline-none placeholder:text-slate-200"
                   placeholder="0"
                 />
               </div>
