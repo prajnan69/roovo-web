@@ -276,7 +276,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 z-10 scrollbar-hide">
-        <div className="space-y-1 pb-[20px]">
+        <div className="space-y-1 pb-32">
           {/* Date Separator */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
