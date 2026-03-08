@@ -58,6 +58,8 @@ export default function ConfirmAndPay({
   const [isSplitEnabled, setIsSplitEnabled] = useState(false);
   const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
   const [splitParticipants, setSplitParticipants] = useState<string[]>([]);
+  const [splitSuccessData, setSplitSuccessData] = useState<any | null>(null);
+  const [isPayingPrimary, setIsPayingPrimary] = useState(false);
 
   useEffect(() => {
     const initializeSDK = async () => {
@@ -124,45 +126,11 @@ export default function ConfirmAndPay({
         if (!splitRes.ok) throw new Error("Failed to initiate split");
         const splitData = await splitRes.json();
 
-        // Find the primary share's placeholder
-        const primaryShare = splitData.splits.find((s: any) => s.is_primary_payer);
-
-        // 2. Create Cashfree Order for ONLY the primary share
-        const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order_amount: primaryShare.amount_share,
-            customer_details: {
-              customer_id: guestDetails.id,
-              customer_phone: guestDetails.phone || "9999999999",
-              customer_name: guestDetails.name || "Guest",
-              customer_email: "guest@roovo.in"
-            },
-            order_meta: {
-              return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-            }
-          })
-        });
-
-        if (!orderRes.ok) throw new Error("Failed to create share payment");
-        const orderData = await orderRes.json();
-
-        // Update the split record with the actual Cashfree order ID
-        await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderData.order_id })
-        });
-
-        // Redirect to Cashfree
-        if (cashfree) {
-          cashfree.checkout({
-            paymentSessionId: orderData.payment_session_id,
-            redirectTarget: "_self"
-          });
-          return true;
-        }
+        // Instead of redirecting immediately, show the links in the drawer
+        setSplitSuccessData(splitData);
+        setIsSplitDrawerOpen(true);
+        setBookingStatus("idle");
+        return true;
       }
 
       // CASE: Normal Full Payment
@@ -242,6 +210,56 @@ export default function ConfirmAndPay({
     }
 
     return false;
+  };
+
+  const handlePayPrimaryShare = async () => {
+    if (!splitSuccessData || isPayingPrimary) return;
+    setIsPayingPrimary(true);
+
+    try {
+      const primaryShare = splitSuccessData.splits.find((s: any) => s.is_primary_payer);
+
+      // 2. Create Cashfree Order for ONLY the primary share
+      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_amount: primaryShare.amount_share,
+          customer_details: {
+            customer_id: guestDetails.id,
+            customer_phone: guestDetails.phone || "9999999999",
+            customer_name: guestDetails.name || "Guest",
+            customer_email: "guest@roovo.in"
+          },
+          order_meta: {
+            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
+          }
+        })
+      });
+
+      if (!orderRes.ok) throw new Error("Failed to create share payment");
+      const orderData = await orderRes.json();
+
+      // Update the split record with the actual Cashfree order ID
+      await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderData.order_id })
+      });
+
+      // Redirect to Cashfree
+      if (cashfree) {
+        cashfree.checkout({
+          paymentSessionId: orderData.payment_session_id,
+          redirectTarget: "_self"
+        });
+      }
+    } catch (error) {
+      console.error("Error paying primary share:", error);
+      alert("Failed to initiate payment. Please try again.");
+    } finally {
+      setIsPayingPrimary(false);
+    }
   };
 
   const createBooking = async (paymentOrderId: string) => {
@@ -430,7 +448,14 @@ export default function ConfirmAndPay({
 
       <SplitPaymentDrawer
         isOpen={isSplitDrawerOpen}
-        onClose={() => setIsSplitDrawerOpen(false)}
+        onClose={() => {
+          setIsSplitDrawerOpen(false);
+          if (splitSuccessData) {
+            // Keep the split data if they close the drawer so they can reopen it?
+            // Or maybe clear it if you want them to restart?
+            // For now, let's clear it if they close it, or maybe only if they confirm.
+          }
+        }}
         totalAmount={grandTotal}
         onConfirm={(participants) => {
           setSplitParticipants(participants);
@@ -438,6 +463,8 @@ export default function ConfirmAndPay({
           setIsSplitDrawerOpen(false);
           triggerHaptic();
         }}
+        successData={splitSuccessData}
+        onPayPrimary={handlePayPrimaryShare}
       />
 
       {/* Fixed Footer for Slide to Reserve */}

@@ -26,6 +26,8 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
     const [isSplitEnabled, setIsSplitEnabled] = useState(false);
     const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
     const [splitParticipants, setSplitParticipants] = useState<string[]>([]);
+    const [splitSuccessData, setSplitSuccessData] = useState<any | null>(null);
+    const [isPayingPrimary, setIsPayingPrimary] = useState(false);
 
     // Nights Calculation
     const calculateNights = () => {
@@ -68,7 +70,8 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                             end_date: offer.endDate,
                             total_price: totalToPay,
                             status: 'pending',
-                            offer_id: offer.id
+                            offer_id: offer.id,
+                            listing_title: listingTitle // Added for notifications
                         },
                         participants: [guestPhone, ...splitParticipants],
                         primaryUserId: guestId,
@@ -77,22 +80,79 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                 });
 
                 if (!splitRes.ok) throw new Error("Split initiation failed");
-                await splitRes.json();
-
-                // 2. We'll let the standard onAccept handle the payment session creation 
-                // but we need it to know it's a split portion. 
-                // For now, I'll pass a split object to onAccept if supported, or handle here.
-                // Let's assume onAccept needs to be modified to handle amount.
-                await onAccept();
-                // NOTE: Parent needs to handle the updated amount if it's a split.
+                const splitData = await splitRes.json();
+                setSplitSuccessData(splitData);
+                // The SplitPaymentDrawer success view is handled by passing successData
             } else {
                 await onAccept();
             }
         } catch (err) {
             console.error(err);
+            alert("An error occurred while processing the request.");
         }
 
         setIsProcessing(false);
+    };
+
+    const handlePayPrimaryShare = async () => {
+        if (!splitSuccessData || isPayingPrimary) return;
+        setIsPayingPrimary(true);
+        triggerHaptic();
+
+        try {
+            const primaryShare = splitSuccessData.splits.find((s: any) => s.is_primary_payer);
+            const orderAmount = primaryShare.amount_share;
+
+            // Prepare booking data for intent (must match what parent expects)
+            const bookingData = {
+                listing_id: listingId,
+                guest_id: guestId,
+                start_date: offer.startDate,
+                end_date: offer.endDate,
+                total_price: totalAmount, // Original total for logic
+                status: 'pending',
+                offer_id: offer.id,
+                is_special_offer: true,
+                auto_bookable: true
+            };
+
+            const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_amount: orderAmount,
+                    customer_details: {
+                        customer_id: guestId,
+                        customer_phone: guestPhone || "9999999999",
+                        customer_name: "Guest",
+                    },
+                    order_meta: {
+                        return_url: `${window.location.origin}/payment/status?order_id={order_id}`
+                    },
+                    bookingData: bookingData
+                })
+            });
+
+            if (!orderRes.ok) throw new Error("Failed to create share payment");
+            const orderData = await orderRes.json();
+
+            // Store ID relationship
+            await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_id: orderData.order_id })
+            });
+
+            // Redirect via window.location (simplest for now or use SDK if available in parent)
+            // Parent usually has cashfree loaded, but we don't have it here. 
+            // We can either pass it as prop or just redirect to return_url that handles status.
+            window.location.href = `${window.location.origin}/payment/status?order_id=${orderData.order_id}`;
+        } catch (error) {
+            console.error(error);
+            alert("Failed to initiate payment.");
+        } finally {
+            setIsPayingPrimary(false);
+        }
     };
 
     return (
@@ -237,7 +297,9 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
 
                     <SplitPaymentDrawer
                         isOpen={isSplitDrawerOpen}
-                        onClose={() => setIsSplitDrawerOpen(false)}
+                        onClose={() => {
+                            setIsSplitDrawerOpen(false);
+                        }}
                         totalAmount={totalAmount}
                         onConfirm={(participants) => {
                             setSplitParticipants(participants);
@@ -245,6 +307,8 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                             setIsSplitDrawerOpen(false);
                             triggerHaptic();
                         }}
+                        successData={splitSuccessData}
+                        onPayPrimary={handlePayPrimaryShare}
                     />
                 </>
             )}
