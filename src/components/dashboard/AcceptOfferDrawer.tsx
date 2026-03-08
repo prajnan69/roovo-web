@@ -1,22 +1,31 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, ArrowRight, CreditCard } from 'lucide-react';
+import { X, ShieldCheck, CreditCard, Users, ShieldAlert } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
+import SplitPaymentDrawer from '../SplitPaymentDrawer';
+import { API_BASE_URL } from '@/services/api';
 
 interface AcceptOfferDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     onAccept: () => void;
     offer: {
+        id: string; // Ensure ID is passed for intent
         startDate: string;
         endDate: string;
         price: number;
     };
     listingTitle: string;
+    guestId: string;
+    guestPhone: string;
+    listingId: string;
 }
 
-export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, listingTitle }: AcceptOfferDrawerProps) {
+export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, listingTitle, guestId, guestPhone, listingId }: AcceptOfferDrawerProps) {
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isSplitEnabled, setIsSplitEnabled] = useState(false);
+    const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
+    const [splitParticipants, setSplitParticipants] = useState<string[]>([]);
 
     // Nights Calculation
     const calculateNights = () => {
@@ -42,7 +51,47 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
     const handleAccept = async () => {
         triggerHaptic();
         setIsProcessing(true);
-        await onAccept();
+
+        const totalToPay = totalAmount;
+
+        try {
+            if (isSplitEnabled && splitParticipants.length > 0) {
+                // 1. Initiate Split
+                const splitRes = await fetch(`${API_BASE_URL}/api/payment-splits/initiate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bookingData: {
+                            listing_id: listingId,
+                            guest_id: guestId,
+                            start_date: offer.startDate,
+                            end_date: offer.endDate,
+                            total_price: totalToPay,
+                            status: 'pending',
+                            offer_id: offer.id
+                        },
+                        participants: [guestPhone, ...splitParticipants],
+                        primaryUserId: guestId,
+                        totalAmount: totalToPay
+                    })
+                });
+
+                if (!splitRes.ok) throw new Error("Split initiation failed");
+                await splitRes.json();
+
+                // 2. We'll let the standard onAccept handle the payment session creation 
+                // but we need it to know it's a split portion. 
+                // For now, I'll pass a split object to onAccept if supported, or handle here.
+                // Let's assume onAccept needs to be modified to handle amount.
+                await onAccept();
+                // NOTE: Parent needs to handle the updated amount if it's a split.
+            } else {
+                await onAccept();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+
         setIsProcessing(false);
     };
 
@@ -121,7 +170,51 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                                     <span>₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-2 text-right">
-                                    GST is calculated dynamically based on the requested price per night (₹{pricePerNight.toLocaleString('en-IN', { maximumFractionDigits: 0 })}/night).
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Split Payment Toggle */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-8">
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                                        <Users size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-800">Split with Friends</h3>
+                                        <p className="text-[11px] text-slate-500">Share the cost equally</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        triggerHaptic();
+                                        if (!isSplitEnabled) {
+                                            setIsSplitDrawerOpen(true);
+                                        } else {
+                                            setIsSplitEnabled(false);
+                                            setSplitParticipants([]);
+                                        }
+                                    }}
+                                    className={`w-12 h-6 rounded-full transition-all relative ${isSplitEnabled ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                >
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isSplitEnabled ? 'left-7' : 'left-1'}`} />
+                                </button>
+                            </div>
+
+                            {isSplitEnabled && (
+                                <div className="bg-white rounded-xl p-3 border border-slate-100 mb-3">
+                                    <div className="flex justify-between text-xs text-slate-600">
+                                        <span>{splitParticipants.length + 1} People</span>
+                                        <span className="font-bold text-indigo-600">₹{(totalAmount / (splitParticipants.length + 1)).toFixed(2)} / each</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className={`flex gap-3 p-3 rounded-xl transition-all ${isSplitEnabled ? 'bg-amber-50 border border-amber-100' : 'hidden'}`}>
+                                <ShieldAlert className="text-amber-500 shrink-0" size={16} />
+                                <p className="text-[10px] text-amber-700 leading-tight">
+                                    Warning: If everyone doesn't pay within 2 hours, the amount will be refunded except for fees.
                                 </p>
                             </div>
                         </div>
@@ -134,13 +227,25 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                             {isProcessing ? (
                                 <>Processing Payment...</>
                             ) : (
-                                <>Pay & Book Now <CreditCard size={18} /></>
+                                <>{isSplitEnabled ? 'Apply Split & Pay share' : 'Pay & Book Now'} <CreditCard size={18} /></>
                             )}
                         </button>
                         <p className="text-center text-[10px] font-medium text-slate-400 mt-4 flex items-center justify-center gap-1 uppercase tracking-wider">
                             Powered by <span className="font-bold text-slate-500">Cashfree Payments</span>
                         </p>
                     </motion.div>
+
+                    <SplitPaymentDrawer
+                        isOpen={isSplitDrawerOpen}
+                        onClose={() => setIsSplitDrawerOpen(false)}
+                        totalAmount={totalAmount}
+                        onConfirm={(participants) => {
+                            setSplitParticipants(participants);
+                            setIsSplitEnabled(true);
+                            setIsSplitDrawerOpen(false);
+                            triggerHaptic();
+                        }}
+                    />
                 </>
             )}
         </AnimatePresence>

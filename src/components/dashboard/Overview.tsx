@@ -128,47 +128,49 @@ const StatsSection = ({ scrollY, trialRemaining }: { scrollY: MotionValue<number
           </span>
         </motion.div>
 
-        {showFlatFee ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="space-y-2"
+        <div className="flex flex-col items-center">
+          <div className="relative flex items-center justify-center py-4">
+            <span className="text-8xl font-black text-indigo-950 tracking-tighter tabular-nums leading-none">
+              {/* @ts-ignore */}
+              <SlidingNumber number={String(Math.max(0, trialRemaining ?? 20))} />
+            </span>
+            <span className="text-4xl text-indigo-200 font-bold self-end mb-2 ml-1">/20</span>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-indigo-900/60 font-medium mb-4"
           >
-            <h2 className="text-5xl font-black text-indigo-950 tracking-tight">
-              5%
-            </h2>
-            <p className="text-xl font-medium text-indigo-900/60">
-              Only 5% flat fee on payouts
-            </p>
-          </motion.div>
-        ) : (
-          <div>
+            bookings remaining
+          </motion.p>
+
+          {showFlatFee && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center gap-2"
+            >
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs ring-4 ring-indigo-50">
+                5%
+              </div>
+              <p className="text-sm font-bold text-indigo-950">
+                Commission Active
+              </p>
+            </motion.div>
+          )}
+
+          {!showFlatFee && (
             <motion.h2
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-lg font-semibold text-indigo-900/50 uppercase tracking-widest mb-2"
+              className="text-xs font-bold text-indigo-900/30 uppercase tracking-[0.2em]"
             >
               Zero Commission
             </motion.h2>
-
-            <div className="relative flex items-center justify-center py-4">
-              <span className="text-8xl font-black text-indigo-950 tracking-tighter tabular-nums leading-none">
-                {/* @ts-ignore */}
-                <SlidingNumber number={String(trialRemaining ?? 20)} />
-              </span>
-              <span className="text-4xl text-indigo-200 font-bold self-end mb-2 ml-1">/20</span>
-            </div>
-
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-indigo-900/60 font-medium"
-            >
-              bookings remaining
-            </motion.p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -39,7 +39,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   const [cashfree, setCashfree] = useState<any>(null);
 
   // Offer State
-  const [selectedOffer, setSelectedOffer] = useState<{ messageId: string, startDate: string, endDate: string, price: number } | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<{ id: string, startDate: string, endDate: string, price: number, listingId: string } | null>(null);
   const [isAcceptDrawerOpen, setIsAcceptDrawerOpen] = useState(false);
 
   // --- Keyboard & Auth Setup ---
@@ -196,7 +196,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           listing_id: convo.listing_id,
-          message_id: selectedOffer.messageId,
+          message_id: selectedOffer.id,
           start_date: selectedOffer.startDate,
           end_date: selectedOffer.endDate,
           price: selectedOffer.price
@@ -224,7 +224,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         host_fees: 0,
         auto_bookable: true, // Offers are auto confirmed
         is_special_offer: true,
-        message_id: selectedOffer.messageId
+        message_id: selectedOffer.id
       };
 
       // 2. Create Cashfree order & store intent
@@ -432,13 +432,18 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                             whileTap={{ scale: 0.97 }}
                             className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-bold rounded-2xl shadow-[0_4px_15px_rgb(0,0,0,0.1)] transition-all flex items-center justify-center gap-2"
                             onClick={() => {
-                              setSelectedOffer({
-                                messageId: msg.id,
-                                startDate: offer.startDate,
-                                endDate: offer.endDate,
-                                price: offer.price
-                              });
-                              setIsAcceptDrawerOpen(true);
+                              if (selectedOffer?.id === msg.id) {
+                                setIsAcceptDrawerOpen(true);
+                              } else {
+                                setSelectedOffer({
+                                  id: msg.id,
+                                  startDate: msg.metadata?.start_date || '',
+                                  endDate: msg.metadata?.end_date || '',
+                                  price: msg.metadata?.price || 0,
+                                  listingId: msg.metadata?.listing_id || ''
+                                });
+                                setIsAcceptDrawerOpen(true);
+                              }
                             }}
                           >
                             Review & Accept <AlertCircle className="w-4 h-4 text-white/70" />
@@ -574,8 +579,11 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         isOpen={isAcceptDrawerOpen}
         onClose={() => setIsAcceptDrawerOpen(false)}
         onAccept={handleAcceptOffer}
-        offer={selectedOffer || { startDate: '', endDate: '', price: 0 }}
+        offer={selectedOffer || { id: '', startDate: '', endDate: '', price: 0 }}
         listingTitle={otherUser?.name ? `Stay with ${otherUser.name}` : 'Special Offer'}
+        guestId={session?.user?.id || ''}
+        guestPhone={session?.user?.phone || ''}
+        listingId={selectedOffer?.listingId || ''}
       />
     </div>
   );

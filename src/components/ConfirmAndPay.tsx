@@ -6,6 +6,9 @@ import { ArrowLeft, Star } from "lucide-react";
 import { API_BASE_URL } from "../services/api";
 import SlideToReserve from "./SlideToReserve";
 import { load } from '@cashfreepayments/cashfree-js';
+import SplitPaymentDrawer from "./SplitPaymentDrawer";
+import { Users, ShieldAlert } from "lucide-react";
+import { triggerHaptic } from "@/lib/haptics";
 
 interface ConfirmAndPayProps {
   listing: {
@@ -48,11 +51,13 @@ export default function ConfirmAndPay({
   isFeeWaived,
   guestDetails,
 }: ConfirmAndPayProps) {
-  const [isLoading, setIsLoading] = useState(false);
   const [bookingStatus, setBookingStatus] = useState<
     "idle" | "loading" | "confirmed" | "pending"
   >("idle");
   const [cashfree, setCashfree] = useState<any>(null);
+  const [isSplitEnabled, setIsSplitEnabled] = useState(false);
+  const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
+  const [splitParticipants, setSplitParticipants] = useState<string[]>([]);
 
   useEffect(() => {
     const initializeSDK = async () => {
@@ -85,13 +90,83 @@ export default function ConfirmAndPay({
   const grandTotal = currentRoovoTotal + totalTax;
 
   const handleBooking = async (): Promise<boolean> => {
-    setIsLoading(true);
     setBookingStatus("loading");
 
     try {
-      // 1. Create Order on Backend
       const orderAmount = parseFloat(grandTotal.toFixed(2));
-      const customerPhone = guestDetails.phone || "9999999999"; // Fallback for dev
+
+      // CASE: Split Payment
+      if (isSplitEnabled && splitParticipants.length > 0) {
+        // 1. Initiate Split on Backend
+        const splitRes = await fetch(`${API_BASE_URL}/api/payment-splits/initiate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingData: {
+              listing_id: listing.id,
+              guest_id: guestDetails.id,
+              host_id,
+              start_date: bookingDetails.startDate,
+              end_date: bookingDetails.endDate,
+              total_price: orderAmount,
+              host_payout: parseFloat(currentRoovoBaseTotal.toFixed(2)),
+              taxes: parseFloat(totalTax.toFixed(2)),
+              our_fees: parseFloat(currentRoovoServiceFeeTotal.toFixed(2)),
+              host_fees: 0,
+              auto_bookable,
+            },
+            participants: [guestDetails.phone, ...splitParticipants],
+            primaryUserId: guestDetails.id,
+            totalAmount: orderAmount
+          })
+        });
+
+        if (!splitRes.ok) throw new Error("Failed to initiate split");
+        const splitData = await splitRes.json();
+
+        // Find the primary share's placeholder
+        const primaryShare = splitData.splits.find((s: any) => s.is_primary_payer);
+
+        // 2. Create Cashfree Order for ONLY the primary share
+        const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_amount: primaryShare.amount_share,
+            customer_details: {
+              customer_id: guestDetails.id,
+              customer_phone: guestDetails.phone || "9999999999",
+              customer_name: guestDetails.name || "Guest",
+              customer_email: "guest@roovo.in"
+            },
+            order_meta: {
+              return_url: `${window.location.origin}/payment/status?order_id={order_id}`
+            }
+          })
+        });
+
+        if (!orderRes.ok) throw new Error("Failed to create share payment");
+        const orderData = await orderRes.json();
+
+        // Update the split record with the actual Cashfree order ID
+        await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderData.order_id })
+        });
+
+        // Redirect to Cashfree
+        if (cashfree) {
+          cashfree.checkout({
+            paymentSessionId: orderData.payment_session_id,
+            redirectTarget: "_self"
+          });
+          return true;
+        }
+      }
+
+      // CASE: Normal Full Payment
+      const customerPhone = guestDetails.phone || "9999999999";
       const customerName = guestDetails.name || "Guest";
 
       const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
@@ -103,7 +178,7 @@ export default function ConfirmAndPay({
             customer_id: guestDetails.id,
             customer_phone: customerPhone,
             customer_name: customerName,
-            customer_email: "guest@roovo.in" // We might need email from session/profile
+            customer_email: "guest@roovo.in"
           },
           order_meta: {
             return_url: `${window.location.origin}/payment/status?order_id={order_id}`
@@ -116,37 +191,34 @@ export default function ConfirmAndPay({
       const paymentSessionId = orderData.payment_session_id;
       const orderId = orderData.order_id;
 
-      // Store pending booking data for redirect handling
+      // Store pending booking data for redirect handling (fallback)
       localStorage.setItem(`pending_booking_${orderId}`, JSON.stringify({
         listing_id: listing.id,
         guest_id: guestDetails.id,
         host_id,
         start_date: bookingDetails.startDate,
         end_date: bookingDetails.endDate,
-        total_price: parseFloat(grandTotal.toFixed(2)),
+        total_price: orderAmount,
         host_payout: parseFloat(currentRoovoBaseTotal.toFixed(2)),
         taxes: parseFloat(totalTax.toFixed(2)),
         our_fees: parseFloat(currentRoovoServiceFeeTotal.toFixed(2)),
-        host_fees: 0, // In case we want to track host-side fees later
+        host_fees: 0,
         auto_bookable,
       }));
 
-      // 2. Trigger Checkout
       if (cashfree) {
         cashfree.checkout({
           paymentSessionId,
-          redirectTarget: "_self", // Ensure redirect happens in same tab for PWA
+          redirectTarget: "_self",
           returnUrl: `${window.location.origin}/payment/status?order_id={order_id}`
         }).then((result: any) => {
           if (result.error) {
             console.error("Payment Error:", result.error);
-            setIsLoading(false);
             setBookingStatus("idle");
             alert("Payment Failed: " + result.error.message);
           }
         });
 
-        // Poll for status
         const pollInterval = setInterval(async () => {
           const statusRes = await fetch(`${API_BASE_URL}/api/cashfree/orders/${orderId}/status`);
           if (statusRes.ok) {
@@ -158,15 +230,13 @@ export default function ConfirmAndPay({
           }
         }, 5000);
 
-        // Clean up interval after some time
-        setTimeout(() => clearInterval(pollInterval), 600000); // 10 mins
+        setTimeout(() => clearInterval(pollInterval), 600000);
 
-        return true; // We initiated payment
+        return true;
       }
 
     } catch (error) {
       console.error(error);
-      setIsLoading(false);
       setBookingStatus("idle");
       return false;
     }
@@ -200,12 +270,10 @@ export default function ConfirmAndPay({
       if (!response.ok) throw new Error("Failed to create booking");
 
       setBookingStatus(auto_bookable ? "confirmed" : "pending");
-      setIsLoading(false);
       // Maybe redirect to success page
     } catch (e) {
       console.error("Error creating booking:", e);
       alert("Payment successful but booking creation failed. Please contact support.");
-      setIsLoading(false);
     }
   }
 
@@ -312,8 +380,65 @@ export default function ConfirmAndPay({
               Please follow the house rules and treat the place with respect.
             </p>
           </div>
+
+          {/* Split Payment Option */}
+          <div className="bg-white rounded-2xl p-5 border border-neutral-200 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-neutral-800">Split with Friends</h3>
+                  <p className="text-xs text-neutral-500">Share the cost equally</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  triggerHaptic();
+                  if (!isSplitEnabled) {
+                    setIsSplitDrawerOpen(true);
+                  } else {
+                    setIsSplitEnabled(false);
+                    setSplitParticipants([]);
+                  }
+                }}
+                className={`w-12 h-6 rounded-full transition-all relative ${isSplitEnabled ? 'bg-indigo-600' : 'bg-neutral-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isSplitEnabled ? 'left-7' : 'left-1'}`} />
+              </button>
+            </div>
+
+            {isSplitEnabled && (
+              <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-100 mb-2">
+                <div className="flex justify-between text-xs text-neutral-600">
+                  <span>{splitParticipants.length + 1} People</span>
+                  <span className="font-bold text-indigo-600">₹{(grandTotal / (splitParticipants.length + 1)).toFixed(2)} / each</span>
+                </div>
+              </div>
+            )}
+
+            <div className={`flex gap-3 p-3 rounded-xl transition-all ${isSplitEnabled ? 'bg-amber-50 border border-amber-100' : 'hidden'}`}>
+              <ShieldAlert className="text-amber-500 shrink-0" size={16} />
+              <p className="text-[10px] text-amber-700 leading-tight">
+                Warning: If everyone doesn't pay within 2 hours, the amount will be refunded except for fees.
+              </p>
+            </div>
+          </div>
         </div>
       </motion.div>
+
+      <SplitPaymentDrawer
+        isOpen={isSplitDrawerOpen}
+        onClose={() => setIsSplitDrawerOpen(false)}
+        totalAmount={grandTotal}
+        onConfirm={(participants) => {
+          setSplitParticipants(participants);
+          setIsSplitEnabled(true);
+          setIsSplitDrawerOpen(false);
+          triggerHaptic();
+        }}
+      />
 
       {/* Fixed Footer for Slide to Reserve */}
       <div className="flex-shrink-0 bg-white border-t border-neutral-100 px-5 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] w-full shadow-[0_-8px_20px_-8px_rgba(0,0,0,0.08)] z-40">

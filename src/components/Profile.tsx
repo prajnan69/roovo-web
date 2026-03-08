@@ -89,6 +89,7 @@ const Profile: FC = () => {
   const [supportMessage, setSupportMessage] = useState('');
   const [supportCategory, setSupportCategory] = useState('Technical Issue');
   const [isSubmittingSupport, setIsSubmittingSupport] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const travelingFileInputRef = useRef<HTMLInputElement>(null);
   const hostFileInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +128,24 @@ const Profile: FC = () => {
     };
 
     checkKyc();
+  }, []);
+
+  /* -------------------- UNREAD NOTIFICATIONS -------------------- */
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { count } = await supabase
+        .from('user_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      setUnreadNotificationsCount(count || 0);
+    };
+
+    fetchUnreadCount();
   }, []);
 
   /* -------------------- Handlers -------------------- */
@@ -181,7 +200,9 @@ const Profile: FC = () => {
           className="relative p-2.5 rounded-full bg-slate-50 active:bg-slate-100 transition-colors"
         >
           <FiBell size={20} className="text-slate-700" />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
+          )}
         </button>
       </div>
 
