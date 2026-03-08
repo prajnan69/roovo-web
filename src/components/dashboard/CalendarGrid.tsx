@@ -138,7 +138,7 @@ const CalendarGrid = ({
 
   return (
     <div
-      className="px-3 pb-20 overflow-hidden touch-none" // touch-none is key for preventing scroll interference
+      className="px-3 pb-20 overflow-hidden touch-pan-y"
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
     >
