@@ -455,11 +455,6 @@ const Calendar = () => {
             <div className="bg-white/95 backdrop-blur-xl border border-white/50 p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] flex items-center justify-between gap-4 ring-1 ring-black/5">
 
               <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <div className="bg-indigo-100/50 text-indigo-700 px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider">
-                    {selectedDates.length} Selected
-                  </div>
-                </div>
                 {pricePlaceholder !== "Price" && (
                   <div className="text-[11px] font-medium text-slate-400 mt-1 truncate">
                     Range: <span className="text-slate-600 font-semibold">₹{pricePlaceholder}</span>
