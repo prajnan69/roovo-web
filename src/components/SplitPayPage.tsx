@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, ArrowLeft, Loader2, AlertCircle, Users } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Loader2, AlertCircle, Users, LogIn } from 'lucide-react';
 import { load } from '@cashfreepayments/cashfree-js';
 import { API_BASE_URL } from '../services/api';
 import { triggerHaptic } from '@/lib/haptics';
 import RoovoLoader from './RoovoLoader';
+import supabase from '@/services/api';
 
 export default function SplitPayPage() {
     const [loading, setLoading] = useState(true);
@@ -12,17 +13,27 @@ export default function SplitPayPage() {
     const [splitData, setSplitData] = useState<any>(null);
     const [cashfree, setCashfree] = useState<any>(null);
     const [isPaying, setIsPaying] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // null = checking
 
     useEffect(() => {
         const initialize = async () => {
             try {
-                // 1. Load Cashfree SDK
+                // 1. Check auth first
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    setIsAuthenticated(false);
+                    setLoading(false);
+                    return;
+                }
+                setIsAuthenticated(true);
+
+                // 2. Load Cashfree SDK
                 const cf = await load({
                     mode: import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox"
                 });
                 setCashfree(cf);
 
-                // 2. Get Split ID from URL
+                // 3. Get Split ID from URL
                 const params = new URLSearchParams(window.location.search);
                 const id = params.get('id');
 
@@ -32,8 +43,7 @@ export default function SplitPayPage() {
                     return;
                 }
 
-                // 3. Fetch Split Details
-                // We'll add a new endpoint or use an existing one if available
+                // 4. Fetch Split Details
                 const res = await fetch(`${API_BASE_URL}/api/payment-splits/share/${id}`);
                 if (!res.ok) throw new Error("Could not find payment details");
 
@@ -48,6 +58,17 @@ export default function SplitPayPage() {
         };
 
         initialize();
+
+        // Re-check after auth state changes (e.g. user just logged in)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'SIGNED_IN') {
+                setIsAuthenticated(true);
+                setLoading(true);
+                initialize();
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const handlePay = async () => {
@@ -96,7 +117,42 @@ export default function SplitPayPage() {
         }
     };
 
-    if (loading) return <RoovoLoader />;
+    if (loading || isAuthenticated === null) return <RoovoLoader />;
+
+    // Auth gate — shown to unauthenticated users who open a share link
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center font-inter">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-sm border border-neutral-200"
+                >
+                    <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-5">
+                        <Users size={32} />
+                    </div>
+                    <h2 className="text-2xl font-black text-neutral-900 mb-2 tracking-tight">Pay Your Share</h2>
+                    <p className="text-neutral-500 text-sm mb-8 leading-relaxed">
+                        You've been invited to split a booking on Roovo. Login to view your share and complete the payment.
+                    </p>
+                    <button
+                        onClick={() => {
+                            triggerHaptic();
+                            // Store the return URL so we can come back after login
+                            sessionStorage.setItem('split_return_url', window.location.href);
+                            // Navigate to home where the login button lives
+                            window.location.href = '/?login=1';
+                        }}
+                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-[0.98] transition-all"
+                    >
+                        <LogIn size={20} />
+                        Login to Continue
+                    </button>
+                    <p className="text-xs text-neutral-400 mt-4">You'll be redirected back to this payment page after logging in.</p>
+                </motion.div>
+            </div>
+        );
+    }
 
     if (error) {
         return (

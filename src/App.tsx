@@ -160,6 +160,30 @@ function AppContent() {
     setIsLoginOpen(true);
   };
 
+  // Handle ?login=1 redirect from split payment share links
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('login') === '1') {
+      handleOpenLogin('Login to pay your share');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  // After login, redirect back to stored split URL if any
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        const returnUrl = sessionStorage.getItem('split_return_url');
+        if (returnUrl) {
+          sessionStorage.removeItem('split_return_url');
+          window.location.href = returnUrl;
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // ✅ Handle Android back button
   useEffect(() => {
     CapacitorApp.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
@@ -416,7 +440,9 @@ function AppContent() {
   }, [getConversations]);
 
   useEffect(() => {
-    getConversations();
+    // Don't call getConversations() directly here — Supabase always fires
+    // INITIAL_SESSION immediately via onAuthStateChange, which calls it.
+    // Calling it here too causes every fetch to run twice on every page load.
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {

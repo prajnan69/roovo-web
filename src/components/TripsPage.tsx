@@ -94,11 +94,65 @@ const TripsPage = ({ onOpenChat }: { onOpenChat?: (conversation: any) => void })
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
-                    // Fetch Bookings
+                    // 1. Fetch bookings where I am the primary guest
                     const data = await fetchBookingsByGuestId(session.user.id);
-                    if (Array.isArray(data)) {
-                        setBookings(data);
+                    let allBookings: any[] = Array.isArray(data) ? data : [];
+
+                    // 2. Fetch split bookings where I'm a participant (but not primary payer)
+                    //    Get my phone number first
+                    let phone = session.user.phone || session.user.user_metadata?.phone || '';
+                    if (!phone) {
+                        const { data: userData } = await supabase
+                            .from('users')
+                            .select('phone')
+                            .eq('id', session.user.id)
+                            .single();
+                        phone = userData?.phone || '';
                     }
+
+                    if (phone) {
+                        const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+                        // Find all paid split groups for this user
+                        const { data: mySplits } = await supabase
+                            .from('payment_splits')
+                            .select('group_id, is_primary_payer')
+                            .like('participant_phone', `%${cleanPhone}`)
+                            .eq('status', 'paid');
+
+                        if (mySplits && mySplits.length > 0) {
+                            // For each split group, try to find the associated booking
+                            for (const split of mySplits) {
+                                // Skip if I'm the primary payer — I'll already see it via guest_id
+                                if (split.is_primary_payer) continue;
+
+                                const splitOrderId = `split_${split.group_id}`;
+                                const { data: splitBookings } = await supabase
+                                    .from('bookings')
+                                    .select(`
+                                        *,
+                                        listings (
+                                            id, title, city, place, public_address,
+                                            images_data, all_image_urls
+                                        )
+                                    `)
+                                    .eq('payment_order_id', splitOrderId);
+
+                                if (splitBookings && splitBookings.length > 0) {
+                                    // Mark as split booking for display purposes
+                                    const enriched = splitBookings.map(b => ({ ...b, listing: b.listings, is_split_participant: true }));
+                                    // Avoid duplicates
+                                    enriched.forEach(b => {
+                                        if (!allBookings.find(existing => existing.id === b.id)) {
+                                            allBookings.push(b);
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    setBookings(allBookings);
 
                     // Fetch User Data for Chat
                     setUserData(prev => ({ ...prev, id: session.user.id }));
