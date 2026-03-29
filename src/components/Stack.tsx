@@ -47,6 +47,7 @@ interface StackProps {
   animationConfig?: { stiffness: number; damping: number };
   showBorder?: boolean;
   onSwipe?: () => void;
+  renderTopRightOverlay?: () => React.ReactNode;
 }
 
 export default function Stack({
@@ -57,7 +58,8 @@ export default function Stack({
   animationConfig = { stiffness: 260, damping: 20 },
   sendToBackOnClick = false,
   showBorder = false,
-  onSwipe
+  onSwipe,
+  renderTopRightOverlay
 }: StackProps) {
   const [cards, setCards] = useState(
     cardsData.length
@@ -133,6 +135,11 @@ export default function Stack({
                 <div className={`w-full h-full rounded-[14px] overflow-hidden ${showBorder ? 'bg-white' : ''}`}>
                   <img src={card.img} alt={`card-${card.id}`} className="w-full h-full object-cover pointer-events-none" />
                 </div>
+                {index === cards.length - 1 && renderTopRightOverlay && (
+                  <div className="absolute top-0 right-0 z-20">
+                    {renderTopRightOverlay()}
+                  </div>
+                )}
               </div>
             </motion.div>
           </CardRotate>

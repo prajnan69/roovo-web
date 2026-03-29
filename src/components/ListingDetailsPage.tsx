@@ -300,6 +300,18 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       }
     };
     getUserData();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        getUserData();
+      }
+    });
+
+    return () => {
+      if (authListener && authListener.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, [listing]);
 
   // Dedicated Effect for Airbnb Price - Triggers only when listing ID and dates are ready
@@ -392,13 +404,22 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
     }
   };
 
-  const handleReserveClick = () => {
+  const handleReserveClick = async () => {
     if (bookingDetails && priceDetails && showPrice) {
-      if (!currentUserId) {
+      // Double check session
+      const { data: { session } } = await supabase.auth.getSession();
+      const activeUserId = session?.user?.id || currentUserId;
+
+      if (!activeUserId) {
         onOpenLogin?.("Login to secure your stay!");
         return;
       }
-      if (listing?.host_id && currentUserId === listing.host_id) {
+      
+      if (!currentUserId && activeUserId) {
+         setCurrentUserId(activeUserId);
+      }
+
+      if (listing?.host_id && activeUserId === listing.host_id) {
         const wittyMessage = getRandomHostSelfReservationMessage();
         setToastMessage(wittyMessage);
         setShowToast(true);

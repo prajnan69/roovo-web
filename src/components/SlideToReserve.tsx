@@ -5,7 +5,7 @@ import { motion, useMotionValue, useTransform, useAnimation } from 'framer-motio
 import { ChevronRight, Check, Loader2 } from 'lucide-react';
 import { triggerHaptic, triggerErrorHaptic } from '@/lib/haptics';
 
-const SlideToReserve = ({ onSlide, variant = "reserve" }: { onSlide: () => Promise<boolean>, variant?: "reserve" | "confirm" }) => {
+const SlideToReserve = ({ onSlide, variant = "reserve", text }: { onSlide: () => Promise<boolean>, variant?: "reserve" | "confirm", text?: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragBounds, setDragBounds] = useState(0);
   const x = useMotionValue(0);
@@ -78,7 +78,7 @@ const SlideToReserve = ({ onSlide, variant = "reserve" }: { onSlide: () => Promi
         style={{ opacity: textOpacity, x: textTranslateX }}
       >
         <span className="font-bold text-[15px] tracking-wide text-slate-400 mix-blend-multiply">
-          {variant === "reserve" ? "Slide to reserve" : "Slide to confirm"}
+          {text ? text : (variant === "reserve" ? "Slide to reserve" : "Slide to confirm")}
         </span>
       </motion.div>
 
@@ -93,7 +93,7 @@ const SlideToReserve = ({ onSlide, variant = "reserve" }: { onSlide: () => Promi
         onDragStart={() => {
           triggerHaptic(10);
         }}
-        onDragEnd={async (_, info) => {
+        onDragEnd={async (_) => {
           if (x.get() > dragBounds * 0.75) {
             // Snap to end and trigger action
             controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });

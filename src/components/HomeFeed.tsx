@@ -116,6 +116,26 @@ const HomeFeed: React.FC<{
         setFilteredListings(listingsWithExtras);
         setCachedListings(listingsWithExtras);
 
+        // Preload first 4 listings' top 5 images to prevent stack UI glitchiness
+        const imagesToPreload = listingsWithExtras
+          .slice(0, 4)
+          .flatMap((l: any) => l.all_image_urls?.slice(0, 5).map((img: any) => img.url))
+          .filter(Boolean);
+
+        if (imagesToPreload.length > 0) {
+          await Promise.all(
+            imagesToPreload.map(
+              (src: string) =>
+                new Promise((resolve) => {
+                  const img = new window.Image();
+                  img.onload = resolve;
+                  img.onerror = resolve; // Don't block forever if one image fails
+                  img.src = src;
+                })
+            )
+          );
+        }
+
       } catch (error) {
         console.error("Error fetching listings:", error);
         if (!cachedListings) {
