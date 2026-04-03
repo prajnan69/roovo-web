@@ -413,6 +413,8 @@ export default function Login({
                 <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[10px] text-neutral-400 font-medium">
                   <button onClick={() => navigate('/terms')} className="hover:text-neutral-600 transition-colors">Terms</button>
                   <span className="text-neutral-300">•</span>
+                  <button onClick={() => navigate('/privacy-policy')} className="hover:text-neutral-600 transition-colors">Privacy</button>
+                  <span className="text-neutral-300">•</span>
                   <button onClick={() => navigate('/refund-policy')} className="hover:text-neutral-600 transition-colors">Refunds</button>
                   <span className="text-neutral-300">•</span>
                   <button onClick={() => navigate('/shipping-policy')} className="hover:text-neutral-600 transition-colors">Shipping</button>

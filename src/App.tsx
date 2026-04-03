@@ -37,6 +37,7 @@ import HomeOptionsPills from './components/HomeOptionsPills';
 import ContactUs from './components/legal/ContactUs';
 import TermsAndConditions from './components/legal/TermsAndConditions';
 import RefundsPolicy from './components/legal/RefundsPolicy';
+import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import TripsPage from './components/TripsPage';
 import SplitPayPage from './components/SplitPayPage';
 
@@ -664,6 +665,7 @@ function AppContent() {
         <Route path="/contact-us" render={() => <ContactUs />} />
         <Route path="/terms" render={() => <TermsAndConditions />} />
         <Route path="/refund-policy" render={() => <RefundsPolicy />} />
+        <Route path="/privacy-policy" render={() => <PrivacyPolicy />} />
       </Router>
 
       {/* Calculate total unread messages */}
