@@ -40,6 +40,9 @@ import RefundsPolicy from './components/legal/RefundsPolicy';
 import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import TripsPage from './components/TripsPage';
 import SplitPayPage from './components/SplitPayPage';
+import AboutUs from './components/legal/AboutUs';
+import Catalogue from './components/legal/Catalogue';
+import BookingFlow from './components/legal/BookingFlow';
 
 function AppContent() {
   const { isNavBarVisible } = useBottomNavBar();
@@ -666,6 +669,9 @@ function AppContent() {
         <Route path="/terms" render={() => <TermsAndConditions />} />
         <Route path="/refund-policy" render={() => <RefundsPolicy />} />
         <Route path="/privacy-policy" render={() => <PrivacyPolicy />} />
+        <Route path="/about-us" render={() => <AboutUs />} />
+        <Route path="/catalogue" render={() => <Catalogue />} />
+        <Route path="/booking-flow" render={() => <BookingFlow />} />
       </Router>
 
       {/* Calculate total unread messages */}

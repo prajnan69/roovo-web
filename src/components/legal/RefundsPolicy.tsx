@@ -2,9 +2,9 @@ import LegalPageLayout from './LegalPageLayout';
 
 const RefundsPolicy = () => {
     return (
-        <LegalPageLayout title="Refunds and Cancellation Policy">
+        <LegalPageLayout title="Returns, Refunds and Cancellation Policy">
             <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold mb-2">REFUNDS AND CANCELLATION POLICY</h2>
+                <h2 className="text-2xl font-bold mb-2">RETURNS, REFUNDS AND CANCELLATION POLICY</h2>
                 <p className="effective-date">Effective Date: {new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
 

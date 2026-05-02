@@ -4,8 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useScroll, useTransform } from "framer-motion";
 import { Share as CapShare } from '@capacitor/share';
 import RoovoLoader from "@/components/RoovoLoader";
-import { fetchListingById, addRecentlyViewed, fetchBookingsByListingId } from "@/services/api";
-import supabase from "../services/api";
+import { fetchListingById, addRecentlyViewed, fetchBookingsByListingId, supabase } from "@/services/api";
 import ConfirmAndPay from "@/components/ConfirmAndPay";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import BookingDrawerContent from "@/components/BookingDrawerContent";
@@ -18,6 +17,7 @@ import { reverseGeocode } from "@/lib/googleMaps";
 import Toast from "@/components/ui/toast";
 import { getRandomHostSelfReservationMessage } from "@/utils/wittyMessages";
 import dayjs from "dayjs";
+import { resolveImageUrl, resolveImageUrls } from "@/utils/imageUtils";
 
 // Extracted Components
 import ListingHeader from "@/components/listing-details/ListingHeader";
@@ -31,6 +31,7 @@ import ListingAmenities from "@/components/listing-details/ListingAmenities";
 import ListingHouseRules from "@/components/listing-details/ListingHouseRules";
 import ListingMap from "@/components/listing-details/ListingMap";
 import GiftBoxAnimation from "@/components/animations/GiftBoxAnimation";
+import Footer from "./Footer";
 
 const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, onOpenChat?: (conversation: any) => void, onOpenLogin?: (subtitle?: string) => void }) => {
   const [listing, setListing] = useState<any>(null);
@@ -114,8 +115,14 @@ const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, on
           ...data,
           place: placeText,
           video_tour_url: videoTourUrl,
-          all_image_urls: data.images_data || [],
-          primary_image_url: data.images_data?.[0]?.url || null,
+          all_image_urls: resolveImageUrls((data.images_data && data.images_data.length > 0) ? data.images_data : (data.images || data.pictures || data.photos || [])).map(url => ({ url })),
+          primary_image_url: resolveImageUrl(
+            (() => {
+              const imgs = (data.images_data && data.images_data.length > 0) ? data.images_data : (data.images || data.pictures || data.photos || []);
+              const first = imgs[0];
+              return typeof first === 'string' ? first : (first?.url || first?.src || first?.path);
+            })()
+          ),
           amenities_sections: groupAmenities(data.amenities_data || []),
           max_guests: data.max_guests,
           total_bedrooms: data.total_bedrooms,
@@ -259,7 +266,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         const { data: kycRow } = await supabase
           .from("kyc")
           .select("id")
-          .eq("host_id", listing.host_id)
+          .eq("user_id", listing.host_id)
           .maybeSingle();
         setIsHostKycVerified(!!kycRow);
 
@@ -821,25 +828,20 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
               }}
             />
           ) : (
-            <div className="mx-auto w-full max-w-md pb-6">
-              <DrawerHeader>
-                <DrawerTitle className="text-xl font-bold text-slate-900">Select Dates</DrawerTitle>
-                <DrawerDescription className="text-slate-500">Add dates for exact pricing</DrawerDescription>
-              </DrawerHeader>
-              <div className="px-4">
-                <BookingDrawerContent
-                  onApply={handleApplyFromDrawer}
-                  onChange={handleDrawerChange}
-                  initialDates={{
-                    checkIn: bookingDetails?.startDate ? new Date(bookingDetails.startDate) : null,
-                    checkOut: bookingDetails?.endDate ? new Date(bookingDetails.endDate) : null
-                  }}
-                  initialGuests={bookingDetails?.guests || 1}
-                  max_guests={listing.max_guests || 4}
-                  pricePerNight={listing.price_per_night}
-                  bookings={bookings}
-                />
-              </div>
+            <div className="mx-auto w-full max-w-md">
+              <BookingDrawerContent
+                onApply={handleApplyFromDrawer}
+                onChange={handleDrawerChange}
+                initialDates={{
+                  checkIn: bookingDetails?.startDate ? new Date(bookingDetails.startDate) : null,
+                  checkOut: bookingDetails?.endDate ? new Date(bookingDetails.endDate) : null
+                }}
+                initialGuests={bookingDetails?.guests || 1}
+                max_guests={listing.max_guests || 4}
+                pricePerNight={listing.price_per_night}
+                bookings={bookings}
+                listingName={listing.title}
+              />
             </div>
           )}
         </DrawerContent>
@@ -855,6 +857,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         userName={currentUserName}
         userPhone={currentUserPhone}
       />
+      <Footer />
 
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
 

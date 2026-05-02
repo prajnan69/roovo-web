@@ -17,6 +17,8 @@ import RoovoLogo from './RoovoLogo';
 import RoovoLoader from './RoovoLoader';
 import { getRandomQuote } from '@/data/travelQuotes';
 import SplitStatusDrawer from './SplitStatusDrawer';
+import Footer from './Footer';
+import { resolveImageUrl } from '@/utils/imageUtils';
 
 const HomeFeed: React.FC<{
   onSwitchToHost?: () => void;
@@ -119,7 +121,10 @@ const HomeFeed: React.FC<{
         // Preload first 4 listings' top 5 images to prevent stack UI glitchiness
         const imagesToPreload = listingsWithExtras
           .slice(0, 4)
-          .flatMap((l: any) => l.all_image_urls?.slice(0, 5).map((img: any) => img.url))
+          .flatMap((l: any) => (l.all_image_urls || []).slice(0, 5).map((img: any) => {
+            const path = typeof img === 'string' ? img : img?.url;
+            return resolveImageUrl(path);
+          }))
           .filter(Boolean);
 
         if (imagesToPreload.length > 0) {
@@ -340,36 +345,54 @@ const HomeFeed: React.FC<{
 
           <FilterChips activeFilter={activeFilter} setActiveFilter={handleFilterChange} />
 
-          {(popularHomes.length > 0 || loading) && (
-            <LayoutGroup id="popular-section">
-              <div className="relative">
-                {isFiltering && (
-                  <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
-                    <RoovoLoader className="w-12 h-auto text-indigo-600" />
-                  </div>
-                )}
-                <ListingSection
-                  key={`popular-${activeFilter}`}
-                  title={getDynamicTitle(activeFilter, 'Karnataka')}
-                  listings={popularHomes}
-                  loading={loading}
-                />
-              </div>
-            </LayoutGroup>
-          )}
-
-          {(weekendHomes.length > 0 || loading) && (
-            <LayoutGroup id="weekend-section">
+          <LayoutGroup id="popular-section">
+            <div className="relative">
+              {isFiltering && (
+                <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
+                  <RoovoLoader className="w-12 h-auto text-indigo-600" />
+                </div>
+              )}
               <ListingSection
-                key={`weekend-${activeFilter}`}
-                title="Available this weekend"
-                listings={weekendHomes}
+                key={`popular-${activeFilter}`}
+                title={getDynamicTitle(activeFilter, 'Karnataka')}
+                listings={popularHomes}
                 loading={loading}
               />
-            </LayoutGroup>
-          )}
+            </div>
+          </LayoutGroup>
 
-          {activeFilter === 'all' && (newHomes.length > 0 || loading) && (
+          <LayoutGroup id="weekend-section">
+            <ListingSection
+              key={`weekend-${activeFilter}`}
+              title="Available this weekend"
+              listings={weekendHomes}
+              loading={loading}
+            />
+          </LayoutGroup>
+
+          {/* ── Why Roovo Trust Strip (from prototype) ── */}
+          <div style={{ margin: '8px 20px 0', background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', borderRadius: 24, padding: '24px 22px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '9999px', background: 'rgba(255,255,255,.07)' }} />
+            <div style={{ position: 'absolute', bottom: -30, left: -30, width: 140, height: 140, borderRadius: '9999px', background: 'rgba(255,255,255,.05)' }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.65)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Why Roovo?</div>
+            <div style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, fontFamily: 'Cormorant Garamond, Georgia, serif', marginBottom: 16 }}>
+              8–10% cheaper<br /><span style={{ fontStyle: 'italic' }}>than Airbnb, always.</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                { icon: '✓', text: 'Price matched vs Airbnb' },
+                { icon: '⬡', text: 'Roovo Verified properties' },
+                { icon: '✦', text: 'Instant GST invoices' },
+              ].map((p, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: '#fff' }}>{p.icon}</div>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,.88)' }}>{p.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {activeFilter === 'all' && (
             <LayoutGroup id="new-section">
               <ListingSection
                 key={`new-${activeFilter}`}
@@ -380,35 +403,32 @@ const HomeFeed: React.FC<{
             </LayoutGroup>
           )}
 
-          <div className="flex flex-col items-center justify-center pt-12 pb-6 opacity-70 px-8">
-            <div className="w-24 mb-4 grayscale opacity-60">
-              <RoovoLogo />
-            </div>
-            <p className="text-sm text-slate-500 font-medium text-center italic">
-              "{quote}"
-            </p>
-            <p className="text-xs text-slate-400 mt-2">You've reached the end!</p>
-          </div>
+          <Footer />
         </div>
       );
     };
 
     return (
-      <div className="min-h-screen bg-white relative">
+      <div className="min-h-screen relative" style={{ background: '#FAF9F7' }}>
         <AnimatePresence>
           {/* Full screen loader removed for skeleton UI */}
         </AnimatePresence>
 
-        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md pt-[calc(env(safe-area-inset-top)+1rem)] pb-2 px-5 transition-all duration-200 border-b border-slate-100/50 flex flex-col items-center">
+        <header className="sticky top-0 z-40 transition-all duration-300 flex flex-col items-center"
+          style={{ background: 'rgba(250,249,247,0.96)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
           <AnimatePresence>
             {headerState === 'greeting' && (
               <motion.div
-                initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto', marginBottom: 12 }}
-                exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
-                className="flex items-center overflow-hidden w-full"
+                initial={{ opacity: 0, maxHeight: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, maxHeight: 80, marginBottom: 14 }}
+                exit={{ opacity: 0, maxHeight: 0, marginBottom: 0 }}
+                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden w-full px-5"
               >
-                <span className="text-2xl font-bold text-slate-900">{getGreeting()}</span>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>{getGreeting()}</div>
+                <div style={{ fontSize: 26, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: 'Cormorant Garamond, Georgia, serif', fontStyle: 'italic' }}>
+                  Find your perfect stay.
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -420,27 +440,23 @@ const HomeFeed: React.FC<{
                 setIsSearchOpen(true);
                 setIsNavBarVisible(false);
               }}
-              className={`bg-white border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.06)] p-3 pr-4 flex items-center gap-3 active:scale-[0.98] transition-all duration-200 cursor-pointer w-full ${(upcomingBooking || pendingSplit) ? 'rounded-t-[28px] rounded-b-none border-b-0' : 'rounded-full'
-                }`}
+              className={`cursor-pointer w-full flex items-center gap-3 ${(upcomingBooking || pendingSplit) ? 'rounded-t-[28px] rounded-b-none' : 'rounded-full'}`}
+              style={{ background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', boxShadow: '0 3px 18px rgba(0,0,0,0.07)', padding: '12px 14px 12px 12px' }}
             >
-              <div className="bg-indigo-50 rounded-full p-2.5 text-indigo-500">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <div style={{ background: '#EEEEFF', borderRadius: '9999px', padding: '9px', display: 'flex', flexShrink: 0 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 17, height: 17 }} fill="none" viewBox="0 0 24 24" stroke="#4F46E5" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div className="flex-1">
-                <p className="font-bold text-slate-900 text-[0.95rem]">Where to?</p>
-                <p className="text-xs text-slate-500 font-medium mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">Anywhere • Any week • Add guests</p>
+              <div className="flex-1 min-w-0">
+                <p style={{ fontWeight: 700, color: '#0A0A09', fontSize: 15, letterSpacing: '-.02em' }}>Where to?</p>
+                <p style={{ fontSize: 12, color: '#888880', fontWeight: 500, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Anywhere · Any week · Add guests</p>
               </div>
               <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerHaptic();
-                  window.location.reload();
-                }}
-                className="p-2 rounded-full border border-slate-100 text-slate-400 hover:bg-slate-50 active:bg-slate-100 transition-colors"
+                onClick={(e) => { e.stopPropagation(); triggerHaptic(); window.location.reload(); }}
+                style={{ padding: 8, borderRadius: '9999px', border: '1px solid rgba(0,0,0,0.065)', color: '#888880', display: 'flex' }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 14, height: 14 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </div>

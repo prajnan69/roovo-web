@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import type { ListingData } from '@/types';
 import { useNavigation } from '@/hooks/useNavigation';
 import MobileSearchModal from './MobileSearchModal';
+import Footer from './Footer';
 
 import { getDistanceFromLatLonInKm } from '@/lib/utils';
 
@@ -178,6 +179,7 @@ export default function SearchPage() {
                       />
                     ))}
                   </div>
+                  <Footer />
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-white rounded-2xl shadow-sm mx-auto max-w-md mt-12">

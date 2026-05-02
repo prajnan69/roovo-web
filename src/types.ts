@@ -135,6 +135,11 @@ export interface ListingData {
   category?: string;
   fuzzy_lat?: number;
   fuzzy_lng?: number;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  exact_lat?: number;
+  exact_lng?: number;
 }
 
 export interface Image {

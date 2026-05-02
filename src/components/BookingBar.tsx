@@ -112,174 +112,92 @@ const BookingBar = ({
       transition={{ type: 'spring', stiffness: 260, damping: 20 }}
       className="fixed bottom-0 left-0 right-0 w-full z-50"
     >
-      {/* Glassmorphism Container */}
-      <div className="bg-white/90 backdrop-blur-xl border-t border-slate-200/50 px-4 md:px-6 py-3 md:py-4 pb-6 md:pb-8 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+      {/* Glassmorphism Container — prototype style */}
+      <div style={{ background: 'rgba(254,254,254,0.96)', backdropFilter: 'blur(26px)', WebkitBackdropFilter: 'blur(26px)', borderTop: '1px solid rgba(0,0,0,0.065)', boxShadow: '0 -4px 28px rgba(0,0,0,0.08)', padding: '16px 22px 34px' }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-2 md:gap-4">
 
           {/* Price Section */}
           <div
             className="flex flex-col justify-center min-w-0 shrink cursor-pointer active:scale-95 transition-transform"
-            onClick={() => {
-              triggerHaptic();
-              setShowBreakdown(true);
-            }}
+            onClick={() => { triggerHaptic(); setShowBreakdown(true); }}
           >
             {showPrice ? (
               <>
-                <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                <div className="flex items-baseline gap-2 flex-wrap">
                   <motion.div
                     animate={isPulsing ? { scale: [1, 1.3, 1], zIndex: 60 } : { scale: 1 }}
                     transition={{ duration: 0.8, times: [0, 0.4, 1], ease: "anticipate" }}
                     className="flex items-baseline gap-1 whitespace-nowrap"
                   >
-                    <span className="text-xl md:text-2xl font-bold text-slate-900">
-                      ₹<SlidingNumber
-                        number={Math.round(displayMode === 'total' ? currentRoovoTotal : displayPricePerNight)}
-                        padStart={false}
-                      />
+                    <span style={{ fontSize: 26, fontWeight: 800, color: '#0A0A09', letterSpacing: '-.04em' }}>
+                      ₹<SlidingNumber number={Math.round(displayMode === 'total' ? currentRoovoTotal : displayPricePerNight)} padStart={false} />
                     </span>
-                    <span className="text-xs md:text-sm font-medium text-slate-500">
+                    <span style={{ fontSize: 13, color: '#888880', fontWeight: 500 }}>
                       {displayMode === 'total' ? `/ ${nights} nights` : '/ night'}
                     </span>
                     {nights > 1 && (
-                      <motion.div
-                        animate={{ y: [0, -2, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
+                      <motion.div animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }}>
                         {displayMode === 'total' ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                       </motion.div>
                     )}
                   </motion.div>
 
-                  {/* Market Price Check / Savings Display */}
                   <AnimatePresence mode="wait">
                     {loadingAirbnbPrice ? (
-                      <motion.div
-                        key="checking"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        className="flex items-center bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-semibold shadow-sm whitespace-nowrap"
-                      >
-                        🔍 Checking Market Price...
+                      <motion.div key="checking" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                        className="flex items-center bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap">
+                        🔍 Checking...
                       </motion.div>
                     ) : !airbnbAvailable || !compareAirbnbTotal ? (
-                      <motion.div
-                        key="exclusive"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="flex items-center bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-bold shadow-sm whitespace-nowrap"
-                        onClick={() => setShowBreakdown(true)}
-                      >
-                        <Sparkles className="w-3 h-3 mr-1" />
-                        Exclusive Price
+                      <motion.div key="exclusive" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                        style={{ background: '#EEEEFF', color: '#4F46E5', padding: '3px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        <Sparkles className="w-3 h-3 mr-1 inline" />Exclusive Price
                       </motion.div>
                     ) : savingsTotal > 0 ? (
-                      <motion.div
-                        key="savings"
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="flex items-center bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-bold shadow-sm whitespace-nowrap"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowBreakdown(true);
-                        }}
-                      >
-                        {discountPercent < 100 ? `${discountPercent}% OFF` : `SAVE ₹${Math.round(displayMode === 'total' ? savingsTotal : (savingsTotal / nights)).toLocaleString()}`}
+                      <motion.div key="savings" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                        style={{ background: '#ECFDF5', color: '#059669', padding: '3px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        Save {discountPercent}%
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
                 </div>
 
-                {/* Comparison Text */}
-                <div
-                  className="h-4 md:h-5 flex items-center mt-0.5 md:mt-1 overflow-hidden"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBreakdown(true);
-                  }}
-                >
-                  <AnimatePresence mode="wait">
-                    {isFeeWaived ? (
-                      <motion.div
-                        key="best-price-loyalty"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-1 text-[10px] md:text-xs font-bold text-green-600 whitespace-nowrap"
-                      >
-                        <Sparkles size={12} className="text-yellow-500" />
-                        Best price on the internet
-                      </motion.div>
-                    ) : !loadingAirbnbPrice && airbnbAvailable && compareAirbnbTotal && compareAirbnbTotal > currentRoovoTotal ? (
-                      <motion.div
-                        key="comparison"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        className="flex items-center gap-1 text-[10px] md:text-xs text-slate-500 whitespace-nowrap"
-                      >
-                        <span className="text-red-500 line-through">
-                          Airbnb: ₹{Math.round(displayMode === 'total' ? compareAirbnbTotal : compareAirbnbPerNight!).toLocaleString()}
-                        </span>
-                        <span className="text-slate-300">•</span>
-                        <span className="font-semibold text-green-600 flex items-center gap-1">
-                          <Check size={12} /> Roovo Price Matched
-                        </span>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="guaranteed"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-1 text-[10px] md:text-xs font-medium text-slate-500 whitespace-nowrap"
-                      >
-                        Best price guaranteed
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                {/* Badges row — prototype style */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, background: '#ECFDF5', color: '#059669', padding: '3px 9px', borderRadius: 99 }}>Save 15% vs Airbnb</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, background: '#EEEEFF', color: '#4F46E5', padding: '3px 9px', borderRadius: 99 }}>GST invoice</span>
                 </div>
               </>
             ) : (
               <div className="flex flex-col justify-center">
-                <span className="text-sm font-medium text-slate-500">
-                  Add dates for prices
-                </span>
+                <span className="text-sm font-medium text-slate-500">Add dates for prices</span>
               </div>
             )}
           </div>
 
           {/* Actions Section */}
-          <div className="flex items-center gap-2 md:gap-3 shrink-0">
-            {/* Chat Button - Secondary Action */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexShrink: 0 }}>
+            {/* Chat Button */}
             {showChat && (
               <motion.button
-                className="p-3 md:p-3.5 rounded-xl md:rounded-2xl bg-slate-50 text-slate-600 border border-slate-100 active:bg-slate-100 transition-colors"
+                style={{ width: 48, height: 48, borderRadius: 16, background: '#F4F3F0', border: '1px solid rgba(0,0,0,0.065)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 whileTap={{ scale: 0.92 }}
-                onClick={() => {
-                  triggerHaptic();
-                  onChatClick?.();
-                }}
+                onClick={() => { triggerHaptic(); onChatClick?.(); }}
                 aria-label="Chat with host"
               >
-                <MessageCircle className="w-5 h-5" />
+                <MessageCircle className="w-5 h-5 text-slate-600" />
               </motion.button>
             )}
 
-            {/* Reserve Button - Primary Action */}
+            {/* Reserve Button — prototype gradient */}
             <motion.button
-              onClick={() => {
-                triggerHaptic();
-                onReserveClick();
-              }}
-              className="relative overflow-hidden px-6 md:px-8 py-3 md:py-3.5 rounded-xl md:rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold shadow-lg shadow-indigo-500/25 active:shadow-sm transition-all"
+              onClick={() => { triggerHaptic(); onReserveClick(); }}
+              style={{ background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', color: '#fff', padding: '0 30px', height: 50, borderRadius: 16, fontWeight: 800, fontSize: 15, boxShadow: '0 8px 32px rgba(79,70,229,.30)', border: 'none', letterSpacing: '-.02em', position: 'relative', overflow: 'hidden' }}
               whileTap={{ scale: 0.96 }}
               whileHover={{ scale: 1.02 }}
             >
-              <span className="relative z-10 flex items-center gap-2 text-sm md:text-base">
-                {buttonText}
-              </span>
-              {/* Subtle shine effect overlay */}
-              <div className="absolute inset-0 bg-white/20 translate-y-full skew-y-12 group-hover:translate-y-[-150%] transition-transform duration-700 ease-in-out" />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent)', transform: 'translateX(-100%)', animation: 'goldshine 3s ease 2s infinite' }} />
+              <span style={{ position: 'relative', zIndex: 1 }}>{buttonText}</span>
             </motion.button>
           </div>
         </div>

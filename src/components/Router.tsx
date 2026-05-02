@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Route from './Route';
+import NotFound from './NotFound';
 
 interface RouterProps {
   children: React.ReactNode;
@@ -34,7 +35,7 @@ const Router: React.FC<RouterProps> = ({ children }) => {
     }
   });
 
-  return matchedComponent;
+  return matchedComponent || <NotFound />;
 };
 
 export default Router;

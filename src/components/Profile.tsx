@@ -294,9 +294,13 @@ const Profile: FC = () => {
           <div className="bg-white rounded-[1.25rem] border border-slate-100 shadow-sm shadow-slate-100 overflow-hidden">
 
             <MenuItem icon={<FiAlertCircle />} label="Raise an Issue" onClick={() => setIsSupportOpen(true)} />
+            <MenuItem icon={<FiUser />} label="About Us" onClick={() => navigate('/about-us')} />
             <MenuItem icon={<FiPhone />} label="Contact Us" onClick={() => navigate('/contact-us')} />
+            <MenuItem icon={<FiFileText />} label="Product Catalogue" onClick={() => navigate('/catalogue')} />
+            <MenuItem icon={<FiFileText />} label="Booking Flow" onClick={() => navigate('/booking-flow')} />
             <MenuItem icon={<FiFileText />} label="Terms & Conditions" onClick={() => navigate('/terms')} />
-            <MenuItem icon={<FiFileText />} label="Refund Policy" onClick={() => navigate('/refund-policy')} />
+            <MenuItem icon={<FiFileText />} label="Privacy Policy" onClick={() => navigate('/privacy-policy')} />
+            <MenuItem icon={<FiFileText />} label="Returns & Refunds Policy" onClick={() => navigate('/refund-policy')} />
             <MenuItem icon={<FiLogOut />} label="Log Out" variant="destructive" onClick={handleLogout} />
           </div>
         </section>

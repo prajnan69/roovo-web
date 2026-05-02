@@ -9,6 +9,7 @@ import { IconStarFilled } from '@tabler/icons-react';
 import { triggerHaptic } from '@/lib/haptics';
 import { reverseGeocode } from '@/lib/googleMaps';
 import { motion, AnimatePresence } from 'motion/react';
+import { resolveImageUrl } from '@/utils/imageUtils';
 
 const VerifiedBadge = ({ listing }: { listing: Listing }) => {
   const [showName, setShowName] = useState(false);
@@ -107,7 +108,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
   }, [listing, locationFromProps, fetchedLocation]);
 
   const images = (listing.all_image_urls || []).slice(0, size === 'small' ? 1 : 5).map((src, index) => {
-    return { id: index, img: src.url };
+    const path = typeof src === 'string' ? src : src.url;
+    return { id: index, img: resolveImageUrl(path) };
   });
 
   const cardWidth = variant === 'search' ? 300 : 160;
@@ -253,7 +255,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
 
 // --- Skeleton Card for Loading State ---
 export const SkeletonCard: React.FC<{ size?: 'small' | 'normal' }> = ({ size = 'normal' }) => (
-  <div className="animate-pulse w-40 shrink-0">
+  <div className={`animate-pulse shrink-0 ${size === 'small' ? 'w-40' : 'w-56'}`}>
     <div className="bg-slate-200 rounded-2xl aspect-square"></div>
     <div className="mt-2 space-y-2">
       <div className="h-3 bg-slate-200 rounded w-5/6"></div>

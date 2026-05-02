@@ -28,6 +28,12 @@ const swipePower = (offset: number, velocity: number) => {
 const MobileImageCarousel = ({ images }: { images: string[] }) => {
   const [[page, direction], setPage] = useState([0, 0]);
 
+  if (!images || images.length === 0) return (
+    <div className="w-full h-full bg-slate-100 flex items-center justify-center">
+      <div className="text-slate-300">No images available</div>
+    </div>
+  );
+
   const imageIndex = page % images.length;
 
   const paginate = (newDirection: number) => {

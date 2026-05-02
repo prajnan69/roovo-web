@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* ── Prototype keyframes ── */
+@keyframes goldshine {
+  0%, 100% { opacity: 0; transform: translateX(-100%) skewX(-20deg); }
+  40% { opacity: 0.7; transform: translateX(300%) skewX(-20deg); }
+}
+
+:root {
+  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* iOS touch fix - ensure buttons and interactive elements respond to taps */
