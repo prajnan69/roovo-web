@@ -375,7 +375,7 @@ const HomeFeed: React.FC<{
             <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '9999px', background: 'rgba(255,255,255,.07)' }} />
             <div style={{ position: 'absolute', bottom: -30, left: -30, width: 140, height: 140, borderRadius: '9999px', background: 'rgba(255,255,255,.05)' }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.65)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Why Roovo?</div>
-            <div style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, fontFamily: 'Cormorant Garamond, Georgia, serif', marginBottom: 16 }}>
+            <div style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, fontFamily: ''Playfair Display', Georgia, serif', marginBottom: 16 }}>
               8–10% cheaper<br /><span style={{ fontStyle: 'italic' }}>than Airbnb, always.</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -426,7 +426,7 @@ const HomeFeed: React.FC<{
                 className="overflow-hidden w-full px-5"
               >
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>{getGreeting()}</div>
-                <div style={{ fontSize: 26, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: 'Cormorant Garamond, Georgia, serif', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 26, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: ''Playfair Display', Georgia, serif', fontStyle: 'italic' }}>
                   Find your perfect stay.
                 </div>
               </motion.div>

@@ -1,12 +1,15 @@
 import React from 'react';
 
-const ListingCardSkeleton: React.FC = () => {
-    return (
-        <div className="w-40 shrink-0 animate-pulse">
-            {/* Image Placeholder */}
-            <div className="bg-slate-200 rounded-2xl aspect-square w-full" />
+interface ListingCardSkeletonProps {
+    size?: 'small' | 'normal';
+}
 
-            {/* Title & Info Placeholders */}
+const ListingCardSkeleton: React.FC<ListingCardSkeletonProps> = ({ size = 'normal' }) => {
+    const w = size === 'small' ? 150 : 180;
+    const h = size === 'small' ? 175 : 225;
+    return (
+        <div className="shrink-0 animate-pulse" style={{ width: w }}>
+            <div className="bg-slate-200 rounded-2xl" style={{ height: h }} />
             <div className="mt-2 space-y-2">
                 <div className="h-3.5 bg-slate-200 rounded w-3/4" />
                 <div className="h-3 bg-slate-200 rounded w-1/2" />

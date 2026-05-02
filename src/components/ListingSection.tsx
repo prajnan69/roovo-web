@@ -76,7 +76,7 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
               <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>
                 {title.toLowerCase().includes('weekend') ? 'Weekend escapes' : title.toLowerCase().includes('new') ? 'Just added' : 'Featured'}
               </div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: 'Cormorant Garamond, Georgia, serif' }}>
+              <div style={{ fontSize: 22, fontWeight: 600, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: "'Playfair Display', Georgia, serif" }}>
                 {title.split(' ').slice(0, 2).join(' ')}{' '}
                 <span style={{ fontStyle: 'italic' }}>{title.split(' ').slice(2).join(' ')}</span>
               </div>
@@ -107,14 +107,14 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
         >
           {loading
             ? Array.from({ length: 4 }).map((_, index) => (
-              <div key={`skel-${index}`} className={size === 'small' ? 'w-40' : 'w-56'}>
-                <ListingCardSkeleton />
+              <div key={`skel-${index}`} style={{ flexShrink: 0, width: size === 'small' ? 150 : 180 }}>
+                <ListingCardSkeleton size={size} />
               </div>
             ))
             : listings.map((listing) => (
               <motion.div
                 key={listing.id}
-                className={size === 'small' ? 'w-40' : 'w-56'}
+                style={{ flexShrink: 0, width: size === 'small' ? 150 : 180 }}
                 layout
                 variants={{
                   hidden: { opacity: 0, y: 20 },
@@ -135,10 +135,10 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
               { g: ['#1E1B4B','#3730A3','#818CF8'], name: 'Upcoming Property' },
               { g: ['#052E16','#065F46','#34D399'], name: 'Coming Soon' },
             ].map((item, i) => (
-              <div key={i} style={{ flexShrink: 0, width: size === 'small' ? 150 : 220 }}>
+              <div key={i} style={{ flexShrink: 0, width: size === 'small' ? 150 : 180 }}>
                 <div style={{
-                  height: size === 'small' ? 170 : 280,
-                  borderRadius: 22,
+                  height: size === 'small' ? 175 : 225,
+                  borderRadius: 18,
                   background: `linear-gradient(155deg,${item.g[0]} 0%,${item.g[1]} 52%,${item.g[2]} 100%)`,
                   position: 'relative',
                   overflow: 'hidden',
@@ -159,7 +159,7 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,.6) 0%,rgba(0,0,0,0) 45%)' }} />
                   {/* Name */}
                   <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: size === 'small' ? '10px 12px' : '18px 16px' }}>
-                    <div style={{ fontSize: size === 'small' ? 12 : 17, fontWeight: 700, color: '#fff', letterSpacing: '-.02em', lineHeight: 1.2, fontFamily: 'Cormorant Garamond, Georgia, serif' }}>{item.name}</div>
+                    <div style={{ fontSize: size === 'small' ? 12 : 16, fontWeight: 700, color: '#fff', letterSpacing: '-.02em', lineHeight: 1.2, fontFamily: "'Playfair Display', Georgia, serif" }}>{item.name}</div>
                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', marginTop: 4, fontStyle: 'italic' }}>Stay tuned for new properties</div>
                   </div>
                 </div>

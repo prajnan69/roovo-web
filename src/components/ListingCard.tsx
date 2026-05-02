@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { ListingData as Listing } from '@/types';
 import { addRecentlyViewed } from '@/services/api';
 import supabase from '@/services/api';
@@ -79,6 +79,22 @@ interface ListingCardProps {
 // --- Main ListingCard Component ---
 const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', variant = 'default' }) => {
   const [fetchedLocation, setFetchedLocation] = useState<string | null>(null);
+  const tiltRef = useRef<HTMLDivElement>(null);
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const el = tiltRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const rx = ((e.clientY - (r.top + r.height / 2)) / r.height) * 9;
+    const ry = -((e.clientX - (r.left + r.width / 2)) / r.width) * 9;
+    el.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.04)`;
+    el.style.boxShadow = `${-ry * 0.6}px ${rx * 0.6}px 32px rgba(0,0,0,0.16)`;
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    const el = tiltRef.current;
+    if (!el) return;
+    el.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) scale(1)';
+    el.style.boxShadow = '';
+  }, []);
 
   // const isGuestFavourite = listing.overall_rating && listing.overall_rating > 4.8;
   const showVerifiedBadge = !!listing.is_roovo_verified;
@@ -112,7 +128,8 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
     return { id: index, img: resolveImageUrl(path) };
   });
 
-  const cardWidth = variant === 'search' ? 300 : 160;
+  const cardWidth = variant === 'search' ? 300 : (size === 'small' ? 150 : 180);
+  const cardHeight = variant === 'search' ? 300 : (size === 'small' ? 175 : 225);
 
   const navigate = (path: string) => {
     // Preserve search params if they exist
@@ -215,13 +232,18 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
   }
 
   return (
-    // Card container: Smaller width, flex-shrink-0 to prevent squishing
-    <div onClick={handleClick} className="cursor-pointer w-40 shrink-0 isolate">
-      {/* --- Image Carousel --- */}
-      <div className="relative rounded-2xl aspect-square group">
+    <div onClick={handleClick} className="cursor-pointer shrink-0 isolate" style={{ width: cardWidth }}>
+      {/* --- Image Carousel with 3D tilt --- */}
+      <div
+        ref={tiltRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        className="relative rounded-2xl group"
+        style={{ width: cardWidth, height: cardHeight, transition: 'transform .32s cubic-bezier(.34,1.56,.64,1), box-shadow .32s ease', borderRadius: 18, overflow: 'hidden' }}
+      >
         <Stack
           cardsData={images}
-          cardDimensions={{ width: cardWidth, height: cardWidth }}
+          cardDimensions={{ width: cardWidth, height: cardHeight }}
           onSwipe={triggerHaptic}
           showBorder={showVerifiedBadge}
           renderTopRightOverlay={() => (
@@ -235,18 +257,17 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
       </div>
 
       {/* --- Listing Info --- */}
-      <div className="mt-2">
-        {size !== 'small' && <h3 className="font-medium text-sm text-slate-800 line-clamp-2">{listing.title}</h3>}
-        <p className="text-xs text-slate-500 mt-1">{displayLocation}</p>
-        <div className="text-xs text-slate-500 flex items-center space-x-1 mt-1">
-          <span>
-            ₹{listing.price_per_night} night
-          </span>
-          <span>·</span>
-          <div className="flex items-center space-x-1">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-800" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-            <span className="font-medium">{listing.overall_rating}</span>
-          </div>
+      <div className="mt-2" style={{ width: cardWidth }}>
+        {size !== 'small' && (
+          <h3 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 600, fontSize: 13, color: '#0A0A09', lineHeight: 1.3, letterSpacing: '-0.01em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 2 }}>{listing.title}</h3>
+        )}
+        <p style={{ fontSize: 11, color: '#888880', fontWeight: 400, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLocation}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#0A0A09' }}>₹{listing.price_per_night}</span>
+          <span style={{ fontSize: 11, color: '#888880' }}>night</span>
+          <span style={{ color: '#BBBBB4' }}>·</span>
+          <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 10, height: 10, color: '#0A0A09', flexShrink: 0 }} viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#0A0A09' }}>{listing.overall_rating}</span>
         </div>
       </div>
     </div>
@@ -254,15 +275,19 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
 };
 
 // --- Skeleton Card for Loading State ---
-export const SkeletonCard: React.FC<{ size?: 'small' | 'normal' }> = ({ size = 'normal' }) => (
-  <div className={`animate-pulse shrink-0 ${size === 'small' ? 'w-40' : 'w-56'}`}>
-    <div className="bg-slate-200 rounded-2xl aspect-square"></div>
-    <div className="mt-2 space-y-2">
-      <div className="h-3 bg-slate-200 rounded w-5/6"></div>
-      <div className="h-3 bg-slate-200 rounded w-1/2"></div>
-      <div className="h-3 bg-slate-200 rounded w-1/3"></div>
+export const SkeletonCard: React.FC<{ size?: 'small' | 'normal' }> = ({ size = 'normal' }) => {
+  const w = size === 'small' ? 150 : 180;
+  const h = size === 'small' ? 175 : 225;
+  return (
+    <div className="animate-pulse shrink-0" style={{ width: w }}>
+      <div className="bg-slate-200 rounded-2xl" style={{ height: h }} />
+      <div className="mt-2 space-y-2">
+        <div className="h-3 bg-slate-200 rounded w-5/6" />
+        <div className="h-3 bg-slate-200 rounded w-1/2" />
+        <div className="h-3 bg-slate-200 rounded w-1/3" />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default ListingCard;

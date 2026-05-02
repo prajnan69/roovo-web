@@ -9,7 +9,7 @@ interface ListingTitleSectionProps {
 const ListingTitleSection = ({ title, place, rating }: ListingTitleSectionProps) => {
     return (
         <div className="mt-2 mb-6">
-            <div className="text-4xl font-bold text-slate-900 leading-tight mb-2">
+            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '2rem', fontWeight: 600, color: '#0A0A09', lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 8 }}>
                 {title}
             </div>
             <div className="flex items-center gap-1.5 text-slate-500 text-sm">
