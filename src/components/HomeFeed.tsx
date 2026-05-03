@@ -47,6 +47,7 @@ const HomeFeed: React.FC<{
     const [quote, setQuote] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
     const [isFiltering, setIsFiltering] = useState(false);
+    const [scrollY, setScrollY] = useState(0);
 
     useEffect(() => {
       onLoadingChange?.(loading);
@@ -157,6 +158,7 @@ const HomeFeed: React.FC<{
     useEffect(() => {
       const handleScroll = () => {
         const currentScrollY = window.scrollY;
+        setScrollY(currentScrollY);
 
         // If dragging way down (overscroll simulation)
         if (currentScrollY < -50) {
@@ -375,7 +377,7 @@ const HomeFeed: React.FC<{
             <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '9999px', background: 'rgba(255,255,255,.07)' }} />
             <div style={{ position: 'absolute', bottom: -30, left: -30, width: 140, height: 140, borderRadius: '9999px', background: 'rgba(255,255,255,.05)' }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.65)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Why Roovo?</div>
-            <div style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, fontFamily: ''Playfair Display', Georgia, serif', marginBottom: 16 }}>
+            <div className="font-display" style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, marginBottom: 16 }}>
               8–10% cheaper<br /><span style={{ fontStyle: 'italic' }}>than Airbnb, always.</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -414,8 +416,17 @@ const HomeFeed: React.FC<{
           {/* Full screen loader removed for skeleton UI */}
         </AnimatePresence>
 
-        <header className="sticky top-0 z-40 transition-all duration-300 flex flex-col items-center"
-          style={{ background: 'rgba(250,249,247,0.96)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
+        <header
+          className="sticky top-0 z-40 flex flex-col items-center"
+          style={{
+            background: scrollY > 25 ? 'rgba(250,249,247,0.96)' : 'transparent',
+            backdropFilter: scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+            WebkitBackdropFilter: scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+            borderBottom: scrollY > 48 ? '1px solid rgba(0,0,0,.065)' : 'none',
+            transition: 'background .3s, border-color .3s',
+            paddingTop: 'max(env(safe-area-inset-top), 12px)',
+          }}
+        >
           <AnimatePresence>
             {headerState === 'greeting' && (
               <motion.div
@@ -426,14 +437,14 @@ const HomeFeed: React.FC<{
                 className="overflow-hidden w-full px-5"
               >
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>{getGreeting()}</div>
-                <div style={{ fontSize: 26, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: ''Playfair Display', Georgia, serif', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 28, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: "'Playfair Display', Georgia, serif", fontStyle: 'italic' }}>
                   Find your perfect stay.
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="relative w-full max-w-3xl mx-auto px-1">
+          <div className="relative w-full max-w-3xl mx-auto" style={{ padding: '0 18px 14px' }}>
             <div
               onClick={() => {
                 triggerHaptic();
@@ -520,10 +531,7 @@ const HomeFeed: React.FC<{
           </div>
         </header>
 
-        <main
-          className={`w-full md:max-w-7xl mx-auto px-4 sm:px-8 pt-2 pb-6 ${showBottomNavBar ? 'pb-24' : ''
-            }`}
-        >
+        <main className="w-full pb-6">
           {renderContent()}
         </main>
 

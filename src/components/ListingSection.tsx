@@ -57,8 +57,8 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
   };
 
   return (
-    <section className="relative group" style={{ minHeight: size === 'small' ? '16rem' : '20rem' }}>
-      <div className="flex items-end justify-between mb-4 px-4 md:px-0">
+    <section className="relative group" style={{ paddingTop: 28, minHeight: size === 'small' ? '16rem' : '20rem' }}>
+      <div style={{ padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
         {loading ? (
           <div className="space-y-2">
             <div className="h-3 bg-slate-200 rounded w-24 animate-pulse" />
@@ -94,7 +94,8 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
           ref={scrollContainerRef}
           key={loading ? 'loading' : listUniqueKey}
           onScroll={checkScrollability}
-          className="flex space-x-4 md:space-x-6 overflow-x-auto pb-4 scrollbar-hide px-4 md:px-0"
+          className="flex overflow-x-auto pb-4 scrollbar-hide"
+          style={{ gap: size === 'small' ? 12 : 14, paddingLeft: 20, paddingRight: 20 }}
           initial="hidden"
           animate="visible"
           variants={{

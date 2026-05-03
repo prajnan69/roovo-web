@@ -15,7 +15,7 @@ const Footer: React.FC = () => {
                 <p className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">Roovo Hospitality Pvt. Ltd.</p>
                 <div className="flex items-start gap-2 text-slate-400">
                     <MapPin size={13} className="shrink-0 mt-0.5" />
-                    <p className="text-xs font-medium">HSR Layout, Bengaluru, Karnataka 560102, India</p>
+                    <p className="text-xs font-medium">Bengaluru, Karnataka 560102, India</p>
                 </div>
                 <div className="flex items-center gap-2 text-slate-400">
                     <Mail size={13} className="shrink-0" />

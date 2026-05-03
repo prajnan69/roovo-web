@@ -17,6 +17,9 @@ interface BottomNavBarProps {
   unreadCount?: number;
 }
 
+// Nav background — matches prototype's var(--nav)
+const NAV_BG = 'rgba(255,255,255,0.88)';
+
 const BottomNavBar: React.FC<BottomNavBarProps> = ({
   show,
   onSearchClick,
@@ -33,125 +36,173 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
   const isHost = profileData?.is_host || false;
   const isHostingPage = pathname.startsWith('/hosting');
 
-  // Helper for click handling
-  const handleItemClick = (item: any, e: any) => {
+  const handleClick = (item: any) => {
     triggerHaptic();
-    if (item.action) {
-      e.preventDefault();
-      item.action();
-    } else {
-      navigate(item.href);
-    }
+    if (item.action) item.action();
+    else navigate(item.href);
   };
 
-  // Define Items Groups
-  const getItems = () => {
-    if (isHostingPage) {
-      // Hosting Mode - Only switch button
-      return {
-        left: [],
-        center: { href: "#", label: "Travel", icon: Repeat, action: onSwitchToTraveling },
-        right: []
-      };
-    } else {
-      // Guest Mode
-      return {
-        left: [
-          { href: "/", label: "Explore", icon: Home },
-          { label: "Search", icon: Search, action: onSearchClick },
-        ],
-        center: isHost
-          ? { href: "/hosting", label: "Hosting", icon: Repeat, action: onSwitchToHost }
-          : { href: "/become-host", label: "Roovo your home", icon: Building2, action: () => navigate('/import-listing') },
-        right: [
-          { href: "/messages", label: "Messages", icon: MessageSquare, action: onMessagesClick },
-          { href: isLoggedIn ? "/profile" : "/login", label: isLoggedIn ? "Profile" : "Log in", icon: UserCircle2, action: isLoggedIn ? undefined : openLogin },
-        ]
-      };
-    }
-  };
-
-  const { left, center, right } = getItems();
-
-  const renderItem = (item: any, isCenter = false) => {
-    const isActive = pathname === item.href;
-    return (
-      <motion.button
-        key={item.label}
-        whileTap={{ scale: 0.9 }}
-        onClick={(e) => handleItemClick(item, e)}
-        className={`relative flex flex-col items-center justify-center h-full px-1 ${isCenter ? '-mt-6' : 'flex-1 max-w-[80px]'}`}
-      >
-        {/* Add the label and active dot */}
-        {isCenter ? (
-          // Center Floating Button
-          <div className="flex flex-col items-center">
-            <div className="w-14 h-14 rounded-full bg-indigo-500 text-white flex items-center justify-center shadow-[0_8px_30px_rgba(255,255,255,0.1),0_8px_30px_rgba(79,70,229,0.3)] ring-4 ring-white/50 backdrop-blur-md hover:scale-105 transition-transform duration-300">
-              <item.icon size={26} strokeWidth={2.5} />
-            </div>
-          </div>
-        ) : (
-          // Standard Button
-          <div className="flex flex-col items-center justify-center w-full h-full pt-1">
-            <div className={`transition-all duration-300 ease-out ${isActive ? 'text-indigo-600 scale-110 drop-shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              <div className="relative">
-                <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                {item.label === 'Messages' && unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </div>
-            </div>
-            <span className={`text-[10px] font-semibold mt-1 tracking-wide whitespace-nowrap transition-colors duration-300 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>
-              {item.label}
-            </span>
-          </div>
-        )}
-      </motion.button>
-    );
-  };
+  // 5 items (always): Explore | Search | [FAB] | Messages | Profile
+  const items = isHostingPage
+    ? [
+        { id: '_hosting_back', label: 'Back', icon: Home, action: onSwitchToTraveling },
+        { id: '_sp1', label: '', icon: null },
+        { id: '_fab', label: '', icon: Repeat, action: onSwitchToTraveling },
+        { id: '_sp2', label: '', icon: null },
+        { id: '_sp3', label: '', icon: null },
+      ]
+    : [
+        { id: 'home', href: '/', label: 'Explore', icon: Home },
+        { id: 'search', label: 'Search', icon: Search, action: onSearchClick },
+        {
+          id: '_fab', label: '', icon: isHost ? Repeat : Building2,
+          action: isHost ? onSwitchToHost : () => navigate('/import-listing')
+        },
+        { id: 'messages', href: '/messages', label: 'Messages', icon: MessageSquare, action: onMessagesClick },
+        {
+          id: 'profile',
+          href: isLoggedIn ? '/profile' : '/login',
+          label: isLoggedIn ? 'Profile' : 'Login',
+          icon: UserCircle2,
+          action: isLoggedIn ? undefined : openLogin,
+          badge: unreadCount > 0 && false, // future
+        },
+      ];
 
   return (
     <AnimatePresence>
       {show && (
         <>
           {isHostingPage ? (
-            // Hosting Mode - Floating Icon Button at Bottom Right (above wheel)
+            // Hosting: small floating FAB only
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
               transition={{ type: "spring", stiffness: 280, damping: 24 }}
-              className="fixed bottom-[88px] right-4 z-50"
+              className="fixed bottom-24 right-4 z-50"
             >
               <button
-                onClick={center.action}
-                className="w-14 h-14 bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-4 ring-white active:scale-95 transition-all"
+                onClick={() => { triggerHaptic(); onSwitchToTraveling?.(); }}
+                style={{ width: 56, height: 56, borderRadius: 9999, background: '#4F46E5', border: '4px solid rgba(255,255,255,.88)', boxShadow: '0 8px 30px rgba(79,70,229,.35),0 4px 14px rgba(0,0,0,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <center.icon size={24} strokeWidth={2} />
+                <Repeat size={22} strokeWidth={2.2} color="#fff" />
               </button>
             </motion.div>
           ) : (
-            // Traveling Mode - Full nav bar with background
+            // Guest mode — full pill nav matching prototype exactly
             <motion.div
-              initial={{ y: 150, opacity: 0 }}
+              initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 150, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 26 }}
-              className="fixed bottom-6 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none"
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              style={{
+                position: 'fixed',
+                bottom: 24,
+                left: 0,
+                right: 0,
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '0 20px',
+                zIndex: 50,
+                pointerEvents: 'none',
+              }}
             >
-              <nav className="pointer-events-auto w-full max-w-[420px] bg-white/85 backdrop-blur-3xl border border-white/80 rounded-full shadow-[0_8px_40px_rgba(0,0,0,0.12)] px-4 py-2.5">
-                <div className="grid grid-cols-5 items-center justify-items-center h-14 relative w-full">
-                  {/* Left Items */}
-                  {left.map((item) => renderItem(item))}
+              <nav
+                style={{
+                  pointerEvents: 'all',
+                  width: '100%',
+                  maxWidth: 360,
+                  background: NAV_BG,
+                  backdropFilter: 'blur(32px)',
+                  WebkitBackdropFilter: 'blur(32px)',
+                  border: '1px solid rgba(0,0,0,0.10)',
+                  borderRadius: 9999,
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+                  padding: '10px 20px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5,1fr)',
+                  alignItems: 'center',
+                }}
+              >
+                {items.map((item, i) => {
+                  const anyItem = item as any;
+                  const isActive = !!anyItem.href && pathname === anyItem.href;
+                  const isFab = item.id === '_fab';
+                  const isBlank = !item.icon;
 
-                  {/* Center Space for Floating Button */}
-                  {renderItem(center, true)}
+                  if (isBlank) return <div key={i} />;
 
-                  {/* Right Items */}
-                  {right.map((item) => renderItem(item))}
-                </div>
+                  if (isFab) {
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'center', marginTop: -28 }}>
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleClick(item)}
+                          style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: 9999,
+                            background: '#4F46E5',
+                            // Use the nav bg color for border so it blends seamlessly
+                            border: `4px solid ${NAV_BG}`,
+                            boxShadow: '0 8px 30px rgba(79,70,229,.35),0 4px 14px rgba(0,0,0,.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <item.icon
+                            size={28}
+                            strokeWidth={2}
+                            color="#fff"
+                            style={{ width: 28, height: 28, flexShrink: 0 }}
+                          />
+                        </motion.button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <motion.button
+                      key={i}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleClick(item)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '4px 0',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transform: isActive ? 'scale(1.12)' : 'scale(1)',
+                        transition: 'transform .22s cubic-bezier(.34,1.56,.64,1)',
+                        position: 'relative',
+                      }}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        <item.icon
+                          size={22}
+                          strokeWidth={isActive ? 2.4 : 1.8}
+                          color={isActive ? '#4F46E5' : '#888880'}
+                        />
+                        {item.id === 'messages' && unreadCount > 0 && (
+                          <span style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 9999, background: '#EF4444', fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      {item.label ? (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#4F46E5' : '#888880', letterSpacing: '.02em', whiteSpace: 'nowrap' }}>
+                          {item.label}
+                        </span>
+                      ) : null}
+                    </motion.button>
+                  );
+                })}
               </nav>
             </motion.div>
           )}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, forwardRef } from 'react';
+import { useState, forwardRef, useEffect, useRef } from 'react';
 import { triggerHaptic } from '@/lib/haptics';
 import { Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface BookingDrawerContentProps {
   onApply: (dates: { checkIn: Date | null; checkOut: Date | null }, guests: number) => void;
@@ -15,22 +16,46 @@ interface BookingDrawerContentProps {
   listingName?: string;
 }
 
-// ── Date strip (14 days) ──
+// ── Date strip (90 days) ──
 const DateStrip = ({ selected, onSelect }: { selected: string; onSelect: (k: string) => void }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const today = new Date();
-  const days = Array.from({ length: 14 }, (_, i) => {
+  const days = Array.from({ length: 90 }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     return d;
   });
+
+  useEffect(() => {
+    if (containerRef.current && selected) {
+      const selectedEl = containerRef.current.querySelector(`[data-date="${selected}"]`) as HTMLElement;
+      if (selectedEl) {
+        const container = containerRef.current;
+        const scrollLeft = selectedEl.offsetLeft - container.offsetWidth / 2 + selectedEl.offsetWidth / 2;
+        container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+      }
+    }
+  }, [selected]);
+
   return (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 0 4px', scrollbarWidth: 'none' }}>
+    <div 
+      ref={containerRef}
+      style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 0 4px', scrollbarWidth: 'none', scrollSnapType: 'x proximity' }}
+    >
       {days.map((d) => {
         const key = d.toISOString().split('T')[0];
         const on = selected === key;
         return (
-          <button key={key} onClick={() => { triggerHaptic(); onSelect(key); }}
-            style={{ flexShrink: 0, width: 52, height: 72, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, border: on ? '1.5px solid #4F46E5' : '1.5px solid rgba(0,0,0,0.10)', background: on ? '#4F46E5' : '#F8F7F4', transition: 'all .2s', boxShadow: on ? '0 8px 32px rgba(79,70,229,.30)' : 'none' }}>
+          <button 
+            key={key} 
+            data-date={key}
+            onClick={() => { triggerHaptic(); onSelect(key); }}
+            style={{ 
+              flexShrink: 0, width: 52, height: 72, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, 
+              border: on ? '1.5px solid #4F46E5' : '1.5px solid rgba(0,0,0,0.10)', background: on ? '#4F46E5' : '#F8F7F4', transition: 'all .2s', 
+              boxShadow: on ? '0 8px 32px rgba(79,70,229,.30)' : 'none', scrollSnapAlign: 'center' 
+            }}
+          >
             <span style={{ fontSize: 10, fontWeight: 600, color: on ? 'rgba(255,255,255,.8)' : '#888880', letterSpacing: '.04em', textTransform: 'uppercase' }}>
               {d.toLocaleDateString('en-IN', { weekday: 'short' })}
             </span>
@@ -81,6 +106,18 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
     const [children, setChildren] = useState(0);
 
     const nights = Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)));
+
+    useEffect(() => {
+      if (checkIn && checkOut) {
+        const dIn = new Date(checkIn);
+        const dOut = new Date(checkOut);
+        if (dOut <= dIn) {
+          const nextDay = new Date(dIn);
+          nextDay.setDate(nextDay.getDate() + 1);
+          setCheckOut(nextDay.toISOString().split('T')[0]);
+        }
+      }
+    }, [checkIn, checkOut]);
     const base = pricePerNight * nights;
     const fee = Math.round(base * 0.03);
     const gstRate = pricePerNight > 7500 ? 0.18 : 0.12;
@@ -122,81 +159,92 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
 
         {/* Step content */}
         <div style={{ padding: '24px 24px 0' }}>
-
-          {/* STEP 0 — DATES */}
-          {step === 0 && (
-            <>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: 'Cormorant Garamond, Georgia, serif', marginBottom: 6 }}>When are you staying?</div>
-              <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Prices vary by date — pick your window</div>
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check in</div>
-                <DateStrip selected={checkIn} onSelect={setCheckIn} />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check out</div>
-                <DateStrip selected={checkOut} onSelect={setCheckOut} />
-              </div>
-              <div style={{ marginTop: 20, padding: '14px 16px', background: '#EEEEFF', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, color: '#4F46E5', fontWeight: 600 }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#4F46E5' }}>{nights} {nights === 1 ? 'night' : 'nights'}</span>
-              </div>
-            </>
-          )}
-
-          {/* STEP 1 — GUESTS */}
-          {step === 1 && (
-            <>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: 'Cormorant Garamond, Georgia, serif', marginBottom: 6 }}>Who's coming?</div>
-              <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Max {max_guests} guests</div>
-              <CounterRow label="Adults" sub="Age 13+" val={adults} setVal={setAdults} min={1} max={max_guests} />
-              <CounterRow label="Children" sub="Ages 2–12" val={children} setVal={setChildren} max={max_guests - adults} />
-              <div style={{ marginTop: 20, padding: '14px 16px', background: '#F4F3F0', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888880" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                <span style={{ fontSize: 13, color: '#3A3A37', fontWeight: 500 }}>{adults + children} guest{adults + children !== 1 ? 's' : ''} selected</span>
-              </div>
-            </>
-          )}
-
-          {/* STEP 2 — CONFIRM */}
-          {step === 2 && (
-            <>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: 'Cormorant Garamond, Georgia, serif', marginBottom: 16 }}>Review & confirm</div>
-              {/* Mini listing card */}
-              <div style={{ display: 'flex', gap: 12, marginBottom: 20, padding: 14, background: '#FAF9F7', borderRadius: 18, border: '1px solid rgba(0,0,0,0.065)' }}>
-                <div style={{ width: 72, height: 72, borderRadius: 14, background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.01em', fontFamily: 'Cormorant Garamond, Georgia, serif' }}>{listingName}</div>
-                  <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>Karnataka, India</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#4F46E5' }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              style={{ width: '100%' }}
+            >
+              {/* STEP 0 — DATES */}
+              {step === 0 && (
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: "'Playfair Display', Georgia, serif", marginBottom: 6 }}>When are you staying?</div>
+                  <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Prices vary by date — pick your window</div>
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check in</div>
+                    <DateStrip selected={checkIn} onSelect={setCheckIn} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check out</div>
+                    <DateStrip selected={checkOut} onSelect={setCheckOut} />
+                  </div>
+                  <div style={{ marginTop: 20, padding: '14px 16px', background: '#EEEEFF', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, color: '#4F46E5', fontWeight: 600 }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#4F46E5' }}>{nights} {nights === 1 ? 'night' : 'nights'}</span>
                   </div>
                 </div>
-              </div>
-              {/* Price breakdown */}
-              <div style={{ background: '#FAF9F7', borderRadius: 18, padding: 16, border: '1px solid rgba(0,0,0,0.065)', marginBottom: 16 }}>
-                {[
-                  { label: `₹${pricePerNight.toLocaleString()} × ${nights} nights`, val: base },
-                  { label: 'Roovo service fee (3%)', val: fee },
-                  { label: `GST (${pricePerNight > 7500 ? 18 : 12}%)`, val: gst },
-                ].map((r, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3A3A37', marginBottom: 10, fontWeight: 500 }}>
-                    <span>{r.label}</span><span>₹{r.val.toLocaleString()}</span>
+              )}
+
+              {/* STEP 1 — GUESTS */}
+              {step === 1 && (
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: "'Playfair Display', Georgia, serif", marginBottom: 6 }}>Who's coming?</div>
+                  <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Max {max_guests} guests</div>
+                  <CounterRow label="Adults" sub="Age 13+" val={adults} setVal={setAdults} min={1} max={max_guests} />
+                  <CounterRow label="Children" sub="Ages 2–12" val={children} setVal={setChildren} max={max_guests - adults} />
+                  <div style={{ marginTop: 20, padding: '14px 16px', background: '#F4F3F0', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888880" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span style={{ fontSize: 13, color: '#3A3A37', fontWeight: 500 }}>{adults + children} guest{adults + children !== 1 ? 's' : ''} selected</span>
                   </div>
-                ))}
-                <div style={{ borderTop: '1px solid rgba(0,0,0,0.065)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: '#0A0A09', letterSpacing: '-.02em' }}>
-                  <span>Total</span>
-                  <span>₹{total.toLocaleString()}</span>
                 </div>
-              </div>
-              {/* Savings callout */}
-              <div style={{ padding: '12px 14px', background: '#ECFDF5', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Check size={16} color="#059669" strokeWidth={2.5} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#059669' }}>You save ~15% vs Airbnb · Instant GST invoice</span>
-              </div>
-            </>
-          )}
+              )}
+
+              {/* STEP 2 — CONFIRM */}
+              {step === 2 && (
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: "'Playfair Display', Georgia, serif", marginBottom: 16 }}>Review & confirm</div>
+                  {/* Mini listing card */}
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 20, padding: 14, background: '#FAF9F7', borderRadius: 18, border: '1px solid rgba(0,0,0,0.065)' }}>
+                    <div style={{ width: 72, height: 72, borderRadius: 14, background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.01em', fontFamily: "'Playfair Display', Georgia, serif" }}>{listingName}</div>
+                      <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>Karnataka, India</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#4F46E5' }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Price breakdown */}
+                  <div style={{ background: '#FAF9F7', borderRadius: 18, padding: 16, border: '1px solid rgba(0,0,0,0.065)', marginBottom: 16 }}>
+                    {[
+                      { label: `₹${pricePerNight.toLocaleString()} × ${nights} nights`, val: base },
+                      { label: 'Roovo service fee (3%)', val: fee },
+                      { label: `GST (${pricePerNight > 7500 ? 18 : 12}%)`, val: gst },
+                    ].map((r, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3A3A37', marginBottom: 10, fontWeight: 500 }}>
+                        <span>{r.label}</span><span>₹{r.val.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.065)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: '#0A0A09', letterSpacing: '-.02em' }}>
+                      <span>Total</span>
+                      <span>₹{total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  {/* Savings callout */}
+                  <div style={{ padding: '12px 14px', background: '#ECFDF5', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Check size={16} color="#059669" strokeWidth={2.5} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#059669' }}>You save ~15% vs Airbnb · Instant GST invoice</span>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
+
 
         {/* Action bar */}
         <div style={{ padding: '20px 24px 36px', display: 'flex', gap: 12, marginTop: 8 }}>

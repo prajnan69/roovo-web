@@ -1,10 +1,8 @@
 import { motion, useTransform } from "framer-motion";
-import { ArrowLeft, Share, Heart } from "lucide-react";
+import { ArrowLeft, Share2, Heart } from "lucide-react";
 
 interface ListingHeaderProps {
-    headerBgOpacity: any;
-    headerIconBg: any;
-    headerTextColor: any;
+    headerBgOpacity: any;      // 0→1 as user scrolls
     isLiked: boolean;
     onLike: () => void;
     onShare: () => void;
@@ -15,95 +13,120 @@ interface ListingHeaderProps {
 
 const ListingHeader = ({
     headerBgOpacity,
-    headerIconBg,
-    headerTextColor,
     isLiked,
     onLike,
     onShare,
     onBack,
     listingName,
-    isRoovoVerified
 }: ListingHeaderProps) => {
-    // Transform values for the Heart (Wishlist) button
-    // Hide it when header becomes opaque (scrolled up) to give space to the title
-    const heartOpacity = useTransform(headerBgOpacity, [0.6, 0.9], [1, 0]);
-    const heartWidth = useTransform(headerBgOpacity, [0.6, 0.9], [52, 0]);
-    const heartScale = useTransform(headerBgOpacity, [0.6, 0.9], [1, 0]);
+    // Title fades in after scroll > 42%
+    const titleOpacity = useTransform(headerBgOpacity, [0.42, 0.7], [0, 1]);
+
+    // Exact prototype thresholds: ha > 0.5 → warm solid, else dark glass
+    // We use useTransform to interpolate all these:
+    const btnBg = useTransform(headerBgOpacity, [0.45, 0.55], ['rgba(0,0,0,0.35)', '#EEEDE9']);
+    const btnBorder = useTransform(headerBgOpacity, [0.45, 0.55], ['rgba(255,255,255,0.2)', 'rgba(0,0,0,0.065)']);
+    const iconColor = useTransform(headerBgOpacity, [0.45, 0.55], ['#ffffff', '#0A0A09']);
 
     return (
-        <div className="fixed top-0 left-0 right-0 z-50 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3 px-4 pointer-events-none">
-            {/* Background Layer - Animates Opacity */}
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50 }}>
+            {/* Glassmorphism background that appears on scroll */}
             <motion.div
-                className="absolute inset-0 bg-white/80 backdrop-blur-md border-b border-black/5 shadow-sm"
-                style={{ opacity: headerBgOpacity }}
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(255,255,255,0.95)',
+                    backdropFilter: 'blur(22px)',
+                    WebkitBackdropFilter: 'blur(22px)',
+                    borderBottom: '1px solid rgba(0,0,0,0.065)',
+                    opacity: headerBgOpacity,
+                }}
             />
+            <div style={{ position: 'relative', padding: 'max(env(safe-area-inset-top), 12px) 18px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
-            <div className="relative flex items-center justify-between w-full z-50 pointer-events-auto">
-                <motion.button
-                    onClick={onBack}
-                    className="transition-all active:scale-95 flex-shrink-0 flex items-center justify-center p-0"
-                    style={{
-                        backgroundColor: headerIconBg,
-                        color: headerTextColor,
-                        width: '48px',
-                        height: '48px',
-                        minWidth: '48px',
-                        minHeight: '48px',
-                        borderRadius: '999px'
-                    }}
-                >
-                    <ArrowLeft size={32} strokeWidth={2.5} style={{ width: '32px', height: '32px' }} />
-                </motion.button>
-
-                {/* Left-Aligned Title & Badge (Next to Back Button) */}
-                <motion.div
-                    className="flex items-center gap-2 pointer-events-none ml-2 flex-1 min-w-0"
-                    style={{ opacity: headerBgOpacity }}
-                >
-                    <span className="text-md font-bold text-black truncate">
-                        {listingName || ""}
-                    </span>
-                    {isRoovoVerified && (
-                        <img src="/verified.png" alt="Verified" className="w-5 h-5 object-contain flex-shrink-0" />
-                    )}
-                </motion.div>
-
-                <motion.div className="flex gap-3 flex-shrink-0 ml-2">
+                    {/* Back button */}
                     <motion.button
-                        onClick={onShare}
-                        className="transition-all active:scale-95 flex items-center justify-center p-0"
+                        onClick={onBack}
+                        whileTap={{ scale: 0.92 }}
                         style={{
-                            backgroundColor: headerIconBg,
-                            color: headerTextColor,
-                            width: '48px',
-                            height: '48px',
-                            minWidth: '48px',
-                            minHeight: '48px',
-                            borderRadius: '999px'
+                            width: 46, height: 46, borderRadius: 16,
+                            background: btnBg,
+                            backdropFilter: 'blur(12px)',
+                            WebkitBackdropFilter: 'blur(12px)',
+                            border: '1px solid',
+                            borderColor: btnBorder,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer',
+                            flexShrink: 0,
                         }}
                     >
-                        <Share size={28} strokeWidth={2.5} style={{ width: '28px', height: '28px' }} />
+                        <motion.span style={{ color: iconColor, display: 'flex' }}>
+                            <ArrowLeft size={18} strokeWidth={2.2} color="currentColor" />
+                        </motion.span>
                     </motion.button>
 
-                    {/* Animated Wrapper for Heart Button */}
-                    <motion.div style={{ width: heartWidth, opacity: heartOpacity, scale: heartScale, overflow: "hidden" }} className="flex justify-center">
+                    {/* Title — fades in on scroll */}
+                    <motion.div
+                        style={{
+                            flex: 1, textAlign: 'center', opacity: titleOpacity,
+                            fontSize: 14, fontWeight: 700, color: '#0A0A09',
+                            padding: '0 12px', overflow: 'hidden', textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap', letterSpacing: '-.02em',
+                            fontFamily: "'Playfair Display', serif",
+                        }}
+                    >
+                        {listingName || ''}
+                    </motion.div>
+
+                    {/* Share + Like buttons */}
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {/* Share */}
                         <motion.button
-                            onClick={onLike}
-                            className="transition-all active:scale-95 flex items-center justify-center p-0"
+                            onClick={onShare}
+                            whileTap={{ scale: 0.92 }}
                             style={{
-                                backgroundColor: headerIconBg,
-                                color: headerTextColor,
-                                width: '48px',
-                                height: '48px',
-                                minWidth: '48px',
-                                minHeight: '48px',
-                                borderRadius: '999px'
+                                width: 46, height: 46, borderRadius: 16,
+                                background: btnBg,
+                                backdropFilter: 'blur(12px)',
+                                WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid',
+                                borderColor: btnBorder,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer',
                             }}
                         >
-                            <Heart size={28} strokeWidth={2.5} style={{ width: '28px', height: '28px' }} className={isLiked ? 'fill-rose-500 text-rose-500' : ''} />
+                            <motion.span style={{ color: iconColor, display: 'flex' }}>
+                                <Share2 size={17} strokeWidth={1.9} color="currentColor" />
+                            </motion.span>
                         </motion.button>
-                    </motion.div>
-                </motion.div>
+
+                        {/* Like / Heart */}
+                        <motion.button
+                            onClick={onLike}
+                            whileTap={{ scale: 0.92 }}
+                            style={{
+                                width: 46, height: 46, borderRadius: 16,
+                                background: btnBg,
+                                backdropFilter: 'blur(12px)',
+                                WebkitBackdropFilter: 'blur(12px)',
+                                border: '1px solid',
+                                borderColor: btnBorder,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <motion.span style={{ color: isLiked ? '#EF4444' : iconColor, display: 'flex' }}>
+                                <Heart
+                                    size={17}
+                                    strokeWidth={1.9}
+                                    color={isLiked ? '#EF4444' : 'currentColor'}
+                                    fill={isLiked ? '#EF4444' : 'none'}
+                                />
+                            </motion.span>
+                        </motion.button>
+                    </div>
+                </div>
             </div>
         </div>
     );

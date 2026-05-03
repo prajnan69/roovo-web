@@ -533,7 +533,7 @@ function AppContent() {
   }
 
   return (
-    <div className="w-screen h-dvh overflow-x-hidden">
+    <div className="w-screen h-dvh overflow-x-hidden relative">
       <Router>
         <Route
           path="/"

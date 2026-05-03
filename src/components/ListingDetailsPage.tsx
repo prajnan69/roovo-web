@@ -31,7 +31,6 @@ import ListingAmenities from "@/components/listing-details/ListingAmenities";
 import ListingHouseRules from "@/components/listing-details/ListingHouseRules";
 import ListingMap from "@/components/listing-details/ListingMap";
 import GiftBoxAnimation from "@/components/animations/GiftBoxAnimation";
-import Footer from "./Footer";
 
 const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, onOpenChat?: (conversation: any) => void, onOpenLogin?: (subtitle?: string) => void }) => {
   const [listing, setListing] = useState<any>(null);
@@ -182,12 +181,11 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: containerRef });
 
-  const imageOpacity = useTransform(scrollY, [0, 300], [1, 0]);
-  const imageScale = useTransform(scrollY, [0, 300], [1, 1.08]);
-  const headerBgOpacity = useTransform(scrollY, [200, 280], [0, 1]);
-  const headerTextColor = useTransform(scrollY, [200, 280], ["#ffffff", "#000000"]);
-  // Corrected "transparent" reference to rgba for motion compatibility
-  const headerIconBg = useTransform(scrollY, [200, 280], ["rgba(255,255,255,0.2)", "rgba(255,255,255,0)"]);
+  const imageOpacity = useTransform(scrollY, [0, 300], [1, 0.15]);
+  const imageScale = useTransform(scrollY, [0, 1400], [1, 0.88]);
+  const headerBgOpacity = useTransform(scrollY, [130, 260], [0, 1]);
+  const heroOp = useTransform(scrollY, [0, 300], [1, 0.15]);
+  const heroSc = useTransform(scrollY, [0, 1400], [1, 0.88]);
 
   // UI State
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -617,8 +615,6 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
 
       <ListingHeader
         headerBgOpacity={headerBgOpacity}
-        headerIconBg={headerIconBg}
-        headerTextColor={headerTextColor}
         isLiked={isLiked}
         onLike={() => setIsLiked(!isLiked)}
         onShare={handleShare}
@@ -628,39 +624,64 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       />
 
       <ListingHero
-        imageOpacity={imageOpacity}
-        imageScale={imageScale}
+        imageOpacity={heroOp}
+        imageScale={heroSc}
         images={listing.all_image_urls?.map((img: any) => img.url)}
         isRoovoVerified={isRoovoVerified}
       />
 
       {/* --- Content Sheet --- */}
-      <div className="relative z-10 mt-[45vh] bg-white rounded-t-[2.5rem] shadow-[0_-8px_30px_rgba(0,0,0,0.08)] min-h-screen">
-        <div className="w-full flex justify-center pt-3 pb-2">
-          <div className="w-10 h-1 bg-slate-200 rounded-full" />
-        </div>
+      <div className="relative z-10 mt-[50vh]" style={{ background: 'var(--bg, #FEFEFE)', borderRadius: '38px 38px 0 0', boxShadow: '0 -18px 56px rgba(0,0,0,0.14)', minHeight: '60%' }}>
+        {/* Drag handle */}
+        <div style={{ width: 44, height: 4, background: 'rgba(0,0,0,0.17)', borderRadius: 99, margin: '16px auto 24px', opacity: 0.45 }} />
 
-        <div className="px-5 pb-8">
+        <div style={{ padding: '0 24px 200px' }}>
+          {/* Tag row + rating */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 7 }}>
+              {listing.property_type && (
+                <span style={{ fontSize: 11, fontWeight: 700, background: '#EEEEFF', color: '#4F46E5', padding: '3px 11px', borderRadius: 99, letterSpacing: '.02em' }}>
+                  {listing.property_type}
+                </span>
+              )}
+              {listing.is_roovo_verified && (
+                <span style={{ fontSize: 11, fontWeight: 600, background: '#ECFDF5', color: '#059669', padding: '3px 11px', borderRadius: 99 }}>Verified</span>
+              )}
+            </div>
+            {listing.overall_rating > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#F4F3F0', borderRadius: 99, padding: '5px 11px' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97706" stroke="#D97706" strokeWidth={0}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0A0A09' }}>{listing.overall_rating}</span>
+              </div>
+            )}
+          </div>
+
           <ListingTitleSection
             title={listing.title}
             place={listing.place}
             rating={listing.overall_rating}
           />
 
-          <ListingStats
-            maxGuests={listing.max_guests}
-            bedrooms={listing.total_bedrooms}
-            bathrooms={listing.total_bathrooms}
-            propertyType={listing.property_type}
-          />
+          <div style={{ height: 1, background: 'rgba(0,0,0,0.065)', margin: '20px 0' }} />
 
-          <ListingHostInfo
-            hostData={listing.host_data}
-            isHostKycVerified={isHostKycVerified}
-            isRoovoVerified={isRoovoVerified}
-          />
+          {/* Value props 2×2 grid - matches prototype */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 22 }}>
+            {[
+              { icon: '✓', bg: '#ECFDF5', ic: '#059669', t: '8–10% cheaper than Airbnb' },
+              { icon: '🛡', bg: '#EEEEFF', ic: '#4F46E5', t: 'Roovo Verified home' },
+              { icon: '✦', bg: 'rgba(217,119,6,.10)', ic: '#D97706', t: 'Instant GST invoice' },
+              { icon: '🔔', bg: '#F4F3F0', ic: '#3A3A37', t: '24/7 host support' },
+            ].map((p, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#FAF9F7', borderRadius: 16, padding: 14, border: '1px solid rgba(0,0,0,0.065)' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: p.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                  {p.icon}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#3A3A37', lineHeight: 1.45 }}>{p.t}</span>
+              </div>
+            ))}
+          </div>
 
-          <div className="my-10" />
+          <div style={{ height: 1, background: 'rgba(0,0,0,0.065)', marginBottom: 22 }} />
 
           <ListingDescription
             description={listing.the_space}
@@ -762,7 +783,15 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       </div>
 
       {/* --- Sticky Booking Bar --- */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-100 pb-[env(safe-area-inset-bottom)]">
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40,
+        background: 'rgba(255,255,255,0.95)',
+        backdropFilter: 'blur(26px)',
+        WebkitBackdropFilter: 'blur(26px)',
+        borderTop: '1px solid rgba(0,0,0,0.065)',
+        boxShadow: '0 -4px 28px rgba(0,0,0,0.08)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
         <BookingBar
           price={listing.price_per_night ?? 0}
           onReserveClick={handleReserveClick}
@@ -857,7 +886,6 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         userName={currentUserName}
         userPhone={currentUserPhone}
       />
-      <Footer />
 
       <Toast message={toastMessage} isVisible={showToast} onClose={() => setShowToast(false)} />
 

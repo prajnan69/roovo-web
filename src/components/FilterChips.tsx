@@ -80,54 +80,45 @@ const FilterChips: React.FC<FilterChipsProps> = ({
   ];
 
   return (
-    <div className="relative px-4 pt-1 mb-2">
-      <div className="flex items-center gap-3 overflow-x-auto py-2 -mx-4 px-4 no-scrollbar">
-        {dynamicFilters.map((filter) => {
-          const isActive = activeFilter === filter.value || (filter as any).originalValue === activeFilter;
-          const Icon = filter.icon;
-          const isAll = filter.value === 'all';
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 20px 12px', scrollbarWidth: 'none' }}>
+      {dynamicFilters.map((filter) => {
+        const isActive = activeFilter === filter.value || (filter as any).originalValue === activeFilter;
+        const Icon = filter.icon;
+        const isAll = filter.value === 'all';
 
-          return (
-            <motion.button
-              key={filter.value}
-              onClick={() => setActiveFilter((filter as any).originalValue || filter.value)}
-              whileTap={{ scale: 0.94 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 18 }}
-              className={`
-                relative flex ${isAll ? 'flex-col items-center justify-center w-[72px] h-[76px]' : 'flex-row items-center justify-center px-4 h-12 min-w-max'}
-                rounded-2xl
-                border transition-all duration-200
-                ${isActive
-                  ? 'bg-white border-indigo-600 shadow-lg shadow-indigo-500/20 ring-4 ring-indigo-50'
-                  : 'bg-white border-slate-200 hover:border-slate-300'
-                }
-              `}
-            >
-              {/* Icon wrapper */}
-              <div
-                className={`
-                  flex items-center justify-center rounded-md
-                  ${isAll ? 'mb-1 w-7 h-7' : 'mr-2 w-5 h-5'}
-                  ${isActive ? 'text-indigo-600' : 'text-slate-600'}
-                `}
-              >
-                <Icon size={isAll ? 22 : 18} />
-              </div>
-
-              {/* Label */}
-              <span
-                className={`
-                  font-semibold
-                  ${isAll ? 'px-1 text-center text-[11px] leading-tight line-clamp-2' : 'text-sm whitespace-nowrap'}
-                  ${isActive ? 'text-indigo-600' : 'text-slate-500'}
-                `}
-              >
-                {filter.label}
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
+        return (
+          <motion.button
+            key={filter.value}
+            onClick={() => setActiveFilter((filter as any).originalValue || filter.value)}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+            style={{
+              flexShrink: 0,
+              width: isAll ? 64 : 'auto',
+              height: isAll ? 68 : 40,
+              borderRadius: isAll ? 16 : 99,
+              padding: isAll ? 0 : '0 14px',
+              display: 'flex',
+              flexDirection: isAll ? 'column' : 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: isAll ? 4 : 6,
+              border: isActive ? '1.5px solid var(--ind, #4F46E5)' : '1.5px solid rgba(0,0,0,.10)',
+              background: isActive ? 'var(--indbg, #EEEEFF)' : 'var(--bg-card, #fff)',
+              boxShadow: isActive ? '0 0 0 3px var(--indring, rgba(79,70,229,.13)), 0 1px 3px rgba(0,0,0,.05)' : '0 1px 3px rgba(0,0,0,.05)',
+              transition: 'all .2s cubic-bezier(.4,0,.2,1)',
+              color: isActive ? 'var(--ind, #4F46E5)' : 'var(--t2, #3A3A37)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--ind, #4F46E5)' : 'var(--t3, #888880)' }}>
+              <Icon size={isAll ? 19 : 14} />
+            </div>
+            <span style={{ fontSize: isAll ? 10 : 12, fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '.01em', textAlign: isAll ? 'center' : 'left', lineHeight: 1.2 }}>
+              {filter.label}
+            </span>
+          </motion.button>
+        );
+      })}
     </div>
   );
 };
