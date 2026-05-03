@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics } from 'firebase/analytics';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 export const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,16 +15,6 @@ export const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
-
-// Enable App Check debug mode on localhost so reCAPTCHA Enterprise works in dev
-if (import.meta.env.DEV) {
-    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-}
-
-initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY),
-    isTokenAutoRefreshEnabled: true,
-});
 
 // Initialize Messaging if supported
 import { getMessaging, isSupported } from "firebase/messaging";

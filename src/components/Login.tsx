@@ -8,7 +8,7 @@ import { triggerHaptic, triggerErrorHaptic } from "@/lib/haptics";
 import Toast from './ui/toast';
 import { useNavigation } from '@/hooks/useNavigation';
 import { API_BASE_URL, default as supabase } from "@/services/api";
-import { RecaptchaVerifier, signInWithPhoneNumber, initializeRecaptchaConfig, type ConfirmationResult } from "firebase/auth";
+import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 interface LoginProps {
@@ -133,7 +133,6 @@ export default function Login({
     setLoading(true);
 
     try {
-      await initializeRecaptchaConfig(auth);
       const verifier = getRecaptchaVerifier();
       const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
       confirmationResult.current = result;
@@ -292,7 +291,7 @@ export default function Login({
                   </p>
                 </motion.div>
 
-                <form className="space-y-5" onSubmit={step === 'phone' ? handleSendOtp : handleVerifyOtp}>
+                <div className="space-y-5">
 
                   {step === 'phone' ? (
                     <motion.div
@@ -375,7 +374,8 @@ export default function Login({
                   </AnimatePresence>
 
                   <motion.button
-                    type="submit"
+                    type="button"
+                    onClick={step === 'phone' ? handleSendOtp : handleVerifyOtp}
                     disabled={loading}
                     whileTap={{ scale: 0.98 }}
                     initial={{ opacity: 0, y: 20 }}
@@ -400,7 +400,7 @@ export default function Login({
                       step === 'phone' ? "Get OTP" : "Verify & Login"
                     )}
                   </motion.button>
-                </form>
+                </div>
 
                 {step === 'otp' && (
                   <motion.div
