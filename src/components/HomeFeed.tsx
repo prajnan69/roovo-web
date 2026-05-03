@@ -7,7 +7,7 @@ import MobileSearchBar from './MobileSearchBar';
 import type { ListingData as Listing } from '@/types';
 import supabase from '@/services/api';
 import { triggerHaptic } from '@/lib/haptics';
-import { getCachedListings, setCachedListings } from '@/services/cache';
+import { getCachedListings, setCachedListings, getListingsPrefetch } from '@/services/cache';
 import { useBottomNavBar } from '@/context/BottomNavBarContext';
 import { useNavigation } from '@/hooks/useNavigation';
 import RecentlyViewedBanner from './RecentlyViewedBanner';
@@ -97,29 +97,45 @@ const HomeFeed: React.FC<{
       setError(null);
       setLoading(true);
 
-      const cachedListings = getCachedListings();
-
-      // Temporarily bypass cache to force fresh fetch and clear old 'room' listings from user's view.
-      if (cachedListings) {
-        setListings(cachedListings);
-        setFilteredListings(cachedListings);
-      }
-
       try {
-        const url = city ? `${API_BASE_URL}/api/listings?city=${city}` : `${API_BASE_URL}/api/listings`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch listings');
-        const data = await response.json();
-        const listingsWithExtras = (data.data || []).map((listing: Listing) => ({
-          ...listing,
-          rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
-        }));
+        let listingsWithExtras: Listing[];
+
+        // For the default (no city filter) load, reuse the module-level
+        // prefetch promise that was started in main.tsx — it may already
+        // be resolved, making this effectively synchronous.
+        if (!city) {
+          const prefetch = getListingsPrefetch();
+          if (prefetch) {
+            listingsWithExtras = await prefetch;
+          } else {
+            const cachedListings = getCachedListings();
+            if (cachedListings) {
+              listingsWithExtras = cachedListings;
+            } else {
+              const response = await fetch(`${API_BASE_URL}/api/listings`);
+              if (!response.ok) throw new Error('Failed to fetch listings');
+              const data = await response.json();
+              listingsWithExtras = (data.data || []).map((listing: Listing) => ({
+                ...listing,
+                rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
+              }));
+              setCachedListings(listingsWithExtras);
+            }
+          }
+        } else {
+          const response = await fetch(`${API_BASE_URL}/api/listings?city=${city}`);
+          if (!response.ok) throw new Error('Failed to fetch listings');
+          const data = await response.json();
+          listingsWithExtras = (data.data || []).map((listing: Listing) => ({
+            ...listing,
+            rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
+          }));
+        }
 
         setListings(listingsWithExtras);
         setFilteredListings(listingsWithExtras);
-        setCachedListings(listingsWithExtras);
 
-        // Preload first 4 listings' top 5 images to prevent stack UI glitchiness
+        // Preload first 4 listings' top 5 images
         const imagesToPreload = listingsWithExtras
           .slice(0, 4)
           .flatMap((l: any) => (l.all_image_urls || []).slice(0, 5).map((img: any) => {
@@ -135,19 +151,20 @@ const HomeFeed: React.FC<{
                 new Promise((resolve) => {
                   const img = new window.Image();
                   img.onload = resolve;
-                  img.onerror = resolve; // Don't block forever if one image fails
+                  img.onerror = resolve;
                   img.src = src;
                 })
             )
           );
         }
-
       } catch (error) {
-        console.error("Error fetching listings:", error);
-        if (!cachedListings) {
+        console.error('Error fetching listings:', error);
+        const cachedListings = getCachedListings();
+        if (cachedListings) {
+          setListings(cachedListings);
+          setFilteredListings(cachedListings);
+        } else {
           setError("We couldn't load the listings. Please try again later.");
-          setLoading(false);
-          return;
         }
       } finally {
         setLoading(false);

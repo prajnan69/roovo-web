@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Spinner } from "./ui/shadcn-io/spinner";
 import RoovoLogo from "./RoovoLogo";
@@ -8,6 +8,8 @@ import { triggerHaptic, triggerErrorHaptic } from "@/lib/haptics";
 import Toast from './ui/toast';
 import { useNavigation } from '@/hooks/useNavigation';
 import { API_BASE_URL, default as supabase } from "@/services/api";
+import { RecaptchaVerifier, signInWithPhoneNumber, initializeRecaptchaConfig, type ConfirmationResult } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 interface LoginProps {
   isOpen: boolean;
@@ -48,6 +50,8 @@ export default function Login({
   const [toastMessage, setToastMessage] = useState('');
 
   const { navigate } = useNavigation();
+  const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
+  const confirmationResult = useRef<ConfirmationResult | null>(null);
 
   useEffect(() => {
     setIsVisible(isOpen);
@@ -55,6 +59,13 @@ export default function Login({
       resetState();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      recaptchaVerifier.current?.clear();
+      recaptchaVerifier.current = null;
+    };
+  }, []);
 
   // Timer logic
   useEffect(() => {
@@ -100,6 +111,15 @@ export default function Login({
     }
   };
 
+  const getRecaptchaVerifier = () => {
+    if (!recaptchaVerifier.current) {
+      recaptchaVerifier.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+    return recaptchaVerifier.current;
+  };
+
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
@@ -113,19 +133,10 @@ export default function Login({
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone: phoneNumber }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to send OTP");
-      }
+      await initializeRecaptchaConfig(auth);
+      const verifier = getRecaptchaVerifier();
+      const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
+      confirmationResult.current = result;
 
       setStep('otp');
       setTimer(30);
@@ -135,7 +146,15 @@ export default function Login({
       setTimeout(() => setShowToast(false), 3000);
     } catch (err: any) {
       console.error("Error sending OTP:", err);
-      setError(err.message || "Failed to send OTP. Try again.");
+      // Reset recaptcha on failure so user can retry
+      recaptchaVerifier.current?.clear();
+      recaptchaVerifier.current = null;
+      const msg = err.code === 'auth/invalid-phone-number'
+        ? 'Invalid phone number'
+        : err.code === 'auth/too-many-requests'
+          ? 'Too many attempts. Try again later.'
+          : 'Failed to send OTP. Try again.';
+      setError(msg);
       triggerHapticFeedback('error');
     } finally {
       setLoading(false);
@@ -153,28 +172,32 @@ export default function Login({
       return;
     }
 
+    if (!confirmationResult.current) {
+      setError("Session expired. Please request OTP again.");
+      setStep('phone');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+      const credential = await confirmationResult.current.confirm(otp);
+      const idToken = await credential.user.getIdToken();
+
+      const response = await fetch(`${API_BASE_URL}/api/auth/firebase-login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone: phoneNumber, otp }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Invalid OTP");
+        throw new Error(data.message || "Login failed");
       }
 
-      // Login successful
       if (data.session) {
         const { error: sessionError } = await supabase.auth.setSession(data.session);
-        if (sessionError) {
-          console.error("Error setting session:", sessionError);
-          // We might still want to proceed or show error
-        }
+        if (sessionError) console.error("Error setting session:", sessionError);
       }
 
       setLoginStatus('success');
@@ -194,7 +217,12 @@ export default function Login({
       console.error("Error verifying OTP:", err);
       setLoginStatus('error');
       triggerHapticFeedback('error');
-      setError(err.message || "Invalid OTP. Please try again.");
+      const msg = err.code === 'auth/invalid-verification-code'
+        ? 'Incorrect OTP. Please try again.'
+        : err.code === 'auth/code-expired'
+          ? 'OTP expired. Please request a new one.'
+          : err.message || 'Invalid OTP. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -430,6 +458,9 @@ export default function Login({
 
           {/* Toast Component */}
           <Toast message={toastMessage} show={showToast} onClose={() => setShowToast(false)} />
+
+          {/* Invisible reCAPTCHA mount point for Firebase Phone Auth */}
+          <div id="recaptcha-container" />
         </motion.div>
       )}
     </AnimatePresence>

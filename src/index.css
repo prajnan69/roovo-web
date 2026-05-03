@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+.grecaptcha-badge {
+  visibility: hidden !important;
+}
+
 /* ── Prototype keyframes ── */
 @keyframes goldshine {
   0%, 100% { opacity: 0; transform: translateX(-100%) skewX(-20deg); }
