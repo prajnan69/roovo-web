@@ -57,7 +57,11 @@ export default function Login({
     setIsVisible(isOpen);
     if (isOpen) {
       resetState();
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
     }
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
   useEffect(() => {
@@ -238,7 +242,7 @@ export default function Login({
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="fixed inset-0 z-50 bg-white/95 backdrop-blur-xl text-neutral-900 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+          className="fixed inset-0 z-50 bg-white/80 backdrop-blur-2xl text-neutral-900 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           initial="hidden"
           animate="visible"
           exit="exit"

@@ -57,8 +57,19 @@ function AppContent() {
   const [guestConversations, setGuestConversations] = useState<any[]>([]);
   const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
   const [pendingSplit, setPendingSplit] = useState<any>(null);
-  const [showSplash, setShowSplash] = useState(!window.location.pathname.startsWith('/payment/status'));
+  const isNative = Capacitor.isNativePlatform() && !window.location.pathname.startsWith('/payment/status');
+  const isPostUpdate = localStorage.getItem('_ota_reload') === '1';
+  const [showSplash, setShowSplash] = useState(isNative && !isPostUpdate);
+  const [splashAnimDone, setSplashAnimDone] = useState(!isNative || isPostUpdate);
+  const [otaDone, setOtaDone] = useState(!isNative || isPostUpdate);
+  const [otaState, setOtaState] = useState<'idle' | 'downloading' | 'updated'>('idle');
   const [isHomeLoading, setIsHomeLoading] = useState(true);
+
+  // Remove the flag once — do NOT do this on the render path or it can run multiple times
+  useEffect(() => {
+    if (isPostUpdate) localStorage.removeItem('_ota_reload');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { pathname, back, navigate } = useNavigation();
   const isPushInitialized = useRef(false);
@@ -86,64 +97,71 @@ function AppContent() {
     setIsSearchOpen(false);
   }, [pathname]);
 
-  // ✅ Self-hosted LiveUpdate logic
+  // Hide splash only when both animation and OTA check are done
   useEffect(() => {
-    const checkForSelfHostedUpdate = async () => {
+    if (splashAnimDone && otaDone) setShowSplash(false);
+  }, [splashAnimDone, otaDone]);
+
+  // OTA check runs during splash — reload if update found, otherwise signal done
+  useEffect(() => {
+    const checkForUpdate = async () => {
+      let willReload = false;
       try {
         if (!Capacitor.isNativePlatform()) return;
-        if (!Capacitor.isPluginAvailable('LiveUpdate')) {
-          console.warn('LiveUpdate plugin not available on this platform');
+        if (!Capacitor.isPluginAvailable('LiveUpdate')) return;
+
+        // On the post-update boot we are already on the new bundle.
+        // We MUST still call ready() to mark it stable — without it the plugin
+        // auto-rolls back after ~10 seconds, causing a third unwanted reload.
+        if (isPostUpdate) {
+          await LiveUpdate.ready();
+          console.log('[LiveUpdate] Post-update boot — bundle marked ready.');
           return;
         }
 
-        console.log('[LiveUpdate] Checking for updates from self-hosted server...');
-
-        const manifestUrl =
-          'https://roovo-backend.fly.dev/v1/apps/94f0b6fd-9585-427d-839f-c09989a1ceaf/bundles/latest';
-
+        const manifestUrl = 'https://roovo-backend.fly.dev/v1/apps/94f0b6fd-9585-427d-839f-c09989a1ceaf/bundles/latest';
         const response = await fetch(manifestUrl);
         if (!response.ok) throw new Error(`Manifest fetch failed: ${response.status}`);
         const manifest = await response.json();
 
         const bundleId = manifest.bundleId || manifest.version;
         const bundleUrl = manifest.url;
-
-        if (!bundleUrl) {
-          throw new Error('Manifest does not contain a valid "url" field.');
-        }
-
-        console.log(`[LiveUpdate] Remote bundle: ${bundleId}, url: ${bundleUrl}`);
+        if (!bundleUrl) throw new Error('No bundle url in manifest');
 
         const current = await LiveUpdate.getCurrentBundle();
         const currentId = current?.bundleId || 'none';
-        console.log(`[LiveUpdate] Current bundle: ${currentId}`);
 
         if (currentId !== bundleId) {
-          console.log(`[LiveUpdate] New bundle detected → downloading ${bundleId} ...`);
-
-
-          await LiveUpdate.downloadBundle({
-            url: bundleUrl,
-            bundleId,
-          });
-
-          console.log('[LiveUpdate] Download complete.');
-          console.log(bundleId);
+          console.log(`[LiveUpdate] Downloading ${bundleId} during splash...`);
+          setOtaState('downloading');
+          try {
+            await LiveUpdate.downloadBundle({ url: bundleUrl, bundleId });
+          } catch (dlErr: any) {
+            if (!dlErr?.message?.includes('bundle already exists')) throw dlErr;
+          }
           await LiveUpdate.setNextBundle({ bundleId });
           await LiveUpdate.ready();
-
-          console.log('[LiveUpdate] Reloading app with new bundle...');
-          // await LiveUpdate.reload();
+          setOtaState('updated');
+          localStorage.setItem('_ota_reload', '1');
+          await new Promise(r => setTimeout(r, 1200));
+          console.log('[LiveUpdate] Reloading with new bundle...');
+          willReload = true;
+          await LiveUpdate.reload();
+          // Freeze — WebView will restart and this code is dead
+          await new Promise(() => {});
         } else {
-          console.log('[LiveUpdate] App is already up to date.');
           await LiveUpdate.ready();
         }
       } catch (error) {
-        console.error('[LiveUpdate] Self-hosted update check failed:', error);
+        console.error('[LiveUpdate] Update check failed:', error);
+      } finally {
+        // Don't unblock splash if reload is in flight — WebView restart handles it
+        if (!willReload) setOtaDone(true);
       }
     };
 
-    checkForSelfHostedUpdate();
+    checkForUpdate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ✅ Configure Status Bar
@@ -529,7 +547,7 @@ function AppContent() {
   }
 
   if (showSplash) {
-    return <SplashScreen onAnimationComplete={() => setShowSplash(false)} />;
+    return <SplashScreen onAnimationComplete={() => setSplashAnimDone(true)} otaState={otaState} />;
   }
 
   return (
@@ -731,6 +749,7 @@ function AppContent() {
           setIsWebPushPromptOpen(false);
         }}
       />
+
     </div>
   );
 }

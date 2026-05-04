@@ -399,9 +399,9 @@ const HomeFeed: React.FC<{
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                { icon: '✓', text: 'Price matched vs Airbnb' },
-                { icon: '⬡', text: 'Roovo Verified properties' },
-                { icon: '✦', text: 'Instant GST invoices' },
+                { icon: '✓', text: 'Always cheaper than Airbnb' },
+                { icon: '⬡', text: 'Roovo Verified stays' },
+                { icon: '✦', text: 'GST invoices for every booking' },
               ].map((p, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: '#fff' }}>{p.icon}</div>
@@ -415,7 +415,7 @@ const HomeFeed: React.FC<{
             <LayoutGroup id="new-section">
               <ListingSection
                 key={`new-${activeFilter}`}
-                title="New homes on Roovo"
+                title="Just added to Roovo"
                 listings={newHomes}
                 loading={loading}
               />
@@ -436,11 +436,20 @@ const HomeFeed: React.FC<{
         <header
           className="sticky top-0 z-40 flex flex-col items-center"
           style={{
-            background: scrollY > 25 ? 'rgba(250,249,247,0.96)' : 'transparent',
-            backdropFilter: scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
-            WebkitBackdropFilter: scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
-            borderBottom: scrollY > 48 ? '1px solid rgba(0,0,0,.065)' : 'none',
-            transition: 'background .3s, border-color .3s',
+            background: headerState === 'greeting'
+              ? 'rgba(250,249,247,0.78)'
+              : scrollY > 25 ? 'rgba(250,249,247,0.96)' : 'transparent',
+            backdropFilter: headerState === 'greeting'
+              ? 'blur(24px)'
+              : scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+            WebkitBackdropFilter: headerState === 'greeting'
+              ? 'blur(24px)'
+              : scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+            borderBottom: headerState === 'greeting'
+              ? '1px solid rgba(0,0,0,.06)'
+              : scrollY > 48 ? '1px solid rgba(0,0,0,.065)' : 'none',
+            borderRadius: headerState === 'greeting' ? '0 0 28px 28px' : 0,
+            transition: 'background .3s, border-color .3s, backdrop-filter .3s, border-radius .3s',
             paddingTop: 'max(env(safe-area-inset-top), 12px)',
           }}
         >
@@ -455,7 +464,7 @@ const HomeFeed: React.FC<{
               >
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>{getGreeting()}</div>
                 <div style={{ fontSize: 28, fontWeight: 500, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: "'Playfair Display', Georgia, serif", fontStyle: 'italic' }}>
-                  Find your perfect stay.
+                  Find your perfect stay ✨
                 </div>
               </motion.div>
             )}
@@ -478,7 +487,7 @@ const HomeFeed: React.FC<{
               </div>
               <div className="flex-1 min-w-0">
                 <p style={{ fontWeight: 700, color: '#0A0A09', fontSize: 15, letterSpacing: '-.02em' }}>Where to?</p>
-                <p style={{ fontSize: 12, color: '#888880', fontWeight: 500, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Anywhere · Any week · Add guests</p>
+                <p style={{ fontSize: 12, color: '#888880', fontWeight: 500, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Goa · Bengaluru · Pondicherry</p>
               </div>
               <div
                 onClick={(e) => { e.stopPropagation(); triggerHaptic(); window.location.reload(); }}

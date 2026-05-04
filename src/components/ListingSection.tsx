@@ -74,7 +74,7 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
               transition={{ duration: 0.25 }}
             >
               <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 4 }}>
-                {title.toLowerCase().includes('weekend') ? 'Weekend escapes' : title.toLowerCase().includes('new') ? 'Just added' : 'Featured'}
+                {title.toLowerCase().includes('weekend') ? 'Weekend escapes' : title.toLowerCase().includes('new') || title.toLowerCase().includes('just') ? 'Just added' : 'Featured'}
               </div>
               <div style={{ fontSize: 22, fontWeight: 600, color: '#0A0A09', letterSpacing: '-.04em', lineHeight: 1.1, fontFamily: "'Playfair Display', Georgia, serif" }}>
                 {title.split(' ').slice(0, 2).join(' ')}{' '}

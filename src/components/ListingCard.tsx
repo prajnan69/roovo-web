@@ -259,7 +259,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
       {/* --- Listing Info --- */}
       <div className="mt-2" style={{ width: cardWidth }}>
         {size !== 'small' && (
-          <h3 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontWeight: 600, fontSize: 13, color: '#0A0A09', lineHeight: 1.3, letterSpacing: '-0.01em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 2 }}>{listing.title}</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 13, color: '#0A0A09', lineHeight: 1.3, letterSpacing: '0em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 2 }}>{listing.title}</h3>
         )}
         <p style={{ fontSize: 11, color: '#888880', fontWeight: 400, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLocation}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>

@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .grecaptcha-badge {
   visibility: hidden !important;
 }
