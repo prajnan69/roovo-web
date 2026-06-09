@@ -42,6 +42,16 @@ interface RouterProps {
   children: React.ReactNode;
 }
 
+const getRouteKey = (currentPath: string) => {
+  if (currentPath === '/hosting/verify') {
+    return '/hosting/verify';
+  }
+  if (currentPath.startsWith('/hosting')) {
+    return '/hosting-dashboard';
+  }
+  return currentPath;
+};
+
 const Router: React.FC<RouterProps> = ({ children }) => {
   const [path, setPath] = useState(window.location.pathname);
 
@@ -68,7 +78,7 @@ const Router: React.FC<RouterProps> = ({ children }) => {
   return (
     // mode="sync": enter and exit run simultaneously so the slide-in overlaps the fade-out
     <AnimatePresence mode="sync" initial={false}>
-      <PageWrapper key={path} pagePath={path}>
+      <PageWrapper key={getRouteKey(path)} pagePath={path}>
         {matchedComponent || <NotFound />}
       </PageWrapper>
     </AnimatePresence>

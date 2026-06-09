@@ -318,6 +318,9 @@ function AppContent() {
         '/logo.png',
         '/mumbai.png',
         '/pondicherry.png',
+        '/icons/globe_t.png',
+        '/icons/man_t.png',
+        '/icons/man_h.png',
       ];
       imagesToPreload.forEach((image) => {
         new Image().src = image;

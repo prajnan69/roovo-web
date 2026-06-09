@@ -7,13 +7,17 @@ import { triggerHaptic } from "@/lib/haptics";
 
 // Helper to determine window width safely
 const useWindowSize = () => {
-    const [size, setSize] = useState([0, 0]);
+    const [size, setSize] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return [window.innerWidth, window.innerHeight];
+        }
+        return [0, 0];
+    });
     useEffect(() => {
         function updateSize() {
             setSize([window.innerWidth, window.innerHeight]);
         }
         window.addEventListener('resize', updateSize);
-        updateSize();
         return () => window.removeEventListener('resize', updateSize);
     }, []);
     return size;
@@ -105,6 +109,9 @@ export default function HostBottomNavigation() {
     const [windowWidth] = useWindowSize();
     const paddingX = Math.max(0, (windowWidth - ITEM_WIDTH) / 2);
 
+    const isProgrammaticScroll = useRef(false);
+    const targetScrollRef = useRef<number | null>(null);
+
     // Restore scroll position before paint to avoid flicker
     useLayoutEffect(() => {
         if (containerRef.current) {
@@ -113,12 +120,16 @@ export default function HostBottomNavigation() {
             );
             if (activeIndex !== -1) {
                 const targetScroll = activeIndex * TOTAL_ITEM_WIDTH;
+                isProgrammaticScroll.current = true;
                 if (globalLastScrollLeft !== null) {
                     containerRef.current.scrollLeft = globalLastScrollLeft;
                 } else {
                     containerRef.current.scrollLeft = targetScroll;
                     globalLastScrollLeft = targetScroll;
                 }
+                setTimeout(() => {
+                    isProgrammaticScroll.current = false;
+                }, 50);
             }
         }
     }, []);
@@ -133,6 +144,8 @@ export default function HostBottomNavigation() {
             if (activeIndex !== -1) {
                 const targetScroll = activeIndex * TOTAL_ITEM_WIDTH;
                 if (Math.abs(containerRef.current.scrollLeft - targetScroll) > 10) {
+                    isProgrammaticScroll.current = true;
+                    targetScrollRef.current = targetScroll;
                     containerRef.current.scrollTo({
                         left: targetScroll,
                         behavior: 'smooth'
@@ -178,7 +191,17 @@ export default function HostBottomNavigation() {
     let scrollTimeout: NodeJS.Timeout;
     const onScroll = () => {
         if (containerRef.current) {
-            globalLastScrollLeft = containerRef.current.scrollLeft;
+            const currentScroll = containerRef.current.scrollLeft;
+            globalLastScrollLeft = currentScroll;
+
+            if (isProgrammaticScroll.current && targetScrollRef.current !== null) {
+                clearTimeout(scrollTimeout);
+                if (Math.abs(currentScroll - targetScrollRef.current) < 5) {
+                    isProgrammaticScroll.current = false;
+                    targetScrollRef.current = null;
+                }
+                return;
+            }
         }
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(handleScrollEnd, 150);
@@ -195,6 +218,18 @@ export default function HostBottomNavigation() {
             <div
                 ref={containerRef}
                 onScroll={onScroll}
+                onTouchStart={() => {
+                    isProgrammaticScroll.current = false;
+                    targetScrollRef.current = null;
+                }}
+                onMouseDown={() => {
+                    isProgrammaticScroll.current = false;
+                    targetScrollRef.current = null;
+                }}
+                onWheel={() => {
+                    isProgrammaticScroll.current = false;
+                    targetScrollRef.current = null;
+                }}
                 className="relative flex items-end overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-safe-bottom h-32 pointer-events-auto"
                 style={{
                     perspective: 600,
