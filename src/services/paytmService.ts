@@ -49,7 +49,7 @@ export async function createPaytmOrder(opts: PaytmOrderOptions): Promise<PaytmOr
   return res.json();
 }
 
-// ── Step 2: load Paytm JS + open checkout modal ───────────────────────────────
+// ── Step 2: load Paytm JS + open checkout modal ─────────────────────────────────
 export async function initiatePaytmCheckout(order: PaytmOrderResult): Promise<void> {
   return new Promise((resolve, reject) => {
     // Remove any stale Paytm script
@@ -60,49 +60,52 @@ export async function initiatePaytmCheckout(order: PaytmOrderResult): Promise<vo
       ? 'https://secure.paytmpayments.com'
       : 'https://securestage.paytmpayments.com';
 
-    const script  = document.createElement('script');
-    script.id     = 'paytm-checkout-script';
-    script.type   = 'application/javascript';
-    // Note: "paytmPatment" typo is intentional — it's Paytm's actual filename
-    script.src    = `${baseUrl}/theia/paytmPatment.js?mid=${order.mid}&orderId=${order.order_id}`;
-    script.crossOrigin = 'anonymous';
+    const config = {
+      root: '',
+      flow: 'DEFAULT',
+      data: {
+        orderId:   order.order_id,
+        token:     order.txn_token,
+        tokenType: 'TXN_TOKEN',
+        amount:    order.amount,
+      },
+      handler: {
+        notifyMerchant: (eventName: string, data: any) => {
+          console.log('[Paytm] notifyMerchant:', eventName, data);
+          if (eventName === 'APP_CLOSED') {
+            reject(new Error('Payment cancelled by user'));
+          }
+        },
+      },
+    };
 
-    script.onload = () => {
+    (window as any).onScriptLoad = () => {
       const paytm = (window as any).Paytm;
       if (!paytm?.CheckoutJS) {
         return reject(new Error('Paytm CheckoutJS not available after script load'));
       }
-
-      const config = {
-        root: '',
-        flow: 'DEFAULT',
-        data: {
-          orderId:   order.order_id,
-          token:     order.txn_token,
-          tokenType: 'TXN_TOKEN',
-          amount:    order.amount,
-        },
-        handler: {
-          notifyMerchant: (eventName: string, data: any) => {
-            console.log('[Paytm] notifyMerchant:', eventName, data);
-            if (eventName === 'APP_CLOSED') {
-              // User dismissed the modal — payment cancelled
-              reject(new Error('Payment cancelled by user'));
-            }
-            // TXN_SUCCESS / TXN_FAILURE → page will navigate to callbackUrl
-          },
-        },
-      };
-
-      paytm.CheckoutJS.init(config)
-        .then(() => {
-          paytm.CheckoutJS.invoke();
-          resolve(); // modal opened; result comes via callbackUrl redirect
-        })
-        .catch(reject);
+      paytm.CheckoutJS.onLoad(() => {
+        paytm.CheckoutJS.init(config)
+          .then(() => {
+            paytm.CheckoutJS.invoke();
+            resolve();
+          })
+          .catch((err: any) => {
+            console.error('[Paytm] CheckoutJS init error:', err);
+            reject(err);
+          });
+      });
     };
 
+    const script = document.createElement('script');
+    script.id   = 'paytm-checkout-script';
+    script.type = 'application/javascript';
+    // Official script URL format from Paytm docs
+    script.src  = `${baseUrl}/merchantpgpui/checkoutjs/merchants/${order.mid}.js`;
+    script.setAttribute('onload', 'onScriptLoad()');
+    script.crossOrigin = 'anonymous';
     script.onerror = () => reject(new Error('Failed to load Paytm checkout script'));
+
     document.head.appendChild(script);
   });
 }
