@@ -126,8 +126,8 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
     guests: listing.max_guests || 1,
     checkIn: listing.operations_data?.checkInTime || "14:00",
     checkOut: listing.operations_data?.checkOutTime || "11:00",
-    weekend_price: (listing.base_price_weekend !== undefined && listing.base_price_weekend !== null) ? Number(listing.base_price_weekend) : null,
-    price_per_night: Number(listing.base_price_weekday) || 0,
+    weekend_price: (listing.base_price_weekend !== undefined && listing.base_price_weekend !== null) ? String(listing.base_price_weekend) : "",
+    price_per_night: (listing.base_price_weekday !== undefined && listing.base_price_weekday !== null) ? String(listing.base_price_weekday) : "",
     included_amenities: getFlatAmenities(listing.amenities_data),
     additional_rules: (listing.house_rules || []).find((r: any) => typeof r === 'string') || "",
     guest_access: listing.operations_data?.guest_access || "",
@@ -200,8 +200,8 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
     const payload = {
       id: listing.id, // Preserve ID
       max_guests: formData.guests,
-      base_price_weekday: formData.price_per_night,
-      base_price_weekend: (formData.weekend_price !== null && formData.weekend_price !== undefined) ? formData.weekend_price : formData.price_per_night,
+      base_price_weekday: Number(formData.price_per_night) || 0,
+      base_price_weekend: (formData.weekend_price !== null && formData.weekend_price !== undefined && formData.weekend_price !== '') ? Number(formData.weekend_price) : (Number(formData.price_per_night) || 0),
       is_auto_bookable: formData.auto_bookable,
       pets_allowed: formData.pets_allowed,
       neighborhood_desc: formData.neighborhood_description,
@@ -368,7 +368,7 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
                     <input
                       type="number"
                       value={formData.price_per_night}
-                      onChange={(e) => updateField('price_per_night', Number(e.target.value))}
+                      onChange={(e) => updateField('price_per_night', e.target.value)}
                       className="w-full text-xl font-bold text-gray-900 outline-none bg-transparent placeholder-gray-200"
                       placeholder="0"
                     />
@@ -388,10 +388,10 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
                     <span className="text-lg font-bold text-gray-900 mr-1">₹</span>
                     <input
                       type="number"
-                      value={formData.weekend_price !== null ? formData.weekend_price : formData.price_per_night}
-                      onChange={(e) => updateField('weekend_price', Number(e.target.value))}
+                      value={formData.weekend_price}
+                      onChange={(e) => updateField('weekend_price', e.target.value)}
                       className="w-full text-xl font-bold text-gray-900 outline-none bg-transparent placeholder-gray-200"
-                      placeholder="Same as weekday"
+                      placeholder={formData.price_per_night ? String(formData.price_per_night) : "Same as weekday"}
                     />
                   </div>
                 </div>
