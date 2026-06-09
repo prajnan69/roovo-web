@@ -57,8 +57,8 @@ export async function initiatePaytmCheckout(order: PaytmOrderResult): Promise<vo
 
     const isProd  = order.environment === 'PROD';
     const baseUrl = isProd
-      ? 'https://securegw.paytm.in'
-      : 'https://securegw-stage.paytm.in';
+      ? 'https://secure.paytmpayments.com'
+      : 'https://securestage.paytmpayments.com';
 
     const script  = document.createElement('script');
     script.id     = 'paytm-checkout-script';
