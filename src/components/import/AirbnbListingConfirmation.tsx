@@ -142,6 +142,7 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
     // Preload images in batches of 5
     const preloadImages = (startIndex: number, count: number = 5) => {
         if (preloadingRef.current) return;
+        if (!data.photos || data.photos.length === 0) return;
         preloadingRef.current = true;
 
         const imagesToPreload: number[] = [];
@@ -153,11 +154,13 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
         }
 
         imagesToPreload.forEach(index => {
-            const img = new Image();
-            img.src = data.photos[index].url;
-            img.onload = () => {
-                setPreloadedImages(prev => new Set([...prev, index]));
-            };
+            if (data.photos[index]) {
+                const img = new Image();
+                img.src = data.photos[index].url;
+                img.onload = () => {
+                    setPreloadedImages(prev => new Set([...prev, index]));
+                };
+            }
         });
 
         preloadingRef.current = false;

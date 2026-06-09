@@ -49,8 +49,8 @@ const PaymentStatus = () => {
       }
 
       try {
-        // Verify payment
-        const res = await fetch(`${API_BASE_URL}/api/cashfree/orders/${orderId}/status`);
+        // Verify payment via Paytm
+        const res = await fetch(`${API_BASE_URL}/api/paytm/orders/${orderId}/status`);
         if (!res.ok) throw new Error("Verification failed");
         const data = await res.json();
 

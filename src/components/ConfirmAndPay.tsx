@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Star } from "lucide-react";
 import { API_BASE_URL } from "../services/api";
 import SlideToReserve from "./SlideToReserve";
-import { load } from '@cashfreepayments/cashfree-js';
+import { createPaytmOrder, initiatePaytmCheckout } from '../services/paytmService';
 import SplitPaymentDrawer from "./SplitPaymentDrawer";
 import { Users, ShieldAlert } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
@@ -60,7 +60,6 @@ export default function ConfirmAndPay({
   const [bookingStatus, setBookingStatus] = useState<
     "idle" | "loading" | "confirmed" | "pending"
   >("idle");
-  const [cashfree, setCashfree] = useState<any>(null);
   const [isSplitEnabled, setIsSplitEnabled] = useState(false);
   const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);
   const [splitParticipants, setSplitParticipants] = useState<string[]>([]);
@@ -106,18 +105,6 @@ export default function ConfirmAndPay({
   }, [bookingStatus]);
 
   useEffect(() => {
-    const initializeSDK = async () => {
-      try {
-        const cf = await load({
-          mode: import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox"
-        });
-        setCashfree(cf);
-      } catch (err) {
-        console.error("Cashfree SDK failed to load", err);
-      }
-    };
-    initializeSDK();
-
     // Fetch manual payments setting
     fetch(`${API_BASE_URL}/api/settings`)
       .then(res => res.json())
@@ -150,7 +137,7 @@ export default function ConfirmAndPay({
 
     try {
       if (manualPaymentsEnabled) {
-        // Bypass CashFree and create booking directly
+        // Bypass payment gateway and create booking directly
         await createBooking("at_property");
         return true;
       }
@@ -194,73 +181,50 @@ export default function ConfirmAndPay({
       }
 
       // CASE: Normal Full Payment
-      const customerPhone = guestDetails.phone || "9999999999";
-      const customerName = guestDetails.name || "Guest";
+      const bookingPayload = {
+        listing_id:   listing.id,
+        guest_id:     guestDetails.id,
+        host_id,
+        start_date:   bookingDetails.startDate,
+        end_date:     bookingDetails.endDate,
+        total_price:  orderAmount,
+        host_payout:  parseFloat(currentRoovoBaseTotal.toFixed(2)),
+        taxes:        parseFloat(totalTax.toFixed(2)),
+        our_fees:     parseFloat(currentRoovoServiceFeeTotal.toFixed(2)),
+        host_fees:    0,
+        auto_bookable,
+      };
 
-      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_amount: orderAmount,
-          customer_details: {
-            customer_id: guestDetails.id,
-            customer_phone: customerPhone,
-            customer_name: customerName,
-            customer_email: "guest@roovo.in"
-          },
-          order_meta: {
-            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-          }
-        })
+      const order = await createPaytmOrder({
+        order_amount:     orderAmount,
+        customer_details: {
+          customer_id:    guestDetails.id,
+          customer_phone: guestDetails.phone || '9999999999',
+          customer_name:  guestDetails.name  || 'Guest',
+          customer_email: 'guest@roovo.in',
+        },
+        order_meta: {
+          return_url: `${window.location.origin}/payment/status?order_id=${Date.now()}`,
+        },
+        bookingData: bookingPayload,
       });
 
-      if (!orderRes.ok) throw new Error("Failed to create payment order");
-      const orderData = await orderRes.json();
-      const paymentSessionId = orderData.payment_session_id;
-      const orderId = orderData.order_id;
-
-      // Store pending booking data for redirect handling (fallback)
-      localStorage.setItem(`pending_booking_${orderId}`, JSON.stringify({
-        listing_id: listing.id,
-        guest_id: guestDetails.id,
-        host_id,
-        start_date: bookingDetails.startDate,
-        end_date: bookingDetails.endDate,
-        total_price: orderAmount,
-        host_payout: parseFloat(currentRoovoBaseTotal.toFixed(2)),
-        taxes: parseFloat(totalTax.toFixed(2)),
-        our_fees: parseFloat(currentRoovoServiceFeeTotal.toFixed(2)),
-        host_fees: 0,
-        auto_bookable,
+      // Persist booking intent locally as fallback (webhook is primary)
+      localStorage.setItem(`pending_booking_${order.order_id}`, JSON.stringify({
+        ...bookingPayload,
       }));
 
-      if (cashfree) {
-        cashfree.checkout({
-          paymentSessionId,
-          redirectTarget: "_self",
-          returnUrl: `${window.location.origin}/payment/status?order_id={order_id}`
-        }).then((result: any) => {
-          if (result.error) {
-            console.error("Payment Error:", result.error);
-            setBookingStatus("idle");
-            alert("Payment Failed: " + result.error.message);
-          }
-        });
-
-        const pollInterval = setInterval(async () => {
-          const statusRes = await fetch(`${API_BASE_URL}/api/cashfree/orders/${orderId}/status`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            if (statusData.status === "SUCCESS") {
-              clearInterval(pollInterval);
-              await createBooking(orderId);
-            }
-          }
-        }, 5000);
-
-        setTimeout(() => clearInterval(pollInterval), 600000);
-
+      try {
+        await initiatePaytmCheckout(order);
+        // Modal opened; payment result arrives via /payment/status redirect
         return true;
+      } catch (checkoutErr: any) {
+        if (checkoutErr.message?.includes('cancelled')) {
+          // User closed the modal
+          setBookingStatus('idle');
+          return false;
+        }
+        throw checkoutErr;
       }
 
     } catch (error) {
@@ -279,41 +243,26 @@ export default function ConfirmAndPay({
     try {
       const primaryShare = splitSuccessData.splits.find((s: any) => s.is_primary_payer);
 
-      // 2. Create Cashfree Order for ONLY the primary share
-      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_amount: primaryShare.amount_share,
-          customer_details: {
-            customer_id: guestDetails.id,
-            customer_phone: guestDetails.phone || "9999999999",
-            customer_name: guestDetails.name || "Guest",
-            customer_email: "guest@roovo.in"
-          },
-          order_meta: {
-            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-          }
-        })
+      // 2. Create Paytm Order for ONLY the primary share
+      const order = await createPaytmOrder({
+        order_amount:     primaryShare.amount_share,
+        customer_details: {
+          customer_id:    guestDetails.id,
+          customer_phone: guestDetails.phone || '9999999999',
+          customer_name:  guestDetails.name  || 'Guest',
+          customer_email: 'guest@roovo.in',
+        },
       });
 
-      if (!orderRes.ok) throw new Error("Failed to create share payment");
-      const orderData = await orderRes.json();
-
-      // Update the split record with the actual Cashfree order ID
+      // Update the split record with the Paytm order ID
       await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
-        method: 'PATCH',
+        method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderData.order_id })
+        body:    JSON.stringify({ order_id: order.order_id }),
       });
 
-      // Redirect to Cashfree
-      if (cashfree) {
-        cashfree.checkout({
-          paymentSessionId: orderData.payment_session_id,
-          redirectTarget: "_self"
-        });
-      }
+      // Open Paytm checkout modal
+      await initiatePaytmCheckout(order);
     } catch (error) {
       console.error("Error paying primary share:", error);
       alert("Failed to initiate payment. Please try again.");

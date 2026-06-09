@@ -509,56 +509,60 @@ export default function ImportListingPage({ onClose, onSuccess, draftId: initial
                     setDraftId(draft.id); // Sync state with loaded draft
 
                     // Restore state from draft
-                    if (draft.raw) {
-                        try {
-                            const baseData = transformListingData(draft.raw);
-                            // Override with saved draft details if they exist (user might have edited them)
-                            if (draft.bedrooms) baseData.bedrooms = typeof draft.bedrooms === 'string' ? parseInt(draft.bedrooms) : draft.bedrooms;
-                            if (draft.bathrooms) baseData.bathrooms = typeof draft.bathrooms === 'string' ? parseInt(draft.bathrooms) : draft.bathrooms;
-                            if (draft.beds) baseData.beds = typeof draft.beds === 'string' ? parseInt(draft.beds) : draft.beds;
-                            if (draft.property_type) baseData.propertyType = draft.property_type;
-                            if (draft.max_guest_capacity) baseData.maxGuestCapacity = typeof draft.max_guest_capacity === 'string' ? parseInt(draft.max_guest_capacity) : draft.max_guest_capacity;
-
-                            setListingData(baseData);
-                        } catch (transformErr) {
-                            console.error("Error transforming draft raw data:", transformErr);
-                            // Fallback or show error?
-                        }
-                    }
-
-                    if (draft.pricing_data) setPricingData(draft.pricing_data);
-                    if (draft.operations_data) setOperationsData(draft.operations_data);
-                    if (draft.extras_data) setExtrasData(draft.extras_data);
-                    if (draft.legal_data) setLegalData(draft.legal_data);
-                    if (draft.photo_assignments) setPhotoAssignments(draft.photo_assignments);
-
-
-                    // Set step based on current_step or infer
-                    if (draft.current_step) {
-                        let nextStep: Step = 'url';
-                        if (draft.current_step === 'import' || draft.current_step === 'confirmation') nextStep = 'confirmation';
-                        if (draft.current_step === 'pricing') nextStep = 'pricing';
-                        if (draft.current_step === 'photo_sorting' || draft.current_step === 'photo_assignments') nextStep = 'photo_sorting';
-                        if (draft.current_step === 'operations') nextStep = 'operations';
-                        if (draft.current_step === 'import_details') nextStep = 'pricing';
-                        if (draft.current_step === 'extras') nextStep = 'extras';
-                        if (draft.current_step === 'verification') nextStep = 'verification';
-
-                        setStep(nextStep);
+                    if (draft.raw && draft.raw.error) {
+                        setError(draft.raw.error);
+                        setUrl(draft.raw.airbnb_url || draft.raw.url || (draft.listing_id ? `https://www.airbnb.com/rooms/${draft.listing_id}` : ""));
+                        setStep('url');
                     } else {
-                        // Infer step
-                        if (draft.legal_data) setStep('verification');
-                        else if (draft.extras_data) setStep('verification');
-                        else if (draft.operations_data) setStep('extras');
-                        else if (draft.photo_assignments) setStep('operations'); // If photo assignments exist, move to operations
-                        else if (draft.pricing_data) {
-                            if (draft.pricing_data.enableRoomSplitting) {
-                                setStep('photo_sorting');
-                            } else {
-                                setStep('operations');
+                        if (draft.raw) {
+                            try {
+                                const baseData = transformListingData(draft.raw);
+                                // Override with saved draft details if they exist (user might have edited them)
+                                if (draft.bedrooms) baseData.bedrooms = typeof draft.bedrooms === 'string' ? parseInt(draft.bedrooms) : draft.bedrooms;
+                                if (draft.bathrooms) baseData.bathrooms = typeof draft.bathrooms === 'string' ? parseInt(draft.bathrooms) : draft.bathrooms;
+                                if (draft.beds) baseData.beds = typeof draft.beds === 'string' ? parseInt(draft.beds) : draft.beds;
+                                if (draft.property_type) baseData.propertyType = draft.property_type;
+                                if (draft.max_guest_capacity) baseData.maxGuestCapacity = typeof draft.max_guest_capacity === 'string' ? parseInt(draft.max_guest_capacity) : draft.max_guest_capacity;
+
+                                setListingData(baseData);
+                            } catch (transformErr) {
+                                console.error("Error transforming draft raw data:", transformErr);
                             }
                         }
-                        else if (draft.raw) setStep('confirmation');
+
+                        if (draft.pricing_data) setPricingData(draft.pricing_data);
+                        if (draft.operations_data) setOperationsData(draft.operations_data);
+                        if (draft.extras_data) setExtrasData(draft.extras_data);
+                        if (draft.legal_data) setLegalData(draft.legal_data);
+                        if (draft.photo_assignments) setPhotoAssignments(draft.photo_assignments);
+
+                        // Set step based on current_step or infer
+                        if (draft.current_step) {
+                            let nextStep: Step = 'url';
+                            if (draft.current_step === 'import' || draft.current_step === 'confirmation') nextStep = 'confirmation';
+                            if (draft.current_step === 'pricing') nextStep = 'pricing';
+                            if (draft.current_step === 'photo_sorting' || draft.current_step === 'photo_assignments') nextStep = 'photo_sorting';
+                            if (draft.current_step === 'operations') nextStep = 'operations';
+                            if (draft.current_step === 'import_details') nextStep = 'pricing';
+                            if (draft.current_step === 'extras') nextStep = 'extras';
+                            if (draft.current_step === 'verification') nextStep = 'verification';
+
+                            setStep(nextStep);
+                        } else {
+                            // Infer step
+                            if (draft.legal_data) setStep('verification');
+                            else if (draft.extras_data) setStep('verification');
+                            else if (draft.operations_data) setStep('extras');
+                            else if (draft.photo_assignments) setStep('operations'); // If photo assignments exist, move to operations
+                            else if (draft.pricing_data) {
+                                if (draft.pricing_data.enableRoomSplitting) {
+                                    setStep('photo_sorting');
+                                } else {
+                                    setStep('operations');
+                                }
+                            }
+                            else if (draft.raw) setStep('confirmation');
+                        }
                     }
                 }
             } catch (err) {

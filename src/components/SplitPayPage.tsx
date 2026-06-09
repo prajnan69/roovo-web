@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldCheck, ArrowLeft, Loader2, AlertCircle, Users, LogIn } from 'lucide-react';
-import { load } from '@cashfreepayments/cashfree-js';
+import { createPaytmOrder, initiatePaytmCheckout } from '../services/paytmService';
 import { API_BASE_URL } from '../services/api';
 import { triggerHaptic } from '@/lib/haptics';
 import RoovoLoader from './RoovoLoader';
@@ -11,7 +11,6 @@ export default function SplitPayPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [splitData, setSplitData] = useState<any>(null);
-    const [cashfree, setCashfree] = useState<any>(null);
     const [isPaying, setIsPaying] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // null = checking
 
@@ -27,13 +26,7 @@ export default function SplitPayPage() {
                 }
                 setIsAuthenticated(true);
 
-                // 2. Load Cashfree SDK
-                const cf = await load({
-                    mode: import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox"
-                });
-                setCashfree(cf);
-
-                // 3. Get Split ID from URL
+                // 2. Get Split ID from URL
                 const params = new URLSearchParams(window.location.search);
                 const id = params.get('id');
 
@@ -72,47 +65,36 @@ export default function SplitPayPage() {
     }, []);
 
     const handlePay = async () => {
-        if (!splitData || isPaying || !cashfree) return;
+        if (!splitData || isPaying) return;
         setIsPaying(true);
         triggerHaptic();
 
         try {
-            // 1. Create Cashfree Order for this specific share
-            const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    order_amount: splitData.amount_share,
-                    customer_details: {
-                        customer_id: `guest_${splitData.participant_phone}`,
-                        customer_phone: splitData.participant_phone.replace(/\D/g, '').slice(-10),
-                        customer_name: "Roovo Guest",
-                        customer_email: "guest@roovo.in"
-                    },
-                    order_meta: {
-                        return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-                    }
-                })
+            // 1. Create Paytm Order for this specific share
+            const order = await createPaytmOrder({
+                order_amount:     splitData.amount_share,
+                customer_details: {
+                    customer_id:    `guest_${splitData.participant_phone}`,
+                    customer_phone: splitData.participant_phone.replace(/\D/g, '').slice(-10),
+                    customer_name:  'Roovo Guest',
+                    customer_email: 'guest@roovo.in',
+                },
             });
 
-            if (!orderRes.ok) throw new Error("Failed to create payment link");
-            const orderData = await orderRes.json();
-
-            // 2. Update the split record with the order ID so the webhook can find it
+            // 2. Update the split record with the Paytm order ID
             await fetch(`${API_BASE_URL}/api/payment-splits/status/${splitData.id}/update-order`, {
-                method: 'PATCH',
+                method:  'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_id: orderData.order_id })
+                body:    JSON.stringify({ order_id: order.order_id }),
             });
 
-            // 3. Trigger Cashfree Checkout
-            await cashfree.checkout({
-                paymentSessionId: orderData.payment_session_id,
-                redirectTarget: "_self"
-            });
+            // 3. Open Paytm checkout modal
+            await initiatePaytmCheckout(order);
         } catch (err: any) {
-            console.error("Payment error:", err);
-            alert("Payment failed to initialize: " + err.message);
+            console.error('Payment error:', err);
+            if (!err.message?.includes('cancelled')) {
+                alert('Payment failed to initialize: ' + err.message);
+            }
             setIsPaying(false);
         }
     };
@@ -235,7 +217,7 @@ export default function SplitPayPage() {
                         )}
                     </button>
                     <p className="text-center text-[10px] text-neutral-400 mt-4 uppercase tracking-widest px-8">
-                        Powered by Cashfree • Secured with 128-bit encryption
+                        Powered by Paytm • Secured with 128-bit encryption
                     </p>
                 </div>
             </main>
