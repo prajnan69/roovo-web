@@ -9,8 +9,8 @@ import { triggerHaptic } from "@/lib/haptics";
 import { Keyboard } from "@capacitor/keyboard";
 import { Plus, Sparkles, AlertCircle, ShieldCheck } from "lucide-react";
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
-import { load } from '@cashfreepayments/cashfree-js';
 import { API_BASE_URL } from "../services/api";
+import { createPaytmOrder, initiatePaytmCheckout } from "../services/paytmService";
 
 const formatNiceDate = (dateString: string) => {
   if (!dateString) return '';
@@ -36,7 +36,6 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [session, setSession] = useState<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [cashfree, setCashfree] = useState<any>(null);
 
   // Offer State
   const [selectedOffer, setSelectedOffer] = useState<{ id: string, startDate: string, endDate: string, price: number, listingId: string } | null>(null);
@@ -63,18 +62,6 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
       setSession(data.session);
     };
     getSession();
-
-    const initializeCashfree = async () => {
-      try {
-        const cf = await load({
-          mode: "production", // or sandbox based on env
-        });
-        setCashfree(cf);
-      } catch (error) {
-        console.error("Failed to load Cashfree SDK:", error);
-      }
-    };
-    initializeCashfree();
 
     return () => { Keyboard.removeAllListeners(); };
   }, []);
@@ -186,7 +173,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   };
 
   const handleAcceptOffer = async () => {
-    if (!selectedOffer || !session || !cashfree || !otherUser) return;
+    if (!selectedOffer || !session || !otherUser) return;
 
     // Calculate final amounts for the offer
     const start = new Date(selectedOffer.startDate);
@@ -198,21 +185,21 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
     const gstAmount = selectedOffer.price * gstRate;
     const orderAmount = selectedOffer.price + gstAmount;
 
-    // Host payout logic exactly as planned:
+    // Host payout logic
     const roovoFee = selectedOffer.price * 0.05;
     const gstOnFee = roovoFee * 0.18;
     const hostPayout = selectedOffer.price - roovoFee - gstOnFee;
     const ourFees = roovoFee + gstOnFee;
 
     try {
-      // We must get listing ID from conversation to validate and create the booking
+      // Get conversation details for listing_id / host_id
       const convo = convoDetails || await (async () => {
         const { data } = await supabase.from('conversations').select('listing_id, host_id').eq('id', conversationId).single();
         return data;
       })();
       if (!convo) throw new Error("Can't find conversation details");
 
-      // 1. Validate Offer First
+      // 1. Validate offer availability
       const validateRes = await fetch(`${API_BASE_URL}/api/bookings/validate-offer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -231,12 +218,11 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         return;
       }
 
-      // Prepare booking data first so we can send it to the backend for intent tracking
       const guestPhone = session.user.identities?.[0]?.identity_data?.phone || "9999999999";
       const bookingData = {
         listing_id: convo.listing_id,
         guest_id: session.user.id,
-        host_id: convo.host_id, // Host ID
+        host_id: convo.host_id,
         start_date: selectedOffer.startDate,
         end_date: selectedOffer.endDate,
         total_price: parseFloat(orderAmount.toFixed(2)),
@@ -244,45 +230,38 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         taxes: parseFloat(gstAmount.toFixed(2)),
         our_fees: parseFloat(ourFees.toFixed(2)),
         host_fees: 0,
-        auto_bookable: true, // Offers are auto confirmed
+        auto_bookable: true,
         is_special_offer: true,
         message_id: selectedOffer.id
       };
 
-      // 2. Create Cashfree order & store intent
-      const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_amount: orderAmount,
-          customer_details: {
-            customer_id: session.user.id,
-            customer_phone: guestPhone,
-            customer_name: session.user.user_metadata?.name || 'Guest',
-          },
-          order_meta: {
-            return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-          },
-          bookingData: bookingData // Send to store in backend intent table
-        })
+      // 2. Create Paytm order & store intent
+      const order = await createPaytmOrder({
+        order_amount: parseFloat(orderAmount.toFixed(2)),
+        customer_details: {
+          customer_id: session.user.id,
+          customer_phone: guestPhone,
+          customer_name: session.user.user_metadata?.name || 'Guest',
+          customer_email: 'guest@roovo.in',
+        },
+        order_meta: {
+          return_url: `${window.location.origin}/payment/status?order_id=ROOVO_PLACEHOLDER`,
+        },
+        bookingData,
       });
 
-      if (!orderRes.ok) throw new Error("Failed to create cashfree order");
-      const orderData = await orderRes.json();
+      // Store pending booking locally as fallback
+      localStorage.setItem(`pending_booking_${order.order_id}`, JSON.stringify(bookingData));
 
-      // Store pending booking in local storage as well for immediate fallback
-      localStorage.setItem(`pending_booking_${orderData.order_id}`, JSON.stringify(bookingData));
+      // 3. Open Paytm checkout
+      await initiatePaytmCheckout(order);
+      // Paytm redirects to /payment/status after payment
 
-      // 2. Checkout
-      cashfree.checkout({
-        paymentSessionId: orderData.payment_session_id,
-        redirectTarget: "_self",
-        returnUrl: `${window.location.origin}/payment/status?order_id={order_id}`
-      });
-
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to initiate payment.');
+      if (!error?.message?.includes('cancelled')) {
+        alert('Failed to initiate payment.');
+      }
     }
   };
 
