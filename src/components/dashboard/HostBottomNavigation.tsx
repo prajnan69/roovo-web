@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { motion, useScroll, useTransform, MotionValue } from "framer-motion";
 import { useNavigation } from "@/hooks/useNavigation";
 import { triggerHaptic } from "@/lib/haptics";
@@ -27,6 +27,9 @@ const NAV_ITEMS = [
     { id: "bookings", label: "Bookings", path: "/hosting/bookings" },
     { id: "payouts", label: "Earnings", path: "/hosting/payouts" },
 ];
+
+// Module-level variable to persist scroll position across unmount/remount
+let globalLastScrollLeft: number | null = null;
 
 const ITEM_WIDTH = 100;
 const ITEM_GAP = 10;
@@ -102,6 +105,24 @@ export default function HostBottomNavigation() {
     const [windowWidth] = useWindowSize();
     const paddingX = Math.max(0, (windowWidth - ITEM_WIDTH) / 2);
 
+    // Restore scroll position before paint to avoid flicker
+    useLayoutEffect(() => {
+        if (containerRef.current) {
+            const activeIndex = NAV_ITEMS.findIndex(item =>
+                pathname === item.path || (item.path === '/hosting' && pathname === '/hosting/')
+            );
+            if (activeIndex !== -1) {
+                const targetScroll = activeIndex * TOTAL_ITEM_WIDTH;
+                if (globalLastScrollLeft !== null) {
+                    containerRef.current.scrollLeft = globalLastScrollLeft;
+                } else {
+                    containerRef.current.scrollLeft = targetScroll;
+                    globalLastScrollLeft = targetScroll;
+                }
+            }
+        }
+    }, []);
+
     // Sync scroll to active route on mount/update
     useEffect(() => {
         if (containerRef.current && windowWidth > 0) {
@@ -156,6 +177,9 @@ export default function HostBottomNavigation() {
 
     let scrollTimeout: NodeJS.Timeout;
     const onScroll = () => {
+        if (containerRef.current) {
+            globalLastScrollLeft = containerRef.current.scrollLeft;
+        }
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(handleScrollEnd, 150);
     };
