@@ -92,7 +92,10 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
         selectedConversation.id,
         session.user.id,
         `I'd like to offer you a special price for your stay.`,
-        offerDetails
+        {
+          ...offerDetails,
+          listing_id: selectedConversation.listing_id || selectedConversation.listing?.id
+        }
       );
     } catch (error) {
       console.error('Failed to send offer:', error);

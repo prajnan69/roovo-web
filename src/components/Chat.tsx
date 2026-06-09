@@ -41,6 +41,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   // Offer State
   const [selectedOffer, setSelectedOffer] = useState<{ id: string, startDate: string, endDate: string, price: number, listingId: string } | null>(null);
   const [isAcceptDrawerOpen, setIsAcceptDrawerOpen] = useState(false);
+  const [convoDetails, setConvoDetails] = useState<{ listing_id: string; host_id: string } | null>(null);
 
   // --- Keyboard & Auth Setup ---
   useEffect(() => {
@@ -77,6 +78,24 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
     return () => { Keyboard.removeAllListeners(); };
   }, []);
+
+  useEffect(() => {
+    const fetchConvoDetails = async () => {
+      try {
+        const { data } = await supabase
+          .from('conversations')
+          .select('listing_id, host_id')
+          .eq('id', conversationId)
+          .single();
+        if (data) {
+          setConvoDetails(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch conversation details:", err);
+      }
+    };
+    fetchConvoDetails();
+  }, [conversationId]);
 
   // --- Data Fetching ---
   useEffect(() => {
@@ -187,7 +206,10 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
     try {
       // We must get listing ID from conversation to validate and create the booking
-      const { data: convo } = await supabase.from('conversations').select('listing_id, host_id').eq('id', conversationId).single();
+      const convo = convoDetails || await (async () => {
+        const { data } = await supabase.from('conversations').select('listing_id, host_id').eq('id', conversationId).single();
+        return data;
+      })();
       if (!convo) throw new Error("Can't find conversation details");
 
       // 1. Validate Offer First
@@ -432,18 +454,14 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                             whileTap={{ scale: 0.97 }}
                             className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-bold rounded-2xl shadow-[0_4px_15px_rgb(0,0,0,0.1)] transition-all flex items-center justify-center gap-2"
                             onClick={() => {
-                              if (selectedOffer?.id === msg.id) {
-                                setIsAcceptDrawerOpen(true);
-                              } else {
-                                setSelectedOffer({
-                                  id: msg.id,
-                                  startDate: msg.metadata?.start_date || '',
-                                  endDate: msg.metadata?.end_date || '',
-                                  price: msg.metadata?.price || 0,
-                                  listingId: msg.metadata?.listing_id || ''
-                                });
-                                setIsAcceptDrawerOpen(true);
-                              }
+                              setSelectedOffer({
+                                id: msg.id,
+                                startDate: msg.metadata?.startDate || msg.metadata?.start_date || '',
+                                endDate: msg.metadata?.endDate || msg.metadata?.end_date || '',
+                                price: msg.metadata?.price || 0,
+                                listingId: msg.metadata?.listingId || msg.metadata?.listing_id || convoDetails?.listing_id || ''
+                              });
+                              setIsAcceptDrawerOpen(true);
                             }}
                           >
                             Review & Accept <AlertCircle className="w-4 h-4 text-white/70" />
@@ -583,8 +601,8 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         listingTitle={otherUser?.name ? `Stay with ${otherUser.name}` : 'Special Offer'}
         guestId={session?.user?.id || ''}
         guestPhone={session?.user?.phone || ''}
-        listingId={selectedOffer?.listingId || ''}
-        hostId={otherUser?.id || ''}
+        listingId={selectedOffer?.listingId || convoDetails?.listing_id || ''}
+        hostId={otherUser?.id || convoDetails?.host_id || ''}
       />
     </div>
   );
