@@ -4,6 +4,7 @@ import { X, ShieldCheck, CreditCard, Users, ShieldAlert } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import SplitPaymentDrawer from '../SplitPaymentDrawer';
 import { API_BASE_URL } from '@/services/api';
+import { createPaytmOrder, initiatePaytmCheckout } from '@/services/paytmService';
 
 interface AcceptOfferDrawerProps {
     isOpen: boolean;
@@ -109,7 +110,6 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
             const primaryShare = splitSuccessData.splits.find((s: any) => s.is_primary_payer);
             const orderAmount = primaryShare.amount_share;
 
-            // Prepare booking data for intent (must match what parent expects)
             const bookingData = {
                 listing_id: listingId,
                 guest_id: guestId,
@@ -127,40 +127,38 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                 auto_bookable: true
             };
 
-            const orderRes = await fetch(`${API_BASE_URL}/api/cashfree/create-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    order_amount: orderAmount,
-                    customer_details: {
-                        customer_id: guestId,
-                        customer_phone: guestPhone || "9999999999",
-                        customer_name: "Guest",
-                    },
-                    order_meta: {
-                        return_url: `${window.location.origin}/payment/status?order_id={order_id}`
-                    },
-                    bookingData: bookingData
-                })
+            // Create Paytm order
+            const order = await createPaytmOrder({
+                order_amount: parseFloat(orderAmount.toFixed(2)),
+                customer_details: {
+                    customer_id: guestId,
+                    customer_phone: guestPhone || '9999999999',
+                    customer_name: 'Guest',
+                    customer_email: 'guest@roovo.in',
+                },
+                order_meta: {
+                    return_url: `${window.location.origin}/payment/status?order_id=ROOVO_PLACEHOLDER`,
+                },
+                bookingData,
             });
 
-            if (!orderRes.ok) throw new Error("Failed to create share payment");
-            const orderData = await orderRes.json();
-
-            // Store ID relationship
+            // Update split record with the Paytm order ID
             await fetch(`${API_BASE_URL}/api/payment-splits/status/${primaryShare.id}/update-order`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_id: orderData.order_id })
+                body: JSON.stringify({ order_id: order.order_id })
             });
 
-            // Redirect via window.location (simplest for now or use SDK if available in parent)
-            // Parent usually has cashfree loaded, but we don't have it here. 
-            // We can either pass it as prop or just redirect to return_url that handles status.
-            window.location.href = `${window.location.origin}/payment/status?order_id=${orderData.order_id}`;
-        } catch (error) {
+            localStorage.setItem(`pending_booking_${order.order_id}`, JSON.stringify(bookingData));
+
+            // Open Paytm checkout
+            await initiatePaytmCheckout(order);
+
+        } catch (error: any) {
             console.error(error);
-            alert("Failed to initiate payment.");
+            if (!error?.message?.includes('cancelled')) {
+                alert('Failed to initiate payment.');
+            }
         } finally {
             setIsPayingPrimary(false);
         }
@@ -302,7 +300,7 @@ export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, li
                             )}
                         </button>
                         <p className="text-center text-[10px] font-medium text-slate-400 mt-4 flex items-center justify-center gap-1 uppercase tracking-wider">
-                            Powered by <span className="font-bold text-slate-500">Cashfree Payments</span>
+                            Powered by <span className="font-bold text-slate-500">Paytm</span>
                         </p>
                     </motion.div>
 
