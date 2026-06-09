@@ -198,7 +198,6 @@ export default function EditListingView({ listing, onClose, onSave }: { listing:
   const handleSave = () => {
     // Construct the payload matching listings_new schema
     const payload = {
-      id: listing.id, // Preserve ID
       max_guests: formData.guests,
       base_price_weekday: Number(formData.price_per_night) || 0,
       base_price_weekend: (formData.weekend_price !== null && formData.weekend_price !== undefined && formData.weekend_price !== '') ? Number(formData.weekend_price) : (Number(formData.price_per_night) || 0),
