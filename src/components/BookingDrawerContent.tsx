@@ -17,7 +17,7 @@ interface BookingDrawerContentProps {
 }
 
 // ── Date strip (90 days) ──
-const DateStrip = ({ selected, onSelect }: { selected: string; onSelect: (k: string) => void }) => {
+const DateStrip = ({ selected, onSelect, isDateDisabled }: { selected: string; onSelect: (k: string) => void; isDateDisabled?: (k: string) => boolean }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const today = new Date();
   const days = Array.from({ length: 90 }, (_, i) => {
@@ -45,24 +45,30 @@ const DateStrip = ({ selected, onSelect }: { selected: string; onSelect: (k: str
       {days.map((d) => {
         const key = d.toISOString().split('T')[0];
         const on = selected === key;
+        const disabled = isDateDisabled ? isDateDisabled(key) : false;
         return (
           <button 
             key={key} 
             data-date={key}
+            disabled={disabled}
             onClick={() => { triggerHaptic(); onSelect(key); }}
             style={{ 
               flexShrink: 0, width: 52, height: 72, borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, 
-              border: on ? '1.5px solid #4F46E5' : '1.5px solid rgba(0,0,0,0.10)', background: on ? '#4F46E5' : '#F8F7F4', transition: 'all .2s', 
-              boxShadow: on ? '0 8px 32px rgba(79,70,229,.30)' : 'none', scrollSnapAlign: 'center' 
+              border: on ? '1.5px solid #4F46E5' : '1.5px solid rgba(0,0,0,0.10)', 
+              background: disabled ? '#EAE8E4' : (on ? '#4F46E5' : '#F8F7F4'), 
+              opacity: disabled ? 0.38 : 1,
+              transition: 'all .2s', 
+              boxShadow: on ? '0 8px 32px rgba(79,70,229,.30)' : 'none', scrollSnapAlign: 'center',
+              cursor: disabled ? 'not-allowed' : 'pointer'
             }}
           >
-            <span style={{ fontSize: 10, fontWeight: 600, color: on ? 'rgba(255,255,255,.8)' : '#888880', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: on ? 'rgba(255,255,255,.8)' : (disabled ? '#BBBBB4' : '#888880'), letterSpacing: '.04em', textTransform: 'uppercase' }}>
               {d.toLocaleDateString('en-IN', { weekday: 'short' })}
             </span>
-            <span style={{ fontSize: 20, fontWeight: 800, color: on ? '#fff' : '#0A0A09', letterSpacing: '-.02em', lineHeight: 1 }}>
+            <span style={{ fontSize: 20, fontWeight: 800, color: on ? '#fff' : (disabled ? '#BBBBB4' : '#0A0A09'), letterSpacing: '-.02em', lineHeight: 1 }}>
               {d.getDate()}
             </span>
-            <span style={{ fontSize: 10, fontWeight: 500, color: on ? 'rgba(255,255,255,.7)' : '#888880' }}>
+            <span style={{ fontSize: 10, fontWeight: 500, color: on ? 'rgba(255,255,255,.7)' : (disabled ? '#BBBBB4' : '#888880') }}>
               {d.toLocaleDateString('en-IN', { month: 'short' })}
             </span>
           </button>
@@ -94,30 +100,108 @@ const CounterRow = ({ label, sub, val, setVal, min = 0, max = 20 }: { label: str
 );
 
 const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProps>(
-  ({ onApply, max_guests, initialDates, initialGuests, onChange, pricePerNight = 0, listingName = 'Your stay' }, ref) => {
+  ({ onApply, max_guests, initialDates, initialGuests, onChange, pricePerNight = 0, bookings = [], listingName = 'Your stay' }, ref) => {
     const [step, setStep] = useState(0); // 0=dates, 1=guests, 2=confirm
     const steps = ['Dates', 'Guests', 'Confirm'];
 
     const today = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const [checkIn, setCheckIn] = useState(initialDates?.checkIn ? initialDates.checkIn.toISOString().split('T')[0] : today);
-    const [checkOut, setCheckOut] = useState(initialDates?.checkOut ? initialDates.checkOut.toISOString().split('T')[0] : tomorrow);
+
+    const isDateBooked = (dateStr: string) => {
+      if (!bookings || bookings.length === 0) return false;
+      return bookings.some((b: any) => {
+        return dateStr >= b.start_date && dateStr < b.end_date;
+      });
+    };
+
+    const isCheckInDisabled = (dateStr: string) => {
+      return isDateBooked(dateStr);
+    };
+
+    const isCheckOutDisabled = (dateStr: string) => {
+      if (dateStr <= checkIn) return true;
+      if (!bookings || bookings.length === 0) return false;
+      return bookings.some((b: any) => {
+        return b.start_date >= checkIn && b.start_date < dateStr;
+      });
+    };
+
+    const getFirstAvailableCheckIn = () => {
+      const start = new Date();
+      for (let i = 0; i < 90; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        if (!isDateBooked(dateStr)) {
+          return dateStr;
+        }
+      }
+      return today;
+    };
+
+    const getFirstAvailableCheckOut = (checkInStr: string) => {
+      const dIn = new Date(checkInStr);
+      const dOut = new Date(dIn);
+      dOut.setDate(dIn.getDate() + 1);
+      const dateStr = dOut.toISOString().split('T')[0];
+      return dateStr;
+    };
+
+    const [checkIn, setCheckIn] = useState(() => {
+      if (initialDates?.checkIn) {
+        return initialDates.checkIn.toISOString().split('T')[0];
+      }
+      return getFirstAvailableCheckIn();
+    });
+
+    const [checkOut, setCheckOut] = useState(() => {
+      if (initialDates?.checkOut) {
+        return initialDates.checkOut.toISOString().split('T')[0];
+      }
+      return getFirstAvailableCheckOut(checkIn);
+    });
+
     const [adults, setAdults] = useState(initialGuests || 2);
     const [children, setChildren] = useState(0);
 
     const nights = Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)));
 
+    // Sync checkOut when checkIn changes, ensuring we don't land on a booked or invalid checkout date
     useEffect(() => {
       if (checkIn && checkOut) {
         const dIn = new Date(checkIn);
         const dOut = new Date(checkOut);
-        if (dOut <= dIn) {
+        if (dOut <= dIn || isCheckOutDisabled(checkOut)) {
           const nextDay = new Date(dIn);
           nextDay.setDate(nextDay.getDate() + 1);
           setCheckOut(nextDay.toISOString().split('T')[0]);
         }
       }
-    }, [checkIn, checkOut]);
+    }, [checkIn]);
+
+    // Handle updates when bookings load or initialDates changes
+    useEffect(() => {
+      if (initialDates?.checkIn && initialDates?.checkOut) {
+        setCheckIn(initialDates.checkIn.toISOString().split('T')[0]);
+        setCheckOut(initialDates.checkOut.toISOString().split('T')[0]);
+      } else if (bookings && bookings.length > 0) {
+        const availCheckIn = getFirstAvailableCheckIn();
+        setCheckIn(availCheckIn);
+        const availCheckOut = getFirstAvailableCheckOut(availCheckIn);
+        setCheckOut(availCheckOut);
+      }
+    }, [bookings, initialDates]);
+
+    // Propagate changes up to parent component dynamically
+    useEffect(() => {
+      if (onChange) {
+        onChange(
+          { checkIn: new Date(checkIn), checkOut: new Date(checkOut) },
+          adults + children
+        );
+      }
+    }, [checkIn, checkOut, adults, children, onChange]);
+
     const base = pricePerNight * nights;
     const fee = Math.round(base * 0.03);
     const gstRate = pricePerNight > 7500 ? 0.18 : 0.12;
@@ -175,11 +259,11 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
                   <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Prices vary by date — pick your window</div>
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check in</div>
-                    <DateStrip selected={checkIn} onSelect={setCheckIn} />
+                    <DateStrip selected={checkIn} onSelect={setCheckIn} isDateDisabled={isCheckInDisabled} />
                   </div>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#888880', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Check out</div>
-                    <DateStrip selected={checkOut} onSelect={setCheckOut} />
+                    <DateStrip selected={checkOut} onSelect={setCheckOut} isDateDisabled={isCheckOutDisabled} />
                   </div>
                   <div style={{ marginTop: 20, padding: '14px 16px', background: '#EEEEFF', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 13, color: '#4F46E5', fontWeight: 600 }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
