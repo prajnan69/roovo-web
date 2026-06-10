@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/services/api';
+import { supabase, API_BASE_URL } from '@/services/api';
+import { createPaytmOrder, initiatePaytmCheckout } from '@/services/paytmService';
 import RoovoLoader from '@/components/RoovoLoader';
 import { triggerHaptic } from '@/lib/haptics';
 import { Clock, ShieldCheck, Check, Calendar, Users, Star, MapPin } from 'lucide-react';
@@ -29,8 +30,21 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
     const [isExpired, setIsExpired] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
+    const [manualPaymentsEnabled, setManualPaymentsEnabled] = useState(true);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Fetch manual payments setting
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/api/settings`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && typeof data.manual_payments_enabled === 'boolean') {
+                    setManualPaymentsEnabled(data.manual_payments_enabled);
+                }
+            })
+            .catch(err => console.error("Failed to fetch settings", err));
+    }, []);
 
     // Fetch link details
     const loadDetails = async () => {
@@ -154,7 +168,75 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
             return;
         }
 
-        await executeBooking(session.user.id);
+        if (manualPaymentsEnabled) {
+            await executeBooking(session.user.id);
+        } else {
+            await executePaytmBooking(session.user);
+        }
+    };
+
+    const executePaytmBooking = async (user: any) => {
+        setBookingInFlight(true);
+        try {
+            const { data: userData } = await supabase
+                .from('users')
+                .select('name, phone')
+                .eq('id', user.id)
+                .single();
+
+            const guestName = userData?.name || user.user_metadata?.name || 'Guest';
+            const guestPhone = userData?.phone || user.user_metadata?.phone || user.phone || '9999999999';
+
+            const orderAmount = Number(paymentLink.total_price);
+            const basePrice = Number(paymentLink.price);
+            const taxAmount = Number(paymentLink.tax_amount);
+            const ourFees = Math.round(basePrice * 0.03);
+            const hostPayout = basePrice - ourFees;
+
+            const bookingPayload = {
+                listing_id: paymentLink.listing_id,
+                guest_id: user.id,
+                host_id: paymentLink.host_id,
+                start_date: paymentLink.start_date,
+                end_date: paymentLink.end_date,
+                total_price: orderAmount,
+                host_payout: hostPayout,
+                taxes: taxAmount,
+                our_fees: ourFees,
+                host_fees: 0,
+                auto_bookable: true,
+                payment_link_id: linkId,
+                payment_method: 'Paytm'
+            };
+
+            const order = await createPaytmOrder({
+                order_amount: orderAmount,
+                customer_details: {
+                    customer_id: user.id,
+                    customer_phone: guestPhone,
+                    customer_name: guestName,
+                    customer_email: user.email || 'guest@roovo.in'
+                },
+                order_meta: {
+                    return_url: `${window.location.origin}/payment/status?order_id=${Date.now()}`
+                },
+                bookingData: bookingPayload
+            });
+
+            try {
+                localStorage.setItem(`pending_booking_${order.order_id}`, JSON.stringify(bookingPayload));
+            } catch (e) {
+                console.warn("Failed to set localStorage booking fallback:", e);
+            }
+
+            await initiatePaytmCheckout(order);
+        } catch (err: any) {
+            console.error('[executePaytmBooking] Error:', err);
+            setToastMsg(err.message || 'Payment initiation failed. Please try again.');
+            setShowToast(true);
+        } finally {
+            setBookingInFlight(false);
+        }
     };
 
     // ✅ Automatically resume booking if the guest just signed in
@@ -180,7 +262,11 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                     try {
                         sessionStorage.removeItem('pending_booking_link_id');
                     } catch (e) {}
-                    executeBooking(session.user.id);
+                    if (manualPaymentsEnabled) {
+                        executeBooking(session.user.id);
+                    } else {
+                        executePaytmBooking(session.user);
+                    }
                 }
             }
         };
@@ -197,7 +283,11 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                         try {
                             sessionStorage.removeItem('pending_booking_link_id');
                         } catch (e) {}
-                        executeBooking(session.user.id);
+                        if (manualPaymentsEnabled) {
+                            executeBooking(session.user.id);
+                        } else {
+                            executePaytmBooking(session.user);
+                        }
                     }
                 }
             });
@@ -211,7 +301,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         return () => {
             if (subscription) subscription.unsubscribe();
         };
-    }, [linkId]);
+    }, [linkId, manualPaymentsEnabled]);
 
     if (loading) {
         return (
