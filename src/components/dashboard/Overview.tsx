@@ -10,6 +10,7 @@ import { usePreloadedData } from "@/context/PreloadContext";
 import { fetchHostState, fetchHostDrafts } from "@/services/api";
 import { useNavigation } from "@/hooks/useNavigation";
 import ImportListingPage from "../import/ImportListingPage";
+import PaymentLinkDrawer from "./PaymentLinkDrawer";
 
 interface ActionCardProps {
   title: string;
@@ -184,6 +185,7 @@ const Overview = () => {
   const [drafts, setDrafts] = useState<any[]>([]);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showPaymentLinkDrawer, setShowPaymentLinkDrawer] = useState(false);
   const { navigate } = useNavigation();
 
   useEffect(() => {
@@ -374,6 +376,20 @@ const Overview = () => {
                 </p>
               </div>
             )}
+
+            {/* Quick Actions / Host Tools */}
+            <div className="mb-6 mt-8">
+              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 px-1">Host Tools</h3>
+              <ActionCard
+                index={notifications.length}
+                title="Send Payment Link"
+                description="Generate a custom booking link with a set price and date range to share directly with a guest."
+                buttonText="Create Link"
+                icon={Sparkles}
+                onButtonClick={() => setShowPaymentLinkDrawer(true)}
+                priority="high"
+              />
+            </div>
           </div>
         </motion.div>
       </div>
@@ -392,6 +408,13 @@ const Overview = () => {
               setShowImportModal(false);
               navigate('hosting/listings');
             }}
+          />
+        )}
+        {showPaymentLinkDrawer && (
+          <PaymentLinkDrawer
+            isOpen={showPaymentLinkDrawer}
+            onClose={() => setShowPaymentLinkDrawer(false)}
+            hostId={profileData?.id || ""}
           />
         )}
       </AnimatePresence>

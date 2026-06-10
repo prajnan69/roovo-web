@@ -30,6 +30,7 @@ import NotificationToast from './components/NotificationToast';
 import PaymentStatus from './components/PaymentStatus';
 import { useWebPush } from './hooks/useWebPush';
 import NotificationPromptDrawer from './components/NotificationPromptDrawer';
+import PaymentLinkPage from './components/PaymentLinkPage';
 
 import ImportListingPage from './components/import/ImportListingPage';
 import CohostInvitationPage from './components/invitation/CohostInvitationPage';
@@ -86,6 +87,7 @@ function AppContent() {
     !pathname.startsWith('/verify-identity') &&
     !pathname.startsWith('/hosting/verify') &&
     !pathname.startsWith('/hosting/payout-methods') &&
+    !pathname.startsWith('/pay-link/') &&
     !isSwitchingToHost &&
     !selectedConversation &&
     !isSearchOpen &&
@@ -575,6 +577,12 @@ function AppContent() {
               setSelectedConversation(conversation);
               navigate('/messages');
             }}
+            onOpenLogin={handleOpenLogin}
+          />
+        )} />
+        <Route path="/pay-link/:id" render={(props) => (
+          <PaymentLinkPage
+            {...props}
             onOpenLogin={handleOpenLogin}
           />
         )} />

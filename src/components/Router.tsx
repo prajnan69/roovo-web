@@ -22,7 +22,7 @@ const fadeVariants: Variants = {
 // PageWrapper captures its own 'path' prop so the EXITING element
 // still knows which variants to use (not the new path from the closure).
 const PageWrapper: React.FC<{ pagePath: string; children: React.ReactNode }> = ({ pagePath, children }) => {
-  const isListing = pagePath.startsWith('/listing/');
+  const isListing = pagePath.startsWith('/listing/') || pagePath.startsWith('/pay-link/');
   const variants = isListing ? listingVariants : fadeVariants;
 
   return (
