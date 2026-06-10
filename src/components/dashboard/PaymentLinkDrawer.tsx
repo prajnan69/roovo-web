@@ -30,6 +30,10 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
 
+    // Bookings and Validation State
+    const [listingBookings, setListingBookings] = useState<any[]>([]);
+    const [loadingBookings, setLoadingBookings] = useState(false);
+
     // Fetch host properties
     useEffect(() => {
         if (isOpen && hostId) {
@@ -55,6 +59,31 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
         }
     }, [isOpen, hostId]);
 
+    // Fetch bookings for the selected listing to check for date conflicts
+    useEffect(() => {
+        if (isOpen && selectedListingId) {
+            const loadBookings = async () => {
+                setLoadingBookings(true);
+                try {
+                    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/bookings/listing/${selectedListingId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (Array.isArray(data)) {
+                            setListingBookings(data);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to load listing bookings:', err);
+                } finally {
+                    setLoadingBookings(false);
+                }
+            };
+            loadBookings();
+        } else if (!isOpen) {
+            setListingBookings([]);
+        }
+    }, [isOpen, selectedListingId]);
+
     const price = parseFloat(priceStr) || 0;
 
     // Nights Calculation
@@ -66,6 +95,26 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
         return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
     };
     const nights = calculateNights();
+
+    // Overlapping Booking Validation
+    const getOverlappingBooking = () => {
+        if (!startDate || !endDate || listingBookings.length === 0) return null;
+        
+        const startStr = startDate;
+        const endStr = endDate;
+
+        for (const b of listingBookings) {
+            if (!b.start_date || !b.end_date) continue;
+            const bStartStr = b.start_date.split('T')[0];
+            const bEndStr = b.end_date.split('T')[0];
+            
+            if (startStr < bEndStr && endStr > bStartStr) {
+                return b;
+            }
+        }
+        return null;
+    };
+    const overlappingBooking = getOverlappingBooking();
 
     // Financial Breakdown
     const basePrice = price;
@@ -195,6 +244,7 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
             setExpiresInHours(12);
             setError('');
             setCopied(false);
+            setListingBookings([]);
         }
     }, [isOpen]);
 
@@ -300,6 +350,18 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
                                             />
                                         </div>
                                     </div>
+                                    
+                                    {overlappingBooking && (
+                                        <div className="mt-3.5 p-3.5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-2.5 text-rose-700 text-xs font-semibold animate-pulse">
+                                            <Info size={16} className="shrink-0 mt-0.5" />
+                                            <div>
+                                                <p className="font-bold text-rose-800">Dates overlap with a blocked date</p>
+                                                <p className="mt-0.5 text-rose-600 font-medium leading-relaxed">
+                                                    This property is blocked or booked from {new Date(overlappingBooking.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} to {new Date(overlappingBooking.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} (Status: <span className="capitalize">{overlappingBooking.status}</span>).
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Pricing and Tax */}
@@ -416,7 +478,7 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
                                 <div className="pt-4">
                                     <button
                                         onClick={handleGenerate}
-                                        disabled={generating || !selectedListingId || !startDate || !endDate || price <= 0 || nights <= 0}
+                                        disabled={generating || !selectedListingId || !startDate || !endDate || price <= 0 || nights <= 0 || !!overlappingBooking}
                                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4.5 rounded-2xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-100 disabled:text-slate-400 transition-all active:scale-[0.98] shadow-lg shadow-indigo-100"
                                     >
                                         {generating ? 'Generating Link...' : 'Generate & Copy Link'} <ArrowRight size={18} />
