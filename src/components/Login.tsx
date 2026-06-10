@@ -251,7 +251,8 @@ export default function Login({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={handleClose}
-              className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs"
+              className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs"
+              style={{ WebkitBackdropFilter: 'blur(2px)' }}
             />
           )}
 

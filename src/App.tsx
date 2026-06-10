@@ -60,7 +60,12 @@ function AppContent() {
   const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
   const [pendingSplit, setPendingSplit] = useState<any>(null);
   const isNative = Capacitor.isNativePlatform() && !window.location.pathname.startsWith('/payment/status');
-  const isPostUpdate = localStorage.getItem('_ota_reload') === '1';
+  let isPostUpdate = false;
+  try {
+    isPostUpdate = localStorage.getItem('_ota_reload') === '1';
+  } catch (e) {
+    console.warn("localStorage.getItem('_ota_reload') failed:", e);
+  }
   const [showSplash, setShowSplash] = useState(isNative && !isPostUpdate);
   const [splashAnimDone, setSplashAnimDone] = useState(!isNative || isPostUpdate);
   const [otaDone, setOtaDone] = useState(!isNative || isPostUpdate);
@@ -69,7 +74,13 @@ function AppContent() {
 
   // Remove the flag once — do NOT do this on the render path or it can run multiple times
   useEffect(() => {
-    if (isPostUpdate) localStorage.removeItem('_ota_reload');
+    if (isPostUpdate) {
+      try {
+        localStorage.removeItem('_ota_reload');
+      } catch (e) {
+        console.warn("localStorage.removeItem('_ota_reload') failed:", e);
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -145,7 +156,11 @@ function AppContent() {
           await LiveUpdate.setNextBundle({ bundleId });
           await LiveUpdate.ready();
           setOtaState('updated');
-          localStorage.setItem('_ota_reload', '1');
+          try {
+            localStorage.setItem('_ota_reload', '1');
+          } catch (e) {
+            console.warn("localStorage.setItem('_ota_reload') failed:", e);
+          }
           await new Promise(r => setTimeout(r, 1200));
           console.log('[LiveUpdate] Reloading with new bundle...');
           willReload = true;
@@ -234,7 +249,11 @@ function AppContent() {
   // ✅ Persist current route for app restart
   useEffect(() => {
     if (pathname) {
-      localStorage.setItem('last_route', pathname);
+      try {
+        localStorage.setItem('last_route', pathname);
+      } catch (e) {
+        console.warn("localStorage.setItem('last_route') failed:", e);
+      }
     }
   }, [pathname]);
 
@@ -260,7 +279,11 @@ function AppContent() {
             handleInviteProcessing(token, session.user.id);
           } else {
             // Not logged in: Store token and urge login
-            localStorage.setItem('pending_invite_token', token);
+            try {
+              localStorage.setItem('pending_invite_token', token);
+            } catch (e) {
+              console.warn("localStorage.setItem('pending_invite_token') failed:", e);
+            }
             setIsLoginOpen(true);
             alert("Please log in to accept the co-host invitation.");
           }
@@ -286,27 +309,44 @@ function AppContent() {
   // ✅ Process pending invite after login
   useEffect(() => {
     const checkPendingInvite = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+      } catch (e) {
+        console.warn("checkPendingInvite: getSession failed:", e);
+      }
       if (session?.user?.id) {
-        const pendingToken = localStorage.getItem('pending_invite_token');
+        let pendingToken = null;
+        try {
+          pendingToken = localStorage.getItem('pending_invite_token');
+        } catch (e) {}
         if (pendingToken) {
-          localStorage.removeItem('pending_invite_token');
+          try {
+            localStorage.removeItem('pending_invite_token');
+          } catch (e) {}
           handleInviteProcessing(pendingToken, session.user.id);
         }
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        checkPendingInvite();
-      }
-    });
+    let subscription: any = null;
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_IN') {
+          checkPendingInvite();
+        }
+      });
+      subscription = data.subscription;
+    } catch (err) {
+      console.warn("Failed to subscribe to auth state change in pending invite:", err);
+    }
 
     // Also check on mount if already signed in
     checkPendingInvite();
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) subscription.unsubscribe();
     }
   }, []);
 

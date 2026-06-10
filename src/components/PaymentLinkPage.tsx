@@ -133,11 +133,22 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
 
         triggerHaptic();
 
-        // Check if guest is logged in
-        const { data: { session } } = await supabase.auth.getSession();
+        // Check if guest is logged in with safe try-catch
+        let session = null;
+        try {
+            const { data } = await supabase.auth.getSession();
+            session = data?.session;
+        } catch (err) {
+            console.warn("Failed to get session from Supabase:", err);
+        }
+
         if (!session?.user?.id) {
             if (onOpenLogin) {
-                sessionStorage.setItem('pending_booking_link_id', linkId);
+                try {
+                    sessionStorage.setItem('pending_booking_link_id', linkId);
+                } catch (e) {
+                    console.warn("sessionStorage.setItem failed:", e);
+                }
                 onOpenLogin("Log in to complete your booking reservation", true);
             }
             return;
@@ -149,30 +160,56 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
     // ✅ Automatically resume booking if the guest just signed in
     useEffect(() => {
         const checkPendingBooking = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
+            let session = null;
+            try {
+                const { data } = await supabase.auth.getSession();
+                session = data?.session;
+            } catch (err) {
+                console.warn("Failed to get session in checkPendingBooking:", err);
+            }
+
             if (session?.user?.id) {
-                const pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
+                let pendingLinkId = null;
+                try {
+                    pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
+                } catch (e) {
+                    console.warn("sessionStorage.getItem failed:", e);
+                }
+
                 if (pendingLinkId === linkId) {
-                    sessionStorage.removeItem('pending_booking_link_id');
+                    try {
+                        sessionStorage.removeItem('pending_booking_link_id');
+                    } catch (e) {}
                     executeBooking(session.user.id);
                 }
             }
         };
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' && session?.user?.id) {
-                const pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
-                if (pendingLinkId === linkId) {
-                    sessionStorage.removeItem('pending_booking_link_id');
-                    executeBooking(session.user.id);
+        let subscription: any = null;
+        try {
+            const { data } = supabase.auth.onAuthStateChange((event, session) => {
+                if (event === 'SIGNED_IN' && session?.user?.id) {
+                    let pendingLinkId = null;
+                    try {
+                        pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
+                    } catch (e) {}
+                    if (pendingLinkId === linkId) {
+                        try {
+                            sessionStorage.removeItem('pending_booking_link_id');
+                        } catch (e) {}
+                        executeBooking(session.user.id);
+                    }
                 }
-            }
-        });
+            });
+            subscription = data.subscription;
+        } catch (err) {
+            console.warn("Failed to subscribe to auth state changes:", err);
+        }
 
         checkPendingBooking();
 
         return () => {
-            subscription.unsubscribe();
+            if (subscription) subscription.unsubscribe();
         };
     }, [linkId]);
 
