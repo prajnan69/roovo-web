@@ -76,6 +76,37 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
 
     const selectedListing = listings.find(l => l.id === selectedListingId);
 
+    const copyToClipboard = async (text: string) => {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                setCopied(true);
+            } else {
+                // Fallback for non-secure contexts / Capacitor custom schemes
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.top = "0";
+                textArea.style.left = "0";
+                textArea.style.position = "fixed";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (successful) {
+                    setCopied(true);
+                } else {
+                    throw new Error('execCommand copy returned false');
+                }
+            }
+        } catch (err) {
+            console.error('Clipboard copy failed:', err);
+            // Alert as fallback if copying fails completely
+            alert(`Link generated: ${text}\n(Please copy it manually if it did not save to your clipboard)`);
+        }
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     const handleGenerate = async () => {
         if (!selectedListingId || !startDate || !endDate || price <= 0 || nights <= 0) return;
         
@@ -109,6 +140,8 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
                     : 'https://roovo.in';
                 const link = `${origin}/pay-link/${linkId}`;
                 setGeneratedLink(link);
+                // Automatically copy to clipboard since button says "Generate & Copy Link"
+                await copyToClipboard(link);
             } else {
                 setError(result.error || 'Failed to generate payment link');
             }
@@ -122,34 +155,7 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
 
     const handleCopy = async () => {
         triggerHaptic();
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(generatedLink);
-                setCopied(true);
-            } else {
-                // Fallback for non-secure contexts / Capacitor custom schemes
-                const textArea = document.createElement("textarea");
-                textArea.value = generatedLink;
-                textArea.style.top = "0";
-                textArea.style.left = "0";
-                textArea.style.position = "fixed";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                const successful = document.execCommand('copy');
-                document.body.removeChild(textArea);
-                if (successful) {
-                    setCopied(true);
-                } else {
-                    throw new Error('execCommand copy returned false');
-                }
-            }
-        } catch (err) {
-            console.error('Clipboard copy failed:', err);
-            // Alert as fallback if copying fails completely
-            alert(`Link generated: ${generatedLink}\n(Please copy it manually if it did not save to your clipboard)`);
-        }
-        setTimeout(() => setCopied(false), 2000);
+        await copyToClipboard(generatedLink);
     };
 
     const handleShare = async () => {
@@ -176,6 +182,21 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
         setExpiresInHours(12);
         setError('');
     };
+
+    // Auto-reset when drawer closes
+    useEffect(() => {
+        if (!isOpen) {
+            setGeneratedLink('');
+            setStartDate('');
+            setEndDate('');
+            setPriceStr('');
+            setGuests(1);
+            setIncludeTax(true);
+            setExpiresInHours(12);
+            setError('');
+            setCopied(false);
+        }
+    }, [isOpen]);
 
     return (
         <AnimatePresence>
