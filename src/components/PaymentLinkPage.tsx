@@ -95,28 +95,15 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         timerRef.current = setInterval(updateTimer, 1000);
     };
 
-    // Book Booking
-    const handleBook = async () => {
-        if (bookingInFlight || isExpired || bookingSuccess) return;
-
-        triggerHaptic();
-
-        // Check if guest is logged in
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) {
-            if (onOpenLogin) {
-                onOpenLogin("Log in to complete your booking reservation");
-            }
-            return;
-        }
-
+    // ✅ Core Booking Action
+    const executeBooking = async (guestId: string) => {
         setBookingInFlight(true);
         try {
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/payment-links/${linkId}/book`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    guest_id: session.user.id,
+                    guest_id: guestId,
                     payment_method: 'link_payment'
                 })
             });
@@ -140,6 +127,55 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         }
     };
 
+    // Book Booking
+    const handleBook = async () => {
+        if (bookingInFlight || isExpired || bookingSuccess) return;
+
+        triggerHaptic();
+
+        // Check if guest is logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) {
+            if (onOpenLogin) {
+                sessionStorage.setItem('pending_booking_link_id', linkId);
+                onOpenLogin("Log in to complete your booking reservation");
+            }
+            return;
+        }
+
+        await executeBooking(session.user.id);
+    };
+
+    // ✅ Automatically resume booking if the guest just signed in
+    useEffect(() => {
+        const checkPendingBooking = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                const pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
+                if (pendingLinkId === linkId) {
+                    sessionStorage.removeItem('pending_booking_link_id');
+                    executeBooking(session.user.id);
+                }
+            }
+        };
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session?.user?.id) {
+                const pendingLinkId = sessionStorage.getItem('pending_booking_link_id');
+                if (pendingLinkId === linkId) {
+                    sessionStorage.removeItem('pending_booking_link_id');
+                    executeBooking(session.user.id);
+                }
+            }
+        });
+
+        checkPendingBooking();
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [linkId]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen w-screen bg-white">
@@ -158,7 +194,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                 <p className="text-sm text-slate-500 mt-2 max-w-xs">{error || 'This payment link does not exist.'}</p>
                 <button 
                     onClick={() => navigate('/')} 
-                    className="mt-6 bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-2xl font-bold text-sm"
+                    className="mt-6 bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]"
                 >
                     Back to Explore
                 </button>
@@ -192,7 +228,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                 <div className="w-full max-w-md bg-slate-50 rounded-3xl border border-slate-200/60 p-4 mt-8 flex gap-4 text-left">
                     <img 
                         src={imageToUse} 
-                        className="w-20 h-20 rounded-2xl object-cover shrink-0 bg-slate-100" 
+                        className="w-20 h-20 rounded-2xl object-cover shrink-0 bg-slate-100 shadow-sm" 
                         alt={listing?.title} 
                     />
                     <div className="flex-1 py-0.5">
@@ -209,7 +245,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                 <div className="w-full max-w-md mt-10 space-y-4">
                     <button 
                         onClick={() => navigate('/trips')} 
-                        className="w-full bg-slate-900 hover:bg-black text-white py-4.5 rounded-2xl font-bold transition-all active:scale-[0.98]"
+                        className="w-full bg-slate-900 hover:bg-black text-white py-4.5 rounded-2xl font-bold transition-all active:scale-[0.98] shadow-lg shadow-slate-900/10"
                     >
                         View My Trips
                     </button>
@@ -225,34 +261,43 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-28">
+        <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans pb-36">
             {/* Header Banner - Countdown Timer */}
-            <div className={`sticky top-0 z-30 px-6 py-4 flex items-center justify-between text-white ${isExpired ? 'bg-rose-500' : 'bg-amber-500 animate-pulse'}`}>
-                <div className="flex items-center gap-2">
-                    <Clock size={18} />
-                    <span className="text-sm font-bold tracking-tight">
-                        {isExpired ? 'Payment Link Expired' : 'Private Stay Offer'}
+            <div className={`sticky top-0 z-30 px-6 py-4.5 flex items-center justify-between text-white shadow-md transition-all ${
+                isExpired 
+                    ? 'bg-gradient-to-r from-rose-500 to-red-600' 
+                    : 'bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-indigo-500/10'
+            }`}>
+                <div className="flex items-center gap-2.5">
+                    <Clock size={16} className={isExpired ? "" : "text-indigo-400 animate-pulse"} />
+                    <span className="text-xs font-bold tracking-wider uppercase">
+                        {isExpired ? 'Offer Expired' : 'Special Offer Countdown'}
                     </span>
                 </div>
-                <span className="text-sm font-black tabular-nums">
+                <span className={`text-xs font-black tracking-tight tabular-nums px-3 py-1 rounded-full ${
+                    isExpired 
+                        ? 'bg-rose-600/30 border border-rose-400/20 text-rose-200' 
+                        : 'bg-indigo-500/20 border border-indigo-400/30 text-indigo-300'
+                }`}>
                     {isExpired ? 'Expired' : timeLeft}
                 </span>
             </div>
 
-            <div className="max-w-md mx-auto p-4 space-y-4 mt-2">
+            <div className="max-w-md mx-auto p-4 space-y-5 mt-2">
                 {/* 1. Property Card */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 shadow-xs overflow-hidden">
-                    <div className="h-56 relative bg-slate-100">
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] overflow-hidden">
+                    <div className="h-60 relative bg-slate-100">
                         <img src={imageToUse} className="w-full h-full object-cover" alt={listing?.title} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent" />
                         {listing?.is_roovo_verified && (
-                            <span className="absolute top-4 left-4 bg-emerald-500 text-white font-bold text-xs px-3 py-1 rounded-full shadow-sm">
+                            <span className="absolute top-4 left-4 bg-emerald-500 text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-full shadow-md tracking-wider uppercase">
                                 Verified Stay
                             </span>
                         )}
                     </div>
-                    <div className="p-5 space-y-3">
-                        <div className="flex justify-between items-start gap-2">
-                            <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                    <div className="p-6 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full tracking-wider uppercase">
                                 {listing?.property_type}
                             </span>
                             {listing?.ratings_data?.value > 0 && (
@@ -262,93 +307,95 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                                 </div>
                             )}
                         </div>
-                        <h1 className="text-lg font-black tracking-tight text-slate-900 leading-snug">
+                        <h1 className="text-xl font-extrabold tracking-tight text-slate-900 leading-snug">
                             {listing?.title}
                         </h1>
-                        <p className="text-slate-500 text-xs flex items-center gap-1">
-                            <MapPin size={12} className="text-slate-400" />
+                        <p className="text-slate-500 text-xs flex items-center gap-1.5 font-medium">
+                            <MapPin size={13} className="text-slate-400" />
                             {listing?.public_address || listing?.place}
                         </p>
                     </div>
                 </div>
 
                 {/* 2. Stay Details */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-5 space-y-4 shadow-xs">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Reservation Details</h3>
+                <div className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em]">Stay Itinerary</h3>
                     
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                            <Calendar size={20} className="text-indigo-600" />
-                            <div>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">Check-In</span>
-                                <p className="text-xs font-extrabold text-slate-900">{dayjs(paymentLink.start_date).format('D MMM YYYY')}</p>
-                            </div>
+                        <div className="flex flex-col p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-In</span>
+                            <p className="text-sm font-black text-slate-800">{dayjs(paymentLink.start_date).format('D MMM YYYY')}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">After 2:00 PM</p>
                         </div>
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                            <Calendar size={20} className="text-indigo-600" />
-                            <div>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">Check-Out</span>
-                                <p className="text-xs font-extrabold text-slate-900">{dayjs(paymentLink.end_date).format('D MMM YYYY')}</p>
-                            </div>
+                        <div className="flex flex-col p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</span>
+                            <p className="text-sm font-black text-slate-800">{dayjs(paymentLink.end_date).format('D MMM YYYY')}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Before 11:00 AM</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <div className="flex items-center gap-3">
-                            <Users size={20} className="text-indigo-600" />
+                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                                <Users size={20} />
+                            </div>
                             <div>
-                                <span className="text-xs font-extrabold text-slate-900">{paymentLink.guests} Guest{paymentLink.guests > 1 ? 's' : ''}</span>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Max occupancy</p>
+                                <span className="text-xs font-extrabold text-slate-900 block">{paymentLink.guests} Guest{paymentLink.guests > 1 ? 's' : ''}</span>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Reservation occupancy</p>
                             </div>
                         </div>
-                        <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl">
+                        <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3.5 py-2 rounded-xl">
                             {nights} Night{nights > 1 ? 's' : ''}
                         </span>
                     </div>
                 </div>
 
                 {/* 3. Pricing Breakdown */}
-                <div className="bg-white rounded-3xl border border-slate-200/60 p-5 space-y-3 shadow-xs">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Price Breakdown</h3>
+                <div className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.15em] mb-1">Price Summary</h3>
                     
-                    <div className="flex justify-between items-center text-sm text-slate-600">
-                        <span>Stay Price ({nights} nights)</span>
-                        <span className="font-semibold text-slate-900">₹{Number(paymentLink.price).toLocaleString('en-IN')}</span>
+                    <div className="flex justify-between items-center text-sm text-slate-500 font-medium">
+                        <span>Stay charges ({nights} night{nights > 1 ? 's' : ''})</span>
+                        <span className="font-bold text-slate-900">₹{Number(paymentLink.price).toLocaleString('en-IN')}</span>
                     </div>
 
                     {paymentLink.include_tax && (
-                        <div className="flex justify-between items-center text-sm text-slate-600">
+                        <div className="flex justify-between items-center text-sm text-slate-500 font-medium">
                             <span>GST Tax (12%)</span>
-                            <span className="font-semibold text-slate-900">+ ₹{Number(paymentLink.tax_amount).toLocaleString('en-IN')}</span>
+                            <span className="font-bold text-slate-900">+ ₹{Number(paymentLink.tax_amount).toLocaleString('en-IN')}</span>
                         </div>
                     )}
 
-                    <div className="h-px bg-slate-100 my-1" />
+                    <div className="h-px bg-slate-100 my-2" />
 
                     <div className="flex justify-between items-center text-slate-950 font-black text-lg">
-                        <span>Total Price</span>
-                        <span>₹{Number(paymentLink.total_price).toLocaleString('en-IN')}</span>
+                        <span>Total Price (INR)</span>
+                        <span className="text-xl text-indigo-600 font-black">₹{Number(paymentLink.total_price).toLocaleString('en-IN')}</span>
                     </div>
 
                     {/* Trust badges */}
-                    <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2">
-                        <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
-                        <span className="text-xs font-bold text-emerald-800 leading-tight">
-                            Roovo Guarantee: Rates are 8-10% lower than standard bookings.
+                    <div className="mt-4 p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl flex items-start gap-2.5">
+                        <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                        <span className="text-[11px] font-bold text-emerald-800 leading-relaxed">
+                            Roovo Direct: Locked private invite stay. Verified & guaranteed lower than standard OTAs.
                         </span>
                     </div>
                 </div>
 
-                {/* 4. Action Booking Button */}
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-lg z-20">
+                {/* 4. Action Booking Button (Sticky-Safe Bottom Layout) */}
+                <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1.2rem+env(safe-area-inset-bottom,0px))] bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-8px_30px_rgba(0,0,0,0.05)] z-40">
                     <div className="max-w-md mx-auto">
                         <button
                             onClick={handleBook}
                             disabled={bookingInFlight || isExpired}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4.5 rounded-2xl font-bold flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400 transition-all active:scale-[0.98] shadow-lg shadow-indigo-100 text-base"
+                            className={`w-full py-4.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] text-base font-inter ${
+                                isExpired 
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/15'
+                            }`}
                         >
                             {bookingInFlight 
-                                ? 'Processing Reservation...' 
+                                ? 'Confirming stay...' 
                                 : isExpired 
                                     ? 'Stay Link Expired' 
                                     : 'Secure & Book Stay'

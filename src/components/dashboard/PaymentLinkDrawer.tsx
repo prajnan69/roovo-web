@@ -102,7 +102,12 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
 
             if (response.ok) {
                 const linkId = result.id;
-                const link = `${window.location.origin}/pay-link/${linkId}`;
+                // If running on mobile/Capacitor, window.location.origin is capacitor://localhost or http://localhost.
+                // We should use https://roovo.in for production links, and preserve local development URL for local testing.
+                const origin = window.location.origin.includes('localhost') && !window.location.origin.includes('capacitor')
+                    ? window.location.origin
+                    : 'https://roovo.in';
+                const link = `${origin}/pay-link/${linkId}`;
                 setGeneratedLink(link);
             } else {
                 setError(result.error || 'Failed to generate payment link');
@@ -115,10 +120,35 @@ export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLi
         }
     };
 
-    const handleCopy = () => {
+    const handleCopy = async () => {
         triggerHaptic();
-        navigator.clipboard.writeText(generatedLink);
-        setCopied(true);
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(generatedLink);
+                setCopied(true);
+            } else {
+                // Fallback for non-secure contexts / Capacitor custom schemes
+                const textArea = document.createElement("textarea");
+                textArea.value = generatedLink;
+                textArea.style.top = "0";
+                textArea.style.left = "0";
+                textArea.style.position = "fixed";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (successful) {
+                    setCopied(true);
+                } else {
+                    throw new Error('execCommand copy returned false');
+                }
+            }
+        } catch (err) {
+            console.error('Clipboard copy failed:', err);
+            // Alert as fallback if copying fails completely
+            alert(`Link generated: ${generatedLink}\n(Please copy it manually if it did not save to your clipboard)`);
+        }
         setTimeout(() => setCopied(false), 2000);
     };
 
