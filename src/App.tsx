@@ -50,6 +50,7 @@ function AppContent() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [loginSubtitle, setLoginSubtitle] = useState<string | undefined>(undefined);
+  const [loginAsDrawer, setLoginAsDrawer] = useState(false);
   const [isSwitchingToHost, setIsSwitchingToHost] = useState(false);
   const [isHostStatusResolved, setIsHostStatusResolved] = useState(false);
   const [animationDirection, setAnimationDirection] = useState<'host' | 'traveling'>('host');
@@ -185,8 +186,9 @@ function AppContent() {
     configureStatusBar();
   }, []);
 
-  const handleOpenLogin = (subtitle?: string) => {
+  const handleOpenLogin = (subtitle?: string, asDrawer: boolean = false) => {
     setLoginSubtitle(subtitle);
+    setLoginAsDrawer(asDrawer);
     setIsLoginOpen(true);
   };
 
@@ -731,13 +733,16 @@ function AppContent() {
         <Login
           isOpen={isLoginOpen}
           subtitle={loginSubtitle}
+          isDrawer={loginAsDrawer}
           onClose={() => {
             setIsLoginOpen(false);
             setLoginSubtitle(undefined);
+            setLoginAsDrawer(false);
           }}
           onLoginSuccess={() => {
             setIsLoginOpen(false);
             setLoginSubtitle(undefined);
+            setLoginAsDrawer(false);
           }}
         />
       )}

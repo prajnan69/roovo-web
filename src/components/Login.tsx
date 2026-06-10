@@ -18,12 +18,13 @@ interface LoginProps {
   title?: string;
   subtitle?: string;
   redirectPath?: string;
+  isDrawer?: boolean;
 }
 
 const slideVariants = {
-  hidden: { y: "100%", opacity: 0 },
+  hidden: { y: "100%", opacity: 0.8 },
   visible: { y: 0, opacity: 1 },
-  exit: { y: "100%", opacity: 0 },
+  exit: { y: "100%", opacity: 0.8 },
 };
 
 export default function Login({
@@ -33,6 +34,7 @@ export default function Login({
   title,
   subtitle,
   redirectPath,
+  isDrawer = false,
 }: LoginProps) {
   // State
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -241,30 +243,51 @@ export default function Login({
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.div
-          className="fixed inset-0 z-50 bg-white/80 backdrop-blur-2xl text-neutral-900 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          variants={slideVariants}
-          transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-end p-6">
-            <button
+        <>
+          {/* Backdrop (Only for Drawer mode) */}
+          {isDrawer && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               onClick={handleClose}
-              className="p-2 rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
+              className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs"
+            />
+          )}
 
-          {/* Content Scrollable Area */}
-          <div className="flex-1 overflow-y-auto w-full">
-            <div className="min-h-full flex flex-col justify-center py-12">
+          {/* Login Container */}
+          <motion.div
+            className={isDrawer
+              ? "fixed bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] z-50 shadow-2xl flex flex-col max-h-[92vh] pb-[calc(1.2rem+env(safe-area-inset-bottom,0px))] border-t border-slate-100"
+              : "fixed inset-0 z-50 bg-white/80 backdrop-blur-2xl text-neutral-900 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+            }
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={slideVariants}
+            transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+          >
+            {/* Grab Handle for Drawer */}
+            {isDrawer && (
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
+            )}
+
+            {/* Header */}
+            <div className={`flex items-center justify-end ${isDrawer ? 'px-6 py-2' : 'p-6'}`}>
+              <button
+                onClick={handleClose}
+                className="p-2 rounded-full bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            {/* Content Scrollable Area */}
+            <div className="flex-1 overflow-y-auto w-full">
+              <div className={isDrawer ? "flex flex-col py-4" : "min-h-full flex flex-col justify-center py-12"}>
 
               {/* Spacer */}
               <div className="flex-1"></div>
@@ -466,6 +489,7 @@ export default function Login({
           {/* Invisible reCAPTCHA mount point for Firebase Phone Auth */}
           <div id="recaptcha-container" />
         </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 
 interface PaymentLinkPageProps {
     match: any;
-    onOpenLogin?: (subtitle?: string) => void;
+    onOpenLogin?: (subtitle?: string, asDrawer?: boolean) => void;
 }
 
 export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageProps) {
@@ -138,7 +138,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         if (!session?.user?.id) {
             if (onOpenLogin) {
                 sessionStorage.setItem('pending_booking_link_id', linkId);
-                onOpenLogin("Log in to complete your booking reservation");
+                onOpenLogin("Log in to complete your booking reservation", true);
             }
             return;
         }
@@ -261,7 +261,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans pb-36">
+        <div className="h-screen w-full overflow-y-auto overflow-x-hidden bg-slate-50/50 text-slate-900 font-sans pb-12">
             {/* Header Banner - Countdown Timer */}
             <div className={`sticky top-0 z-30 px-6 py-4.5 flex items-center justify-between text-white shadow-md transition-all ${
                 isExpired 
@@ -382,26 +382,24 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                     </div>
                 </div>
 
-                {/* 4. Action Booking Button (Sticky-Safe Bottom Layout) */}
-                <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1.2rem+env(safe-area-inset-bottom,0px))] bg-white/95 backdrop-blur-md border-t border-slate-100 shadow-[0_-8px_30px_rgba(0,0,0,0.05)] z-40">
-                    <div className="max-w-md mx-auto">
-                        <button
-                            onClick={handleBook}
-                            disabled={bookingInFlight || isExpired}
-                            className={`w-full py-4.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] text-base font-inter ${
-                                isExpired 
-                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/15'
-                            }`}
-                        >
-                            {bookingInFlight 
-                                ? 'Confirming stay...' 
-                                : isExpired 
-                                    ? 'Stay Link Expired' 
-                                    : 'Secure & Book Stay'
-                            }
-                        </button>
-                    </div>
+                {/* 4. Action Booking Button (Statically in flow) */}
+                <div className="pt-2 pb-6">
+                    <button
+                        onClick={handleBook}
+                        disabled={bookingInFlight || isExpired}
+                        className={`w-full py-4.5 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] text-base font-inter shadow-md ${
+                            isExpired 
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/15'
+                        }`}
+                    >
+                        {bookingInFlight 
+                            ? 'Confirming stay...' 
+                            : isExpired 
+                                ? 'Stay Link Expired' 
+                                : 'Secure & Book Stay'
+                        }
+                    </button>
                 </div>
             </div>
 
