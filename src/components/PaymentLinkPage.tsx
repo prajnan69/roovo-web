@@ -7,6 +7,7 @@ import { Clock, ShieldCheck, Check, Calendar, Users, Star, MapPin } from 'lucide
 import { useNavigation } from '@/hooks/useNavigation';
 import Toast from '@/components/ui/toast';
 import dayjs from 'dayjs';
+import { motion } from 'framer-motion';
 
 interface PaymentLinkPageProps {
     match: any;
