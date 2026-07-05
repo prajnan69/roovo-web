@@ -486,7 +486,7 @@ const HomeFeed: React.FC<{
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p style={{ fontWeight: 700, color: '#0A0A09', fontSize: 15, letterSpacing: '-.02em' }}>Where to?</p>
+                <p style={{ fontWeight: 700, color: '#0A0A09', fontSize: 15, letterSpacing: '-.02em' }}>Where To?</p>
                 <p style={{ fontSize: 12, color: '#888880', fontWeight: 500, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Goa · Bengaluru · Pondicherry</p>
               </div>
               <div

@@ -74,6 +74,8 @@ function AppContent() {
 
   // Remove the flag once — do NOT do this on the render path or it can run multiple times
   useEffect(() => {
+    // React is painting now — tear down the static boot screen from index.html
+    document.getElementById('boot-splash')?.remove();
     if (isPostUpdate) {
       try {
         localStorage.removeItem('_ota_reload');
@@ -124,17 +126,29 @@ function AppContent() {
         if (!Capacitor.isNativePlatform()) return;
         if (!Capacitor.isPluginAvailable('LiveUpdate')) return;
 
-        // On the post-update boot we are already on the new bundle.
-        // We MUST still call ready() to mark it stable — without it the plugin
-        // auto-rolls back after ~10 seconds, causing a third unwanted reload.
+        // Mark the running bundle stable IMMEDIATELY — before any network I/O.
+        // The plugin auto-rolls back readyTimeout (10s) after launch if ready()
+        // hasn't been called. It used to wait on the manifest fetch below, so a
+        // slow response (cold fly machine) let the timer expire and the plugin
+        // reloaded the WebView mid-session — seen as a long white-screen gap.
+        await LiveUpdate.ready();
+
         if (isPostUpdate) {
-          await LiveUpdate.ready();
           console.log('[LiveUpdate] Post-update boot — bundle marked ready.');
           return;
         }
 
         const manifestUrl = 'https://roovo-backend.fly.dev/v1/apps/94f0b6fd-9585-427d-839f-c09989a1ceaf/bundles/latest';
-        const response = await fetch(manifestUrl);
+        // Abort if the backend is slow (cold start) — a missed update check is
+        // better than a stuck splash; the next launch will catch the update.
+        const manifestAbort = new AbortController();
+        const manifestTimer = setTimeout(() => manifestAbort.abort(), 6000);
+        let response: Response;
+        try {
+          response = await fetch(manifestUrl, { signal: manifestAbort.signal });
+        } finally {
+          clearTimeout(manifestTimer);
+        }
         if (!response.ok) throw new Error(`Manifest fetch failed: ${response.status}`);
         const manifest = await response.json();
 
@@ -154,7 +168,6 @@ function AppContent() {
             if (!dlErr?.message?.includes('bundle already exists')) throw dlErr;
           }
           await LiveUpdate.setNextBundle({ bundleId });
-          await LiveUpdate.ready();
           setOtaState('updated');
           try {
             localStorage.setItem('_ota_reload', '1');
@@ -167,9 +180,8 @@ function AppContent() {
           await LiveUpdate.reload();
           // Freeze — WebView will restart and this code is dead
           await new Promise(() => {});
-        } else {
-          await LiveUpdate.ready();
         }
+        // Already on the latest bundle — ready() was called up front.
       } catch (error) {
         console.error('[LiveUpdate] Update check failed:', error);
       } finally {

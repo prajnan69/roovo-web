@@ -1,4 +1,4 @@
-"use client";
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +10,8 @@ import { useNavigation } from '@/hooks/useNavigation';
 import { API_BASE_URL, default as supabase } from "@/services/api";
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { Capacitor } from "@capacitor/core";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 
 interface LoginProps {
   isOpen: boolean;
@@ -44,6 +46,7 @@ export default function Login({
   const [error, setError] = useState<string | null>(null);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [nativeVerificationId, setNativeVerificationId] = useState<string | null>(null);
 
   // UI State
   const [isVisible, setIsVisible] = useState(isOpen);
@@ -60,6 +63,7 @@ export default function Login({
     if (isOpen) {
       resetState();
       document.body.style.overflow = 'hidden';
+
     } else {
       document.body.style.overflow = '';
     }
@@ -72,6 +76,67 @@ export default function Login({
       recaptchaVerifier.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    let codeSentListener: any;
+    let verificationCompletedListener: any;
+    let verificationFailedListener: any;
+
+    if (Capacitor.isNativePlatform()) {
+      FirebaseAuthentication.addListener('phoneCodeSent', (event) => {
+        setNativeVerificationId(event.verificationId);
+      }).then((res) => {
+        codeSentListener = res;
+      });
+
+      FirebaseAuthentication.addListener('phoneVerificationCompleted', async (event) => {
+        try {
+          const { token } = await FirebaseAuthentication.getIdToken();
+          if (token) {
+            const response = await fetch(`${API_BASE_URL}/api/auth/firebase-login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: token }),
+            });
+
+            const data = await response.json();
+            if (response.ok && data.session) {
+              await supabase.auth.setSession(data.session);
+              setLoginStatus('success');
+              triggerHapticFeedback('success');
+              setToastMessage("Login Successful!");
+              setShowToast(true);
+              setTimeout(() => {
+                setIsVisible(false);
+                setTimeout(() => {
+                  onLoginSuccess();
+                  if (redirectPath) navigate(redirectPath);
+                }, 400);
+              }, 1500);
+            }
+          }
+        } catch (err) {
+          console.error("Auto verification error:", err);
+        }
+      }).then((res) => {
+        verificationCompletedListener = res;
+      });
+
+      FirebaseAuthentication.addListener('phoneVerificationFailed', (event) => {
+        console.error('Phone verification failed:', event.message);
+        setError(event.message || 'Verification failed');
+        setLoading(false);
+      }).then((res) => {
+        verificationFailedListener = res;
+      });
+    }
+
+    return () => {
+      if (codeSentListener) codeSentListener.remove();
+      if (verificationCompletedListener) verificationCompletedListener.remove();
+      if (verificationFailedListener) verificationFailedListener.remove();
+    };
+  }, [isOpen]);
 
   // Timer logic
   useEffect(() => {
@@ -95,6 +160,7 @@ export default function Login({
     setLoading(false);
     setTimer(30);
     setCanResend(false);
+    setNativeVerificationId(null);
   };
 
   const handleClose = () => {
@@ -139,9 +205,15 @@ export default function Login({
     setLoading(true);
 
     try {
-      const verifier = getRecaptchaVerifier();
-      const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
-      confirmationResult.current = result;
+      if (Capacitor.isNativePlatform()) {
+        await FirebaseAuthentication.signInWithPhoneNumber({
+          phoneNumber: `+91${phoneNumber}`,
+        });
+      } else {
+        const verifier = getRecaptchaVerifier();
+        const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
+        confirmationResult.current = result;
+      }
 
       setStep('otp');
       setTimer(30);
@@ -151,9 +223,11 @@ export default function Login({
       setTimeout(() => setShowToast(false), 3000);
     } catch (err: any) {
       console.error("Error sending OTP:", err);
-      // Reset recaptcha on failure so user can retry
-      recaptchaVerifier.current?.clear();
-      recaptchaVerifier.current = null;
+      if (!Capacitor.isNativePlatform()) {
+        // Reset recaptcha on failure so user can retry
+        recaptchaVerifier.current?.clear();
+        recaptchaVerifier.current = null;
+      }
       const msg = err.code === 'auth/invalid-phone-number'
         ? 'Invalid phone number'
         : err.code === 'auth/too-many-requests'
@@ -177,16 +251,39 @@ export default function Login({
       return;
     }
 
-    if (!confirmationResult.current) {
-      setError("Session expired. Please request OTP again.");
-      setStep('phone');
-      setLoading(false);
-      return;
+    if (Capacitor.isNativePlatform()) {
+      if (!nativeVerificationId) {
+        setError("Session expired. Please request OTP again.");
+        setStep('phone');
+        setLoading(false);
+        return;
+      }
+    } else {
+      if (!confirmationResult.current) {
+        setError("Session expired. Please request OTP again.");
+        setStep('phone');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
-      const credential = await confirmationResult.current.confirm(otp);
-      const idToken = await credential.user.getIdToken();
+      let idToken = "";
+
+      if (Capacitor.isNativePlatform()) {
+        await FirebaseAuthentication.confirmVerificationCode({
+          verificationId: nativeVerificationId!,
+          verificationCode: otp,
+        });
+        const { token } = await FirebaseAuthentication.getIdToken();
+        if (!token) {
+          throw new Error("Failed to retrieve ID Token");
+        }
+        idToken = token;
+      } else {
+        const credential = await confirmationResult.current.confirm(otp);
+        idToken = await credential.user.getIdToken();
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/auth/firebase-login`, {
         method: 'POST',

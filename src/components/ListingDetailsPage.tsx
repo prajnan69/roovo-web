@@ -664,24 +664,24 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
 
           <div style={{ height: 1, background: 'rgba(0,0,0,0.065)', margin: '20px 0' }} />
 
-          {/* Value props 2×2 grid - matches prototype */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 22 }}>
-            {[
-              { icon: '✓', bg: '#ECFDF5', ic: '#059669', t: '8–10% cheaper than Airbnb' },
-              { icon: '🛡', bg: '#EEEEFF', ic: '#4F46E5', t: 'Roovo Verified home' },
-              { icon: '✦', bg: 'rgba(217,119,6,.10)', ic: '#D97706', t: 'Instant GST invoice' },
-              { icon: '🔔', bg: '#F4F3F0', ic: '#3A3A37', t: '24/7 host support' },
-            ].map((p, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#FAF9F7', borderRadius: 16, padding: 14, border: '1px solid rgba(0,0,0,0.065)' }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: p.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-                  {p.icon}
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#3A3A37', lineHeight: 1.45 }}>{p.t}</span>
-              </div>
-            ))}
-          </div>
+          {/* Stay facts — capacity, rooms, property type */}
+          <ListingStats
+            maxGuests={listing.max_guests}
+            bedrooms={listing.bedrooms || listing.sleeping_arrangements?.length || 0}
+            bathrooms={listing.bathrooms || 0}
+            propertyType={listing.property_type}
+          />
 
-          <div style={{ height: 1, background: 'rgba(0,0,0,0.065)', marginBottom: 22 }} />
+          {listing.host_data && (
+            <>
+              <ListingHostInfo
+                hostData={listing.host_data}
+                isHostKycVerified={isHostKycVerified}
+                isRoovoVerified={isRoovoVerified}
+              />
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.065)', marginBottom: 22 }} />
+            </>
+          )}
 
           <ListingDescription
             description={listing.the_space}

@@ -179,28 +179,42 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
       }
     }, [checkIn]);
 
-    // Handle updates when bookings load or initialDates changes
+    // Handle updates when bookings load or initialDates changes.
+    // Keyed on the date VALUES, not the initialDates object identity: the
+    // parent re-creates initialDates every render, echoing our own onChange
+    // one render late. Identity-keying made this effect adopt that stale
+    // echo, fighting the checkout auto-correction effect above in an
+    // infinite ping-pong (React #185).
+    const toDateKey = (d?: Date | null) =>
+      d && !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : null;
+    const initCheckIn = toDateKey(initialDates?.checkIn);
+    const initCheckOut = toDateKey(initialDates?.checkOut);
     useEffect(() => {
-      if (initialDates?.checkIn && initialDates?.checkOut) {
-        setCheckIn(initialDates.checkIn.toISOString().split('T')[0]);
-        setCheckOut(initialDates.checkOut.toISOString().split('T')[0]);
+      if (initCheckIn && initCheckOut) {
+        setCheckIn(initCheckIn);
+        setCheckOut(initCheckOut);
       } else if (bookings && bookings.length > 0) {
         const availCheckIn = getFirstAvailableCheckIn();
         setCheckIn(availCheckIn);
         const availCheckOut = getFirstAvailableCheckOut(availCheckIn);
         setCheckOut(availCheckOut);
       }
-    }, [bookings, initialDates]);
+    }, [bookings, initCheckIn, initCheckOut]);
 
-    // Propagate changes up to parent component dynamically
+    // Propagate changes up to parent component dynamically.
+    // onChange is read through a ref so a new function identity from the
+    // parent (re-created each render) can't re-trigger this effect — that
+    // caused an infinite onChange -> setState -> render loop (React #185).
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
     useEffect(() => {
-      if (onChange) {
-        onChange(
+      if (onChangeRef.current) {
+        onChangeRef.current(
           { checkIn: new Date(checkIn), checkOut: new Date(checkOut) },
           adults + children
         );
       }
-    }, [checkIn, checkOut, adults, children, onChange]);
+    }, [checkIn, checkOut, adults, children]);
 
     const base = pricePerNight * nights;
     const fee = Math.round(base * 0.03);

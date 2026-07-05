@@ -19,6 +19,15 @@
 </head>
 
 <body>
+  <!-- Static boot screen: paints before any JS parses, so WebView (re)starts
+       (first boot, post-OTA reload, rollback) never show a raw white screen.
+       Removed by App.tsx once React mounts. -->
+  <style>
+    #boot-splash{position:fixed;inset:0;background:#fff;z-index:9999;display:flex;align-items:center;justify-content:center}
+    #boot-splash .bs-dot{width:14px;height:14px;border-radius:50%;background:#6366F1;animation:bs-pulse 1.1s ease-in-out infinite}
+    @keyframes bs-pulse{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(1.9);opacity:1}}
+  </style>
+  <div id="boot-splash"><div class="bs-dot"></div></div>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
