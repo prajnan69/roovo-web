@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase, API_BASE_URL } from '@/services/api';
+import { supabase } from '@/services/api';
 import { createPaytmOrder, initiatePaytmCheckout } from '@/services/paytmService';
 import RoovoLoader from '@/components/RoovoLoader';
 import { triggerHaptic } from '@/lib/haptics';
@@ -31,21 +31,8 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
     const [isExpired, setIsExpired] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
-    const [manualPaymentsEnabled, setManualPaymentsEnabled] = useState(true);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-    // Fetch manual payments setting
-    useEffect(() => {
-        fetch(`${API_BASE_URL}/api/settings`)
-            .then(res => res.json())
-            .then(data => {
-                if (data && typeof data.manual_payments_enabled === 'boolean') {
-                    setManualPaymentsEnabled(data.manual_payments_enabled);
-                }
-            })
-            .catch(err => console.error("Failed to fetch settings", err));
-    }, []);
 
     // Fetch link details
     const loadDetails = async () => {
@@ -110,38 +97,6 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         timerRef.current = setInterval(updateTimer, 1000);
     };
 
-    // ✅ Core Booking Action
-    const executeBooking = async (guestId: string) => {
-        setBookingInFlight(true);
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/payment-links/${linkId}/book`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    guest_id: guestId,
-                    payment_method: 'link_payment'
-                })
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                setBookingSuccess(true);
-                setToastMsg('Booking Confirmed! 🎉');
-                setShowToast(true);
-            } else {
-                setToastMsg(result.error || 'Failed to complete booking');
-                setShowToast(true);
-            }
-        } catch (err) {
-            console.error('Booking failed:', err);
-            setToastMsg('Network error. Please try again.');
-            setShowToast(true);
-        } finally {
-            setBookingInFlight(false);
-        }
-    };
-
     // Book Booking
     const handleBook = async () => {
         if (bookingInFlight || isExpired || bookingSuccess) return;
@@ -169,11 +124,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
             return;
         }
 
-        if (manualPaymentsEnabled) {
-            await executeBooking(session.user.id);
-        } else {
-            await executePaytmBooking(session.user);
-        }
+        await executePaytmBooking(session.user);
     };
 
     const executePaytmBooking = async (user: any) => {
@@ -263,11 +214,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                     try {
                         sessionStorage.removeItem('pending_booking_link_id');
                     } catch (e) {}
-                    if (manualPaymentsEnabled) {
-                        executeBooking(session.user.id);
-                    } else {
-                        executePaytmBooking(session.user);
-                    }
+                    executePaytmBooking(session.user);
                 }
             }
         };
@@ -284,11 +231,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
                         try {
                             sessionStorage.removeItem('pending_booking_link_id');
                         } catch (e) {}
-                        if (manualPaymentsEnabled) {
-                            executeBooking(session.user.id);
-                        } else {
-                            executePaytmBooking(session.user);
-                        }
+                        executePaytmBooking(session.user);
                     }
                 }
             });
@@ -302,7 +245,7 @@ export default function PaymentLinkPage({ match, onOpenLogin }: PaymentLinkPageP
         return () => {
             if (subscription) subscription.unsubscribe();
         };
-    }, [linkId, manualPaymentsEnabled]);
+    }, [linkId]);
 
     if (loading) {
         return (

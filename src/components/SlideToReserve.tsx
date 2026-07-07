@@ -5,7 +5,7 @@ import { motion, useMotionValue, useTransform, useAnimation } from 'framer-motio
 import { ChevronRight, Check, Loader2 } from 'lucide-react';
 import { triggerHaptic, triggerErrorHaptic } from '@/lib/haptics';
 
-const SlideToReserve = ({ onSlide, variant = "reserve", text }: { onSlide: () => Promise<boolean>, variant?: "reserve" | "confirm", text?: string }) => {
+const SlideToReserve = ({ onSlide, variant = "reserve", text, resetSignal }: { onSlide: () => Promise<boolean>, variant?: "reserve" | "confirm", text?: string, resetSignal?: number }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragBounds, setDragBounds] = useState(0);
   const x = useMotionValue(0);
@@ -25,6 +25,16 @@ const SlideToReserve = ({ onSlide, variant = "reserve", text }: { onSlide: () =>
     window.addEventListener('resize', updateBounds);
     return () => window.removeEventListener('resize', updateBounds);
   }, []);
+
+  // "Success" here only means "checkout was opened" — if the caller's checkout
+  // drawer gets closed without completing payment, resetSignal lets the parent
+  // un-stick the handle instead of leaving it locked at the end permanently.
+  useEffect(() => {
+    if (resetSignal === undefined) return;
+    setIsSuccess(false);
+    controls.start({ x: 0, transition: { type: "spring", stiffness: 400, damping: 25 } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   const handleSlide = async () => {
     if (isProcessing) return;
@@ -95,8 +105,9 @@ const SlideToReserve = ({ onSlide, variant = "reserve", text }: { onSlide: () =>
         }}
         onDragEnd={async (_) => {
           if (x.get() > dragBounds * 0.75) {
-            // Snap to end and trigger action
-            controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
+            // Snap to end and let it settle before invoking Paytm checkout —
+            // invoking it mid-animation left the injected iframe with bad hit-regions
+            await controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
             await handleSlide();
           } else {
             // Snap back

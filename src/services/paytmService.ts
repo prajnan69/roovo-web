@@ -52,7 +52,6 @@ export async function createPaytmOrder(opts: PaytmOrderOptions): Promise<PaytmOr
 // ── Step 2: load Paytm JS + open checkout modal ─────────────────────────────────
 export async function initiatePaytmCheckout(order: PaytmOrderResult): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Remove any stale Paytm script
     document.getElementById('paytm-checkout-script')?.remove();
 
     const isProd  = order.environment === 'PROD';
@@ -100,7 +99,6 @@ export async function initiatePaytmCheckout(order: PaytmOrderResult): Promise<vo
     const script = document.createElement('script');
     script.id   = 'paytm-checkout-script';
     script.type = 'application/javascript';
-    // Official script URL format from Paytm docs
     script.src  = `${baseUrl}/merchantpgpui/checkoutjs/merchants/${order.mid}.js`;
     script.setAttribute('onload', 'onScriptLoad()');
     script.crossOrigin = 'anonymous';

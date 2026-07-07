@@ -847,6 +847,10 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
                 setShowConfirmAndPay(false);
                 setIsDrawerOpen(true);
               }}
+              onRequestClose={() => {
+                setShowConfirmAndPay(false);
+                setIsDrawerOpen(false);
+              }}
               host_id={listing.host_id}
               auto_bookable={listing.is_auto_bookable}
               isFeeWaived={isFeeWaived}
