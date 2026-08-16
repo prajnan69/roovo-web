@@ -571,12 +571,6 @@ export default function Login({
                   <button onClick={() => navigate('/terms')} className="hover:text-neutral-600 transition-colors">Terms</button>
                   <span className="text-neutral-300">•</span>
                   <button onClick={() => navigate('/privacy-policy')} className="hover:text-neutral-600 transition-colors">Privacy</button>
-                  <span className="text-neutral-300">•</span>
-                  <button onClick={() => navigate('/refund-policy')} className="hover:text-neutral-600 transition-colors">Refunds</button>
-                  <span className="text-neutral-300">•</span>
-                  <button onClick={() => navigate('/shipping-policy')} className="hover:text-neutral-600 transition-colors">Shipping</button>
-                  <span className="text-neutral-300">•</span>
-                  <button onClick={() => navigate('/contact-us')} className="hover:text-neutral-600 transition-colors">Contact</button>
                 </div>
                 <p className="text-[9px] text-neutral-300 text-center mt-2">
                   Roovo Hospitality Private Limited
