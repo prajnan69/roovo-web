@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
@@ -222,17 +220,14 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
     isInitialLoadRef.current = true;
   }, [conversationId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (messages.length === 0) return;
-    const wasInitialLoad = isInitialLoadRef.current;
-    scrollToBottom(wasInitialLoad ? 'auto' : 'smooth');
-    isInitialLoadRef.current = false;
-    if (wasInitialLoad) {
-      // Catch layout shifts from late-loading avatar images without a second
-      // visible animation — this re-pin is 'auto' too, so it's only visible
-      // if something actually moved.
-      const t = setTimeout(() => scrollToBottom('auto'), 150);
-      return () => clearTimeout(t);
+    const el = scrollContainerRef.current;
+    if (isInitialLoadRef.current) {
+      if (el) el.scrollTop = el.scrollHeight;
+      isInitialLoadRef.current = false;
+    } else {
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -404,9 +399,11 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 z-10 scrollbar-hide overscroll-contain">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 z-10 scrollbar-hide overscroll-contain relative">
         {loading && (
-          <div className="flex h-full items-center justify-center"><Spinner /></div>
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-50/80 z-20 pointer-events-none">
+            <Spinner />
+          </div>
         )}
         <div className="space-y-1 pb-32">
           <AnimatePresence initial={false}>
@@ -427,15 +424,11 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
               // One separator per calendar day, above the first message of that day
               const isNewDay = !prevMsg || !isSameDay(new Date(msg.created_at), new Date(prevMsg.created_at));
               const dateSeparator = isNewDay ? (
-                <motion.div
-                  initial={skipEnterAnim ? false : { opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-center py-6 sticky top-0 z-20"
-                >
+                <div className="flex justify-center py-6 sticky top-0 z-20">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-white">
                     {getDayLabel(msg.created_at)}
                   </span>
-                </motion.div>
+                </div>
               ) : null;
 
               // Dynamic border radius
