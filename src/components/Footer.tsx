@@ -32,11 +32,8 @@ const Footer: React.FC = () => {
                 {[
                     { label: 'About Us', path: '/about-us' },
                     { label: 'Contact', path: '/contact-us' },
-                    { label: 'Catalogue', path: '/catalogue' },
-                    { label: 'Booking Guide', path: '/booking-flow' },
                     { label: 'Privacy', path: '/privacy-policy' },
                     { label: 'Terms', path: '/terms' },
-                    { label: 'Refunds', path: '/refund-policy' },
                 ].map((link) => (
                     <button
                         key={link.path}

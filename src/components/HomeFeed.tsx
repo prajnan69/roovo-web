@@ -100,12 +100,14 @@ const HomeFeed: React.FC<{
       onLoadingChange?.(loading);
     }, [loading, onLoadingChange]);
 
-    // Ensure nav bar is visible whenever home becomes the active route (fixes
-    // missing nav bar after back from Search). Keyed to pathname, not mount:
-    // HomeFeed now stays permanently mounted across navigation.
+    // Ensure nav bar visibility respects active modals when home becomes active
     useEffect(() => {
-      if (pathname === '/') setIsNavBarVisible(true);
-    }, [pathname, setIsNavBarVisible]);
+      if (pathname === '/' && !isMapOpen && !isSearchOpen) {
+        setIsNavBarVisible(true);
+      } else if (isMapOpen || isSearchOpen) {
+        setIsNavBarVisible(false);
+      }
+    }, [pathname, isMapOpen, isSearchOpen, setIsNavBarVisible]);
 
     const handleFilterChange = (newFilter: string) => {
       if (newFilter === activeFilter) return;
@@ -439,7 +441,6 @@ const HomeFeed: React.FC<{
               {[
                 { icon: '✓', text: 'Always cheaper than Airbnb' },
                 { icon: '⬡', text: 'Roovo Verified stays' },
-                { icon: '✦', text: 'GST invoices for every booking' },
               ].map((p, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, color: '#fff' }}>{p.icon}</div>
