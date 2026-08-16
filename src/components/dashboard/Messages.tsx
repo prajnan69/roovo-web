@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronRight, ArrowLeft, LogIn } from "lucide-react";
 import supabase, { markConversationAsRead } from "../../services/api";
@@ -8,6 +8,7 @@ import Chat from "../Chat";
 import { triggerHaptic } from "@/lib/haptics";
 import { useBottomNavBar } from "@/context/BottomNavBarContext";
 import { useNavigation } from "@/hooks/useNavigation";
+import { useBackCloseable } from "@/hooks/useBackCloseable";
 import SendOfferDrawer from "./SendOfferDrawer";
 import { sendOfferMessage } from "../../services/api";
 
@@ -18,6 +19,11 @@ interface MessagesPageProps {
   userType: 'host' | 'guest';
   onLoginClick?: () => void;
   isAuthenticated?: boolean;
+  // Unified mode: when the signed-in user is also a host, the guest messages
+  // screen shows both their traveling and hosting conversations behind a
+  // segmented toggle. Plain guests never see it.
+  hostConversations?: any[];
+  isHost?: boolean;
 }
 
 const MessagesPage: React.FC<MessagesPageProps> = ({
@@ -27,11 +33,28 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
   userType,
   onLoginClick,
   isAuthenticated = true,
+  hostConversations = [],
+  isHost = false,
 }) => {
   const [conversations, setConversations] = useState<any[]>(initialConversations);
   const [isOfferDrawerOpen, setIsOfferDrawerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'guest' | 'host'>('guest');
+  const initialSelectedRef = useRef(!!selectedConversation);
   const { setIsNavBarVisible } = useBottomNavBar();
   const { back, pathname } = useNavigation();
+
+  const unified = isHost && userType === 'guest';
+  // The context a conversation was opened under decides how the chat behaves
+  // (who the "other user" is, whether the offer drawer is available).
+  const selectedContext: 'host' | 'guest' =
+    selectedConversation?.__context || (unified ? 'guest' : userType);
+
+  // A deep-linked/host conversation should land on the matching tab
+  useEffect(() => {
+    if (unified && selectedConversation?.__context) {
+      setActiveTab(selectedConversation.__context);
+    }
+  }, [unified, selectedConversation]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -50,15 +73,15 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
     setConversations(initialConversations);
   }, [initialConversations]);
 
-
-
   const handleConversationSelect = async (convo: any) => {
+    initialSelectedRef.current = false;
     await triggerHaptic();
-    onConversationSelect(convo);
+    const context = unified ? activeTab : userType;
+    onConversationSelect(unified ? { ...convo, __context: context } : convo);
 
     // Mark as read in background
     try {
-      await markConversationAsRead(convo.id, userType);
+      await markConversationAsRead(convo.id, context);
       // locally update for immediate UI feedback
       convo.unread_count = 0;
     } catch (error) {
@@ -68,12 +91,19 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
 
   const handleBack = async () => {
     await triggerHaptic();
-    if (selectedConversation) {
+    if (selectedConversation?.__fromExternal) {
+      onConversationSelect(null);
+      back();
+    } else if (selectedConversation) {
       onConversationSelect(null);
     } else if (!pathname.includes("/hosting")) {
       back();
     }
   };
+
+  // Hardware back: close chat first if opened from inside the tab, or
+  // let it pop to previous page if entered from listing/trips.
+  useBackCloseable(!!selectedConversation && !selectedConversation?.__fromExternal, () => onConversationSelect(null));
 
   const handleLoginClick = async () => {
     await triggerHaptic();
@@ -136,18 +166,23 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
 
   return (
     <div className="relative h-screen w-full bg-white overflow-hidden flex flex-col font-sans">
-      <AnimatePresence initial={false} mode="popLayout">
-        {/* --- Conversation List View --- */}
-        {!selectedConversation && (
-          <motion.div
-            key="list"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="flex-1 flex flex-col h-full bg-white"
-          >
-            {/* Native Header with Search */}
+      {/* --- Conversation List View — always mounted, never unmounts.
+          It used to be conditionally rendered ({!selectedConversation && ...})
+          inside the same AnimatePresence as the chat detail view, in
+          "popLayout" mode. That unmounted/remounted the entire list on every
+          chat open/close (rebuilding every row from scratch — the flash), and
+          popLayout also force-switches an exiting element from normal layout
+          flow to position:absolute mid-animation, which visibly snaps if its
+          measured box doesn't match exactly. Matches the same fix already
+          applied to the app's root Router for the home page. */}
+      <motion.div
+        initial={selectedConversation ? { opacity: 0 } : false}
+        animate={{ opacity: selectedConversation ? 0 : 1 }}
+        transition={{ duration: 0.25, ease: "easeInOut" }}
+        style={{ pointerEvents: selectedConversation ? 'none' : 'auto' }}
+        className="flex-1 flex flex-col h-full bg-white"
+      >
+        {/* Native Header with Search */}
             <div className={`pt-2 pb-2 px-4`}>
               <div className="text-2xl font-bold text-gray-900 mb-4 mt-2">Messages</div>
               <div className="relative">
@@ -158,22 +193,66 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                   className="w-full bg-gray-100 text-base rounded-xl py-2.5 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-800 placeholder:text-gray-500 transition-all"
                 />
               </div>
+
+              {/* Traveling / Hosting toggle — hosts only */}
+              {unified && (
+                <div className="flex bg-gray-100 rounded-xl p-1 mt-3">
+                  {(['guest', 'host'] as const).map((tab) => {
+                    const label = tab === 'guest' ? 'Traveling' : 'Hosting';
+                    const list = tab === 'guest' ? conversations : hostConversations;
+                    const unread = list.reduce((n: number, c: any) => n + (c.unread_count > 0 ? 1 : 0), 0);
+                    const active = activeTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => { triggerHaptic(); setActiveTab(tab); }}
+                        className={`relative flex-1 py-2 rounded-lg text-[13px] font-bold transition-colors ${active ? 'text-slate-900' : 'text-gray-400'}`}
+                      >
+                        {active && (
+                          <motion.div
+                            layoutId="messages-tab-pill"
+                            className="absolute inset-0 bg-white rounded-lg shadow-sm"
+                            transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                          />
+                        )}
+                        <span className="relative z-10 flex items-center justify-center gap-1.5">
+                          {label}
+                          {unread > 0 && (
+                            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-black flex items-center justify-center ${tab === 'host' ? 'bg-emerald-500' : 'bg-indigo-600'}`}>
+                              {unread}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Scrollable List */}
             <div className="flex-1 overflow-y-auto">
-              {conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 space-y-2">
-                  <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2">
-                    <Search className="w-6 h-6 text-gray-300" />
-                  </div>
-                  <p className="font-medium">No messages yet</p>
-                </div>
-              ) : (
-                <div className="pb-48 pt-2">
-                  {conversations.map((convo, i) => {
-                    const otherUser = (userType === 'host' ? convo.guest : convo.host) || {};
-                    const isLast = i === conversations.length - 1;
+              {(() => {
+                const rowType: 'host' | 'guest' = unified ? activeTab : userType;
+                const list = unified && activeTab === 'host' ? hostConversations : conversations;
+                if (list.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 space-y-2">
+                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-2">
+                        <Search className="w-6 h-6 text-gray-300" />
+                      </div>
+                      <p className="font-medium">
+                        {rowType === 'host' ? 'No guest messages yet' : 'No messages yet'}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                <div className="pb-48 pt-2" key={rowType}>
+                  {list.map((convo, i) => {
+                    const otherUser = (rowType === 'host' ? convo.guest : convo.host) || {};
+                    const isLast = i === list.length - 1;
+                    const isHostingRow = rowType === 'host';
 
                     // Simple unread detection: if the last message wasn't sent by us (we don't have user id here easily without prop drilling, but we can assume bolding until opened)
                     // Let's just use a more subtle styling for the last message
@@ -185,8 +264,8 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                         onClick={() => handleConversationSelect(convo)}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        className={`group active:bg-gray-50 transition-colors pl-4 pr-4 py-4 flex items-center gap-4 cursor-pointer ${!isLast ? 'border-b border-gray-50' : ''} ${hasUnread ? 'bg-indigo-50/30' : ''}`}
+                        transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(i, 8) * 0.03 }}
+                        className={`group active:bg-gray-50 transition-colors pl-4 pr-4 py-4 flex items-center gap-4 cursor-pointer ${!isLast ? 'border-b border-gray-50' : ''} ${hasUnread ? (isHostingRow ? 'bg-emerald-50/30' : 'bg-indigo-50/30') : ''}`}
                       >
                         {/* Avatar with Image Fallback */}
                         <div className="relative flex-shrink-0">
@@ -213,15 +292,15 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
 
                           <div className="flex justify-between items-center">
                             <div className="flex-1 min-w-0 pr-2">
-                              <p className="text-[12px] font-medium text-indigo-600 uppercase tracking-wide truncate mb-0.5">
-                                {convo.listing.title}
+                              <p className={`text-[12px] font-medium uppercase tracking-wide truncate mb-0.5 ${isHostingRow ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                                {isHostingRow ? `Hosting · ${convo.listing.title}` : convo.listing.title}
                               </p>
                               <p className={`text-[14px] truncate leading-snug ${hasUnread ? 'font-medium text-slate-800' : 'text-gray-600'}`}>
                                 {convo.last_message?.content || <span className="italic opacity-60">Start a conversation...</span>}
                               </p>
                             </div>
                             {hasUnread && (
-                              <div className="w-2 h-2 rounded-full bg-indigo-500 ml-2 shadow-sm shadow-indigo-200"></div>
+                              <div className={`w-2 h-2 rounded-full ml-2 shadow-sm ${isHostingRow ? 'bg-emerald-500 shadow-emerald-200' : 'bg-indigo-500 shadow-indigo-200'}`}></div>
                             )}
                             <ChevronRight className="w-4 h-4 text-gray-300 ml-2" />
                           </div>
@@ -230,21 +309,22 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                     );
                   })}
                 </div>
-              )}
+                );
+              })()}
             </div>
-          </motion.div>
-        )}
+      </motion.div>
 
-        {/* --- Chat Detail View --- */}
+      {/* --- Chat Detail View --- */}
+      <AnimatePresence initial={false}>
         {selectedConversation && (() => {
-          const otherUser = (userType === 'host' ? selectedConversation.guest : selectedConversation.host) || {};
+          const otherUser = (selectedContext === 'host' ? selectedConversation.guest : selectedConversation.host) || {};
           return (
             <motion.div
               key="chat"
-              initial={{ x: "100%" }}
+              initial={initialSelectedRef.current ? { x: 0 } : { x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
               className="absolute inset-0 z-20 bg-white h-full flex flex-col shadow-2xl"
             >
               {/* Chat Header */}
@@ -274,10 +354,13 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                   </div>
                   <div className="flex flex-col justify-center min-w-0">
                     <h2 className="text-sm font-bold text-slate-900 truncate leading-tight">
-                      {otherUser.name || (userType === 'host' ? 'Guest' : 'Host')}
+                      {otherUser.name || (selectedContext === 'host' ? 'Guest' : 'Host')}
                     </h2>
                     <span className="text-[11px] text-gray-500 font-medium truncate">
-                      {selectedConversation.listing?.title || 'Unknown Listing'}
+                      {selectedContext === 'host' && unified && (
+                        <span className="text-emerald-600 font-bold">Hosting · </span>
+                      )}
+                      {selectedConversation.listing?.title || selectedConversation.listing_title || 'Stay'}
                     </span>
                   </div>
                 </div>
@@ -287,12 +370,12 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
               <div className="flex-1 relative bg-slate-50 overflow-hidden">
                 <Chat
                   conversationId={selectedConversation.id}
-                  otherUser={userType === 'host' ? selectedConversation.guest : selectedConversation.host}
-                  onShowOfferDrawer={userType === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
+                  otherUser={selectedContext === 'host' ? selectedConversation.guest : selectedConversation.host}
+                  onShowOfferDrawer={selectedContext === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
                 />
               </div>
 
-              {userType === 'host' && (
+              {selectedContext === 'host' && (
                 <SendOfferDrawer
                   isOpen={isOfferDrawerOpen}
                   onClose={() => setIsOfferDrawerOpen(false)}

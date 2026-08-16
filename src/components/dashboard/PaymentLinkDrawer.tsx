@@ -4,6 +4,7 @@ import { X, Calendar as CalendarIcon, DollarSign, ArrowRight, Share2, Copy, Chec
 import { triggerHaptic } from '@/lib/haptics';
 import { getListingsByHostId } from '@/services/api';
 import { Share as CapShare } from '@capacitor/share';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface PaymentLinkDrawerProps {
     isOpen: boolean;
@@ -12,6 +13,9 @@ interface PaymentLinkDrawerProps {
 }
 
 export default function PaymentLinkDrawer({ isOpen, onClose, hostId }: PaymentLinkDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [listings, setListings] = useState<any[]>([]);
     const [loadingListings, setLoadingListings] = useState(false);
     

@@ -150,9 +150,7 @@ const PayoutMethods = () => {
                 }, 400);
 
                 // Haptic
-                if (typeof navigator !== 'undefined' && navigator.vibrate) {
-                    navigator.vibrate([10, 30, 10, 30]);
-                }
+                triggerHaptic();
             }
 
             // 3. Countdown & Auto-Save

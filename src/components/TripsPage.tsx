@@ -234,7 +234,7 @@ const TripsPage = ({ onOpenChat }: { onOpenChat?: (conversation: any) => void })
     const displayedTrips = activeTab === 'upcoming' ? upcomingTrips : pastTrips;
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-20">
+        <div className="h-screen w-full overflow-y-auto bg-slate-50 pb-20">
             {/* Header */}
             <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200 px-6 pt-[calc(env(safe-area-inset-top)+1rem)] pb-3">
                 <div className="text-2xl font-bold text-slate-900 tracking-tight">Trips</div>

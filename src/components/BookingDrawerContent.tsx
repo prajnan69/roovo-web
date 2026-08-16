@@ -11,9 +11,7 @@ interface BookingDrawerContentProps {
   initialDates?: { checkIn: Date | null; checkOut: Date | null };
   initialGuests?: number;
   onChange?: (dates: { checkIn: Date | null; checkOut: Date | null }, guests: number) => void;
-  pricePerNight?: number;
   bookings?: any[];
-  listingName?: string;
 }
 
 // ── Date strip (90 days) ──
@@ -91,8 +89,8 @@ const CounterRow = ({ label, sub, val, setVal, min = 0, max = 20 }: { label: str
         −
       </button>
       <span style={{ fontSize: 18, fontWeight: 700, color: '#0A0A09', minWidth: 24, textAlign: 'center', letterSpacing: '-.02em' }}>{val}</span>
-      <button onClick={() => { triggerHaptic(); setVal(Math.min(max, val + 1)); }}
-        style={{ width: 36, height: 36, borderRadius: '9999px', border: '1.5px solid #4F46E5', background: '#EEEEFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: '#4F46E5', cursor: 'pointer' }}>
+      <button onClick={() => { if (val < max) triggerHaptic(); setVal(Math.min(max, val + 1)); }}
+        style={{ width: 36, height: 36, borderRadius: '9999px', border: val >= max ? '1.5px solid rgba(0,0,0,0.10)' : '1.5px solid #4F46E5', background: val >= max ? '#F4F3F0' : '#EEEEFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: val >= max ? '#BBBBB4' : '#4F46E5', cursor: val >= max ? 'not-allowed' : 'pointer' }}>
         +
       </button>
     </div>
@@ -100,9 +98,9 @@ const CounterRow = ({ label, sub, val, setVal, min = 0, max = 20 }: { label: str
 );
 
 const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProps>(
-  ({ onApply, max_guests, initialDates, initialGuests, onChange, pricePerNight = 0, bookings = [], listingName = 'Your stay' }, ref) => {
-    const [step, setStep] = useState(0); // 0=dates, 1=guests, 2=confirm
-    const steps = ['Dates', 'Guests', 'Confirm'];
+  ({ onApply, max_guests, initialDates, initialGuests, onChange, bookings = [] }, ref) => {
+    const [step, setStep] = useState(0); // 0=dates, 1=guests
+    const steps = ['Dates', 'Guests'];
 
     const today = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
@@ -161,7 +159,7 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
       return getFirstAvailableCheckOut(checkIn);
     });
 
-    const [adults, setAdults] = useState(initialGuests || 2);
+    const [adults, setAdults] = useState(() => Math.max(1, Math.min(initialGuests || 2, max_guests || 1)));
     const [children, setChildren] = useState(0);
 
     const nights = Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)));
@@ -216,12 +214,6 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
       }
     }, [checkIn, checkOut, adults, children]);
 
-    const base = pricePerNight * nights;
-    const fee = Math.round(base * 0.03);
-    const gstRate = pricePerNight > 7500 ? 0.18 : 0.12;
-    const gst = Math.round((base + fee) * gstRate);
-    const total = base + fee + gst;
-
     const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
     const handleConfirm = () => {
@@ -250,7 +242,7 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 600, color: i === step ? '#4F46E5' : '#BBBBB4', letterSpacing: '.03em', textTransform: 'uppercase' }}>{s}</span>
               </div>
-              {i < 2 && <div style={{ width: 32, height: 1.5, background: i < step ? '#4F46E5' : 'rgba(0,0,0,0.10)', borderRadius: 99, marginBottom: 18, transition: 'background .3s' }} />}
+              {i < steps.length - 1 && <div style={{ width: 32, height: 1.5, background: i < step ? '#4F46E5' : 'rgba(0,0,0,0.10)', borderRadius: 99, marginBottom: 18, transition: 'background .3s' }} />}
             </div>
           ))}
         </div>
@@ -291,51 +283,12 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
                 <div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: "'Playfair Display', Georgia, serif", marginBottom: 6 }}>Who's coming?</div>
                   <div style={{ fontSize: 13, color: '#888880', marginBottom: 20 }}>Max {max_guests} guests</div>
-                  <CounterRow label="Adults" sub="Age 13+" val={adults} setVal={setAdults} min={1} max={max_guests} />
-                  <CounterRow label="Children" sub="Ages 2–12" val={children} setVal={setChildren} max={max_guests - adults} />
+                  {/* Each row's cap leaves room for the other, so adults+children can never exceed max_guests */}
+                  <CounterRow label="Adults" sub="Age 13+" val={adults} setVal={setAdults} min={1} max={Math.max(1, max_guests - children)} />
+                  <CounterRow label="Children" sub="Ages 2–12" val={children} setVal={setChildren} max={Math.max(0, max_guests - adults)} />
                   <div style={{ marginTop: 20, padding: '14px 16px', background: '#F4F3F0', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888880" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     <span style={{ fontSize: 13, color: '#3A3A37', fontWeight: 500 }}>{adults + children} guest{adults + children !== 1 ? 's' : ''} selected</span>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 2 — CONFIRM */}
-              {step === 2 && (
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.03em', fontFamily: "'Playfair Display', Georgia, serif", marginBottom: 16 }}>Review & confirm</div>
-                  {/* Mini listing card */}
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 20, padding: 14, background: '#FAF9F7', borderRadius: 18, border: '1px solid rgba(0,0,0,0.065)' }}>
-                    <div style={{ width: 72, height: 72, borderRadius: 14, background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0A0A09', letterSpacing: '-.01em', fontFamily: "'Playfair Display', Georgia, serif" }}>{listingName}</div>
-                      <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>Karnataka, India</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#4F46E5' }}>{fmtDate(checkIn)} → {fmtDate(checkOut)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Price breakdown */}
-                  <div style={{ background: '#FAF9F7', borderRadius: 18, padding: 16, border: '1px solid rgba(0,0,0,0.065)', marginBottom: 16 }}>
-                    {[
-                      { label: `₹${pricePerNight.toLocaleString()} × ${nights} nights`, val: base },
-                      { label: 'Roovo service fee (3%)', val: fee },
-                      { label: `GST (${pricePerNight > 7500 ? 18 : 12}%)`, val: gst },
-                    ].map((r, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3A3A37', marginBottom: 10, fontWeight: 500 }}>
-                        <span>{r.label}</span><span>₹{r.val.toLocaleString()}</span>
-                      </div>
-                    ))}
-                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.065)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: '#0A0A09', letterSpacing: '-.02em' }}>
-                      <span>Total</span>
-                      <span>₹{total.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  {/* Savings callout */}
-                  <div style={{ padding: '12px 14px', background: '#ECFDF5', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Check size={16} color="#059669" strokeWidth={2.5} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#059669' }}>You save ~15% vs Airbnb · Instant GST invoice</span>
                   </div>
                 </div>
               )}
@@ -354,13 +307,13 @@ const BookingDrawerContent = forwardRef<HTMLDivElement, BookingDrawerContentProp
           )}
           <button onClick={() => {
             triggerHaptic();
-            if (step < 2) setStep(s => s + 1);
+            if (step < steps.length - 1) setStep(s => s + 1);
             else handleConfirm();
           }}
             style={{ flex: 2, padding: 16, borderRadius: 18, background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', color: '#fff', fontWeight: 800, fontSize: 15, boxShadow: '0 8px 32px rgba(79,70,229,.30)', border: 'none', letterSpacing: '-.01em', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent)', transform: 'translateX(-100%)', animation: 'goldshine 3s ease 2s infinite' }} />
             <span style={{ position: 'relative' }}>
-              {step === 0 ? 'Choose guests' : step === 1 ? 'Review booking' : 'Check Availability'}
+              {step === steps.length - 1 ? 'Check Availability' : 'Choose guests'}
             </span>
           </button>
         </div>

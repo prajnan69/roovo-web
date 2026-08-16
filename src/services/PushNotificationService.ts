@@ -59,15 +59,20 @@ export const initPushNotifications = async (userId: string) => {
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
             console.log('Push notification action performed', notification.actionId, notification.inputValue);
             const data = notification.notification.data;
-            if (data && data.url) {
-                // Use a global window dispatcher or router if available, 
-                // or let the App component handle deep linking via another mechanism.
-                // For now logging it. App's deep link handler should ideally pick this up if implemented,
-                // or we can dispatch a navigation event.
-                if (data.url.startsWith('/chat/')) {
-                    window.location.href = data.url; // Simple fallback, but might reload app
-                    // Better: dispatch a navigation event if using a router hooked to window
-                }
+            if (!data) return;
+
+            // Chat messages: land on the messages screen with the conversation
+            // preselected. App.tsx consumes the ?conversation= param once the
+            // conversation lists have loaded.
+            if (data.type === 'chat_message' || (typeof data.url === 'string' && data.url.startsWith('/chat/'))) {
+                const convId = data.conversationId || (typeof data.url === 'string' ? data.url.split('/chat/')[1] : '');
+                window.location.href = convId ? `/messages?conversation=${convId}` : '/messages';
+                return;
+            }
+
+            // Anything else (bookings etc.) navigates to its url directly
+            if (typeof data.url === 'string' && data.url.startsWith('/')) {
+                window.location.href = data.url;
             }
         });
 

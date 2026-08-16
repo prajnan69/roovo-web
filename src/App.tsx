@@ -20,11 +20,13 @@ import MobileSearchBar from './components/MobileSearchBar';
 import SearchPage from './components/SearchPage';
 import Login from './components/Login';
 import { useNavigation } from './hooks/useNavigation';
+import { closeTopmostOverlay } from './hooks/useBackCloseable';
 import { PreloadProvider } from './context/PreloadContext';
 import { BottomNavBarProvider, useBottomNavBar } from './context/BottomNavBarContext';
 import SwitchingToHostLoader from './components/SwitchingToHostLoader';
 import SwitchingToTravelingLoader from './components/SwitchingToTravelingLoader';
 import SplashScreen from './components/SplashScreen';
+import { AnimatePresence } from 'framer-motion';
 import './index.css';
 import NotificationToast from './components/NotificationToast';
 import PaymentStatus from './components/PaymentStatus';
@@ -45,6 +47,13 @@ import AboutUs from './components/legal/AboutUs';
 import Catalogue from './components/legal/Catalogue';
 import BookingFlow from './components/legal/BookingFlow';
 
+// getConversations re-runs on every auth event and realtime change. Fresh
+// object identities for data that hasn't actually changed re-render the whole
+// app tree (HomeFeed, Messages, HostDashboard all take these as props), so
+// keep the previous state object when the refetched payload is identical.
+const keepIfUnchanged = <T,>(next: T) => (prev: T): T =>
+  JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+
 function AppContent() {
   const { isNavBarVisible } = useBottomNavBar();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -57,8 +66,11 @@ function AppContent() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [hostConversations, setHostConversations] = useState<any[]>([]);
   const [guestConversations, setGuestConversations] = useState<any[]>([]);
+  const [isUserHost, setIsUserHost] = useState(false);
   const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
   const [pendingSplit, setPendingSplit] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentHostId, setCurrentHostId] = useState<string | null>(null);
   const isNative = Capacitor.isNativePlatform() && !window.location.pathname.startsWith('/payment/status');
   let isPostUpdate = false;
   try {
@@ -243,20 +255,48 @@ function AppContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ✅ Handle Android back button
+  // ✅ Handle Android back button — must register exactly once. This effect
+  // used to re-run on every render (no cleanup, unstable deps), stacking
+  // listeners so a single back press fired history.back() many times and
+  // jumped straight to the homepage instead of the previous page.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
   useEffect(() => {
-    CapacitorApp.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
-      if (pathname === '/hosting') {
+    const handle = CapacitorApp.addListener('backButton', ({ canGoBack }: { canGoBack: boolean }) => {
+      // An open overlay (drawer, login, search) consumes the back press and
+      // closes itself instead of navigating.
+      if (closeTopmostOverlay()) return;
+      if (pathnameRef.current === '/hosting') {
         CapacitorApp.exitApp();
         return;
       }
       if (canGoBack) {
-        back();
+        const pathBeforeBack = window.location.pathname;
+        window.history.back();
+        // Safety net: some Android WebView configurations silently no-op
+        // history.back() when the only prior entry is a client-side
+        // pushState (not a real page load), leaving the user stuck on the
+        // page they tried to leave via the hardware back button.
+        setTimeout(() => {
+          if (window.location.pathname === pathBeforeBack) {
+            window.history.pushState({}, '', '/');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+        }, 400);
+      } else if (pathnameRef.current !== '/') {
+        // canGoBack is false when the app was opened straight into this page
+        // with no prior history — a shared listing link, a push notification,
+        // a deep link. That has nothing to do with whether the app itself
+        // should exit; it only means there's no page to pop back to. Land on
+        // home instead of quitting the app out from under the user.
+        window.history.pushState({}, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
       } else {
         CapacitorApp.exitApp();
       }
     });
-  }, [back, pathname]);
+    return () => { handle.then(h => h.remove()); };
+  }, []);
 
   // ✅ Persist current route for app restart
   useEffect(() => {
@@ -394,17 +434,23 @@ function AppContent() {
         .from('hosts')
         .select('id')
         .eq('user_id', session.user.id)
-        .single();
+        .maybeSingle();
+
+      setIsUserHost(!!host);
+      setCurrentUser(session.user);
+      setCurrentHostId(host?.id || null);
 
       if (host) {
         try {
           const data = await fetchConversationsByHostId(host.id);
           if (Array.isArray(data)) {
             setHostConversations(
-              data.sort(
-                (a, b) =>
-                  new Date(b.last_message_at).getTime() -
-                  new Date(a.last_message_at).getTime(),
+              keepIfUnchanged(
+                data.sort(
+                  (a, b) =>
+                    new Date(b.last_message_at).getTime() -
+                    new Date(a.last_message_at).getTime(),
+                ),
               ),
             );
           }
@@ -417,10 +463,12 @@ function AppContent() {
         const data = await fetchConversationsByGuestId(session.user.id);
         if (Array.isArray(data)) {
           setGuestConversations(
-            data.sort(
-              (a, b) =>
-                new Date(b.last_message_at).getTime() -
-                new Date(a.last_message_at).getTime(),
+            keepIfUnchanged(
+              data.sort(
+                (a, b) =>
+                  new Date(b.last_message_at).getTime() -
+                  new Date(a.last_message_at).getTime(),
+              ),
             ),
           );
         }
@@ -440,11 +488,7 @@ function AppContent() {
             .filter((b: any) => new Date(b.start_date) >= now)
             .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
 
-          if (confirmed.length > 0) {
-            setUpcomingBooking(confirmed[0]);
-          } else {
-            setUpcomingBooking(null);
-          }
+          setUpcomingBooking(keepIfUnchanged(confirmed.length > 0 ? confirmed[0] : null));
         }
       } catch (err) {
         console.error('Error fetching guest bookings:', err);
@@ -476,12 +520,7 @@ function AppContent() {
           console.log('App.tsx - Split Fetch Result Status:', res.status);
           if (res.ok) {
             const splits = await res.json();
-            console.log('App.tsx - Pending Splits received:', splits);
-            if (splits && splits.length > 0) {
-              setPendingSplit(splits[0]);
-            } else {
-              setPendingSplit(null);
-            }
+            setPendingSplit(keepIfUnchanged(splits && splits.length > 0 ? splits[0] : null));
           }
         } else {
           console.warn('App.tsx - Still no phone number found for split check');
@@ -490,41 +529,90 @@ function AppContent() {
         console.error('App.tsx - Split fetch error:', err);
       }
     } else {
+      setCurrentUser(null);
+      setCurrentHostId(null);
       setHostConversations([]);
       setGuestConversations([]);
+      setIsUserHost(false);
       setUpcomingBooking(null);
       setPendingSplit(null);
     }
     setIsHostStatusResolved(true);
   }, []);
 
+  // Open a conversation deep-linked from a push-notification tap
+  // (?conversation=<id> set by PushNotificationService).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const convId = params.get('conversation');
+    if (!convId) return;
+    const inGuest = guestConversations.find((c: any) => String(c.id) === convId);
+    const inHost = hostConversations.find((c: any) => String(c.id) === convId);
+    if (!inGuest && !inHost) return;
+    setSelectedConversation(inGuest || { ...inHost, __context: 'host' });
+    window.history.replaceState({}, '', '/messages');
+    if (pathname !== '/messages') navigate('/messages');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guestConversations, hostConversations]);
+
   // ✅ Global Subscription for Conversations
   useEffect(() => {
+    if (!currentUser) return;
+
     let channel: any;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const setupSubscription = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+    const setupSubscription = () => {
+      let subChannel = supabase.channel(`conversations_user_${currentUser.id}`);
 
-      channel = supabase
-        .channel('global_conversations')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'conversations' },
-          () => {
-            console.log('Global conversation change detected, refetching...');
+      subChannel = subChannel.on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversations',
+          filter: `guest_id=eq.${currentUser.id}`,
+        },
+        () => {
+          clearTimeout(refetchTimer);
+          refetchTimer = setTimeout(() => {
+            console.log('Guest conversation change detected, refetching...');
             getConversations();
+          }, 1000);
+        }
+      );
+
+      if (currentHostId) {
+        subChannel = subChannel.on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'conversations',
+            filter: `host_id=eq.${currentHostId}`,
+          },
+          () => {
+            clearTimeout(refetchTimer);
+            refetchTimer = setTimeout(() => {
+              console.log('Host conversation change detected, refetching...');
+              getConversations();
+            }, 1000);
           }
-        )
-        .subscribe();
+        );
+      }
+
+      channel = subChannel.subscribe();
     };
 
     setupSubscription();
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      clearTimeout(refetchTimer);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, [getConversations]);
+  }, [currentUser, currentHostId, getConversations]);
 
   useEffect(() => {
     // Don't call getConversations() directly here — Supabase always fires
@@ -605,12 +693,14 @@ function AppContent() {
     );
   }
 
-  if (showSplash) {
-    return <SplashScreen onAnimationComplete={() => setSplashAnimDone(true)} otaState={otaState} />;
-  }
-
   return (
-    <div className="w-screen h-dvh overflow-x-hidden relative">
+    <div className="w-screen h-dvh overflow-hidden relative">
+      <AnimatePresence>
+        {showSplash && (
+          <SplashScreen onAnimationComplete={() => setSplashAnimDone(true)} otaState={otaState} otaDone={otaDone} />
+        )}
+      </AnimatePresence>
+
       <Router>
         <Route
           path="/"
@@ -628,7 +718,7 @@ function AppContent() {
           <ListingDetailsPage
             {...props}
             onOpenChat={(conversation) => {
-              setSelectedConversation(conversation);
+              setSelectedConversation({ ...conversation, __fromExternal: true });
               navigate('/messages');
             }}
             onOpenLogin={handleOpenLogin}
@@ -648,6 +738,8 @@ function AppContent() {
             selectedConversation={selectedConversation}
             onConversationSelect={setSelectedConversation}
             userType="guest"
+            hostConversations={hostConversations}
+            isHost={isUserHost}
           />
         )} />
         <Route path="/verify-identity" render={() => <VerifyIdentity />} />
@@ -661,7 +753,7 @@ function AppContent() {
         <Route path="/trips" render={() => (
           <TripsPage
             onOpenChat={(conversation) => {
-              setSelectedConversation(conversation);
+              setSelectedConversation({ ...conversation, __fromExternal: true });
               navigate('/messages');
             }}
           />
@@ -669,7 +761,7 @@ function AppContent() {
         <Route path="/past-trips" render={() => (
           <TripsPage
             onOpenChat={(conversation) => {
-              setSelectedConversation(conversation);
+              setSelectedConversation({ ...conversation, __fromExternal: true });
               navigate('/messages');
             }}
           />

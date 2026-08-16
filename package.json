@@ -1,7 +1,7 @@
 {
   "name": "capacitor-app",
   "private": true,
-  "version": "1.5.2",
+  "version": "1.6.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "zip": "node zip.js",
-    "push-update": "npm run build && node zip.js && node update-manifest.cjs && curl -X POST -F \"update=@update.zip\" https://roovo-backend.fly.dev/upload-update",
-    "create-bundle": "npx @capawesome/cli apps:bundles:create --url https://roovo-backend.fly.dev/updates/update.zip",
+    "push-update": "npm run build && node zip.js && node update-manifest.cjs && curl -X POST -F \"update=@update.zip\" -H \"x-deploy-secret: %DEPLOY_SECRET%\" https://roovo-backend.fly.dev/upload-update",
+    "create-bundle": "npx @capawesome/cli apps:bundles:create --app-id 94f0b6fd-9585-427d-839f-c09989a1ceaf --channel testing --url https://roovo-backend.fly.dev/updates/update.zip",
     "sync": "npm run build && npx cap sync"
   },
   "dependencies": {

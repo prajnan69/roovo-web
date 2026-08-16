@@ -3,6 +3,7 @@ import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { Briefcase, X, CheckCircle, Send, Users, Building2, Wallet } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import { Spinner } from "./ui/shadcn-io/spinner";
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface CorporateBookingDrawerProps {
     isOpen: boolean;
@@ -19,6 +20,9 @@ const CorporateBookingDrawer: React.FC<CorporateBookingDrawerProps> = ({
     userPhone,
     userId
 }) => {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     // Form State
     const [formData, setFormData] = useState({
         companyName: '',

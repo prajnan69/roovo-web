@@ -39,6 +39,11 @@ const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, on
   const id = match[1];
 
   useEffect(() => {
+    // Capture mount time: the push transition runs ~300ms, and applying the
+    // fetched data mid-slide mounts the whole heavy listing tree while the
+    // animation is running — visible frame drops. Data is applied only after
+    // the transition window has passed.
+    const mountedAt = Date.now();
     const loadListingData = async () => {
       try {
         const [listingData, bookingData] = await Promise.all([
@@ -47,7 +52,6 @@ const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, on
         ]);
 
         const data = listingData;
-        setBookings(bookingData || []);
 
         // Host Data Mapping
         const rawHost = data.host || {};
@@ -142,6 +146,12 @@ const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, on
           location: { address: data.public_address || 'Detailed address provided after booking' }
         };
 
+        // Wait out the remainder of the push transition before swapping the
+        // loader for the full content.
+        const settle = 400 - (Date.now() - mountedAt);
+        if (settle > 0) await new Promise((r) => setTimeout(r, settle));
+
+        setBookings(bookingData || []);
         setListing(mappedListing);
 
       } catch (e) {
@@ -151,18 +161,23 @@ const ListingDetailsPage = ({ match, onOpenChat, onOpenLogin }: { match: any, on
       }
     };
     loadListingData();
+  }, [id]);
 
-    // Record Recently Viewed
+  // Record Recently Viewed — its own effect. It used to live in the data-load
+  // effect with listing?.host_id as a dep, which re-ran the entire fetch and
+  // re-applied the listing a second time as soon as the first load finished.
+  useEffect(() => {
+    if (!listing?.host_id) return;
     const recordView = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id && id && listing?.host_id) {
+      if (session?.user?.id && id) {
         if (session.user.id !== listing.host_id) {
           addRecentlyViewed(session.user.id, id);
         }
       }
     };
-    if (listing) recordView();
-  }, [id, listing?.host_id]); // Added listing dependency for recordView
+    recordView();
+  }, [id, listing?.host_id]);
 
   if (loading) {
     return (
@@ -195,6 +210,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [chatIntent, setChatIntent] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [existingConversation, setExistingConversation] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserName, setCurrentUserName] = useState<string>('User');
   const [currentUserPhone, setCurrentUserPhone] = useState<string>('');
@@ -257,6 +273,34 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
     }
   }, [listing]); // Run when listing is available
 
+  // Enrich conversation object with listing and host metadata for MessagesPage
+  const getEnrichedConversation = (convo: any) => {
+    if (!convo) return null;
+    const hostName = listing?.host_data?.name || listing?.host?.name || 'Host';
+    const hostImg = listing?.host_data?.image || listing?.host?.profilePictureUrl || null;
+    return {
+      ...convo,
+      listing: {
+        id: listing?.id,
+        title: listing?.title || 'Stay',
+        all_image_urls: listing?.all_image_urls || [],
+        images_data: listing?.images_data || [],
+        ...(convo.listing || {}),
+      },
+      host: {
+        id: listing?.host_id,
+        name: hostName,
+        avatar_url: hostImg,
+        ...(convo.host || {}),
+      },
+      guest: {
+        id: currentUserId,
+        name: currentUserName || 'Guest',
+        ...(convo.guest || {}),
+      },
+    };
+  };
+
   useEffect(() => {
     // Fetch Host extra info (KYC & Subscription)
     const fetchHostExtras = async () => {
@@ -279,6 +323,22 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
         setCurrentUserId(session.user.id);
+        // Pre-fetch existing conversation in background for instant opening
+        if (listing?.id) {
+          (async () => {
+            try {
+              const { data } = await supabase
+                .from('conversations')
+                .select('*')
+                .eq('listing_id', listing.id)
+                .eq('guest_id', session.user.id)
+                .maybeSingle();
+              if (data) setExistingConversation(getEnrichedConversation(data));
+            } catch (err) {
+              console.error("Failed to prefetch conversation:", err);
+            }
+          })();
+        }
         try {
           const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/users/${session.user.id}`);
           if (response.ok) {
@@ -467,7 +527,11 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
         taxes: totalPrice * 0.18,
       });
       setShowPrice(true);
-      setButtonText("Reserve");
+      // Don't flip to "Reserve" here — this fires live on every drawer
+      // interaction (including on mount, since dates default to a valid
+      // range). Only the drawer's own confirm button (handleApplyFromDrawer)
+      // should promote the CTA, otherwise opening the drawer and backing out
+      // silently switches the main page to "Reserve" with default guests.
       setShowChat(true);
       checkAirbnbPrice(dFrom.toDate(), dTo.toDate(), guests);
     } else {
@@ -533,80 +597,48 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
 
   const handleChat = async () => {
     triggerHaptic();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat/conversations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          listing_id: listing.id,
-          guest_id: session.user.id,
-        }),
-      });
-
-      if (response.ok) {
-        const conversation = await response.json();
-        const messagesResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat/messages/${conversation.id}`);
-
-        if (messagesResponse.ok) {
-          const messages = await messagesResponse.json();
-          if (messages && messages.length > 0) {
-            if (onOpenChat) onOpenChat(conversation);
-          } else {
-            setIsChatDrawerOpen(true);
-          }
-        } else {
-          setIsChatDrawerOpen(true);
-        }
-      } else {
-        setIsChatDrawerOpen(true);
+    const userId = currentUserId;
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (onOpenLogin) onOpenLogin("Login to chat with the host");
+        return;
       }
-    } catch (error) {
-      console.error("Error checking conversation:", error);
-      setIsChatDrawerOpen(true);
+      setCurrentUserId(session.user.id);
     }
+
+    if (existingConversation) {
+      if (onOpenChat) onOpenChat(getEnrichedConversation(existingConversation));
+      return;
+    }
+
+    // Open chat drawer immediately
+    setIsChatDrawerOpen(true);
   };
 
   const handleChatRequest = async () => {
     triggerHaptic();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      if (onOpenLogin) onOpenLogin("Login to chat with the host");
+    const userId = currentUserId;
+    if (!userId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (onOpenLogin) onOpenLogin("Login to chat with the host");
+        return;
+      }
+      setCurrentUserId(session.user.id);
+    }
+
+    if (existingConversation) {
+      if (onOpenChat) onOpenChat(getEnrichedConversation(existingConversation));
       return;
     }
 
-    try {
-      // Check if conversation already exists
-      const { data: existingConvo } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('listing_id', listing.id)
-        .eq('guest_id', session.user.id)
-        .maybeSingle();
-
-      if (existingConvo) {
-        // Chat exists, just open it without asking for dates!
-        handleChat();
-      } else {
-        // No chat exists, ask for dates if not selected
-        if (bookingDetails?.startDate && bookingDetails?.endDate) {
-          setIsChatDrawerOpen(true);
-        } else {
-          setChatIntent(true);
-          setIsDrawerOpen(true);
-        }
-      }
-    } catch (e) {
-      console.error("Error checking for existing conversation:", e);
-      // Fallback
-      if (bookingDetails?.startDate && bookingDetails?.endDate) {
-        setIsChatDrawerOpen(true);
-      } else {
-        setChatIntent(true);
-        setIsDrawerOpen(true);
-      }
+    // No chat exists, ask for dates if not selected
+    if (bookingDetails?.startDate && bookingDetails?.endDate) {
+      setIsChatDrawerOpen(true);
+    } else {
+      setChatIntent(true);
+      setIsDrawerOpen(true);
     }
   };
 
@@ -871,9 +903,7 @@ const ListingContent = ({ listing, setListing, id, bookings, onOpenChat, onOpenL
                 }}
                 initialGuests={bookingDetails?.guests || 1}
                 max_guests={listing.max_guests || 4}
-                pricePerNight={listing.price_per_night}
                 bookings={bookings}
-                listingName={listing.title}
               />
             </div>
           )}

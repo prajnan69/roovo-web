@@ -5,6 +5,7 @@ import { triggerHaptic } from '@/lib/haptics';
 import SplitPaymentDrawer from '../SplitPaymentDrawer';
 import { API_BASE_URL } from '@/services/api';
 import { createPaytmOrder, initiatePaytmCheckout } from '@/services/paytmService';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface AcceptOfferDrawerProps {
     isOpen: boolean;
@@ -24,6 +25,9 @@ interface AcceptOfferDrawerProps {
 }
 
 export default function AcceptOfferDrawer({ isOpen, onClose, onAccept, offer, listingTitle, guestId, guestPhone, listingId, hostId }: AcceptOfferDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSplitEnabled, setIsSplitEnabled] = useState(false);
     const [isSplitDrawerOpen, setIsSplitDrawerOpen] = useState(false);

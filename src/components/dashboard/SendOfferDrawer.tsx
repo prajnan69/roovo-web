@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar as CalendarIcon, DollarSign, ArrowRight } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface SendOfferDrawerProps {
     isOpen: boolean;
@@ -11,6 +12,9 @@ interface SendOfferDrawerProps {
 }
 
 export default function SendOfferDrawer({ isOpen, onClose, onSend, guestName }: SendOfferDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [priceStr, setPriceStr] = useState('');

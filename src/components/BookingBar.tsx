@@ -162,11 +162,6 @@ const BookingBar = ({
                   </AnimatePresence>
                 </div>
 
-                {/* Badges row — prototype style */}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, background: '#ECFDF5', color: '#059669', padding: '3px 9px', borderRadius: 99 }}>Save 15% vs Airbnb</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, background: '#EEEEFF', color: '#4F46E5', padding: '3px 9px', borderRadius: 99 }}>GST invoice</span>
-                </div>
               </>
             ) : (
               <div className="flex flex-col justify-center">

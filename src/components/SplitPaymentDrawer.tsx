@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Users, Plus, Phone, AlertCircle, Trash2 } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface SplitPaymentDrawerProps {
     isOpen: boolean;
@@ -16,6 +17,9 @@ interface SplitPaymentDrawerProps {
 }
 
 export default function SplitPaymentDrawer({ isOpen, onClose, totalAmount, onConfirm, successData, onPayPrimary }: SplitPaymentDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [participants, setParticipants] = useState<string[]>(['']); // Array of phone numbers, starting with one empty
     const [error, setError] = useState<string | null>(null);
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);

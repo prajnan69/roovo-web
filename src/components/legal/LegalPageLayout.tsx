@@ -9,7 +9,7 @@ const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({ title, children }) =>
     const { back } = useNavigation();
 
     return (
-        <div className="min-h-screen bg-white flex flex-col">
+        <div className="h-screen w-full overflow-y-auto overflow-x-hidden bg-white flex flex-col">
             {/* Header */}
             <header className="px-4 py-3 border-b border-slate-200 flex items-center sticky top-0 bg-white z-50 shadow-sm">
                 <button

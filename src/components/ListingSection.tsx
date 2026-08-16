@@ -1,10 +1,21 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import ListingCard from './ListingCard';
 import ListingCardSkeleton from './ListingCardSkeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ListingData as Listing } from '@/types';
+
+// The staggered fade-in is a first-load flourish. It used to replay on every
+// mount (every back-navigation, every filter change), which read as the whole
+// feed's images disappearing and reappearing. Module-level so it survives
+// remounts and is shared by all sections; resets only on a real page reload.
+let hasPlayedEntrance = false;
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0 },
+};
 
 interface ListingSectionProps {
   title: string;
@@ -19,10 +30,13 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // Generate a unique key for the list
-  const listUniqueKey = useMemo(() => {
-    return listings.map(l => l.id).join('-');
-  }, [listings]);
+  // Decided once per component instance: play the entrance only if no section
+  // has completed it yet this session.
+  const playEntrance = useRef(!hasPlayedEntrance).current;
+
+  useEffect(() => {
+    if (!loading && listings.length > 0) hasPlayedEntrance = true;
+  }, [loading, listings.length]);
 
   const checkScrollability = () => {
     const container = scrollContainerRef.current;
@@ -83,20 +97,19 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
             </motion.div>
           </AnimatePresence>
         )}
-        <button style={{ fontSize: 12, fontWeight: 600, color: '#4F46E5', display: 'flex', alignItems: 'center', gap: 3, background: '#EEEEFF', padding: '6px 12px', borderRadius: 99, border: 'none', flexShrink: 0 }}>
-          See all
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
       </div>
 
       <div className="relative">
+        {/* Keyed on loading only (not the listing ids): re-keying on ids
+            remounted every card — and its <img> nodes — whenever the data
+            identity changed, flashing the whole row. */}
         <motion.div
           ref={scrollContainerRef}
-          key={loading ? 'loading' : listUniqueKey}
+          key={loading ? 'loading' : 'content'}
           onScroll={checkScrollability}
           className="flex overflow-x-auto pb-4 scrollbar-hide"
           style={{ gap: size === 'small' ? 12 : 14, paddingLeft: 20, paddingRight: 20 }}
-          initial="hidden"
+          initial={playEntrance ? 'hidden' : false}
           animate="visible"
           variants={{
             visible: {
@@ -116,11 +129,7 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
               <motion.div
                 key={listing.id}
                 style={{ flexShrink: 0, width: size === 'small' ? 150 : 180 }}
-                layout
-                variants={{
-                  hidden: { opacity: 0, y: 20 },
-                  visible: { opacity: 1, y: 0 },
-                }}
+                variants={playEntrance ? cardVariants : undefined}
                 transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <ListingCard listing={listing} onImageLoad={onImageLoad} size={size} />

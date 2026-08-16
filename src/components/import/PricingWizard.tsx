@@ -10,6 +10,7 @@ import { triggerHaptic, triggerErrorHaptic } from "@/lib/haptics";
 import SlidingNumber from "../ui/SlidingNumber";
 import { Spinner } from "../ui/shadcn-io/spinner";
 import { Drawer } from "vaul";
+import { useBackCloseable } from "@/hooks/useBackCloseable";
 
 interface PricingWizardProps {
   airbnbPrice: number; // Airbnb guest pays (SOURCE OF TRUTH)
@@ -94,6 +95,8 @@ export default function PricingWizard({
     }
   }; const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // Hardware back closes the drawer instead of navigating
+  useBackCloseable(isDrawerOpen, () => setIsDrawerOpen(false));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [weekendPremium, setWeekendPremium] = useState(15);
 

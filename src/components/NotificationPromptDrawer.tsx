@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, ShieldAlert } from 'lucide-react';
 import { triggerHaptic } from '../lib/haptics';
+import { useBackCloseable } from '../hooks/useBackCloseable';
 
 interface NotificationPromptDrawerProps {
     isOpen: boolean;
@@ -12,6 +13,9 @@ interface NotificationPromptDrawerProps {
 }
 
 const NotificationPromptDrawer = ({ isOpen, onClose, onEnable, isLoading = false }: NotificationPromptDrawerProps) => {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     return (
         <AnimatePresence>
             {isOpen && (

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Home } from 'lucide-react';
 import InfinityCheckLoader from '../InfinityCheckLoader';
 import { supabase } from '../../services/api';
+import { useBackCloseable } from '../../hooks/useBackCloseable';
 
 interface VerifiedDrawerProps {
     isOpen: boolean;
@@ -30,6 +31,9 @@ export default function VerifiedDrawer({
     onClose,
     onSuccess
 }: VerifiedDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [stayName, setStayName] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);

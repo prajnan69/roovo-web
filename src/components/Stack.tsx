@@ -6,9 +6,12 @@ interface CardRotateProps {
   children: React.ReactNode;
   onSendToBack: () => void;
   sensitivity: number;
+  // Only the top card is reachable by touch, so only it needs the drag
+  // gesture machinery — the layers underneath skip pan listeners entirely.
+  draggable: boolean;
 }
 
-function CardRotate({ children, onSendToBack, sensitivity }: CardRotateProps) {
+function CardRotate({ children, onSendToBack, sensitivity, draggable }: CardRotateProps) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotateX = useTransform(y, [-100, 100], [60, -60]);
@@ -27,7 +30,7 @@ function CardRotate({ children, onSendToBack, sensitivity }: CardRotateProps) {
     <motion.div
       className="absolute cursor-grab"
       style={{ x, y, rotateX, rotateY }}
-      drag
+      drag={draggable}
       dragConstraints={{ top: 0, right: 0, bottom: 0, left: 0 }}
       dragElastic={0.6}
       whileTap={{ cursor: 'grabbing' }}
@@ -111,7 +114,12 @@ export default function Stack({
         const randomRotate = randomRotation ? Math.random() * 10 - 5 : 0;
 
         return (
-          <CardRotate key={card.id} onSendToBack={() => sendToBack(card.id)} sensitivity={sensitivity}>
+          <CardRotate
+            key={card.id}
+            onSendToBack={() => sendToBack(card.id)}
+            sensitivity={sensitivity}
+            draggable={index === cards.length - 1}
+          >
             <motion.div
               className="relative"
               onClick={() => sendToBackOnClick && sendToBack(card.id)}

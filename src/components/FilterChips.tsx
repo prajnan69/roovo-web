@@ -84,8 +84,11 @@ const FilterChips: React.FC<FilterChipsProps> = ({
       {dynamicFilters.map((filter) => {
         const isActive = activeFilter === filter.value || (filter as any).originalValue === activeFilter;
         const Icon = filter.icon;
-        const isAll = filter.value === 'all';
 
+        // Every chip — including "All" — is the same pill. "All" used to be
+        // special-cased to a 64x68 rounded square with a stacked icon-over-
+        // label layout and smaller text, so it sat visibly taller and wider
+        // than its neighbours in the same row.
         return (
           <motion.button
             key={filter.value}
@@ -94,15 +97,14 @@ const FilterChips: React.FC<FilterChipsProps> = ({
             transition={{ type: 'spring', stiffness: 280, damping: 18 }}
             style={{
               flexShrink: 0,
-              width: isAll ? 64 : 'auto',
-              height: isAll ? 68 : 40,
-              borderRadius: isAll ? 16 : 99,
-              padding: isAll ? 0 : '0 14px',
+              height: 40,
+              borderRadius: 99,
+              padding: '0 14px',
               display: 'flex',
-              flexDirection: isAll ? 'column' : 'row',
+              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: isAll ? 4 : 6,
+              gap: 6,
               border: isActive ? '1.5px solid var(--ind, #4F46E5)' : '1.5px solid rgba(0,0,0,.10)',
               background: isActive ? 'var(--indbg, #EEEEFF)' : 'var(--bg-card, #fff)',
               boxShadow: isActive ? '0 0 0 3px var(--indring, rgba(79,70,229,.13)), 0 1px 3px rgba(0,0,0,.05)' : '0 1px 3px rgba(0,0,0,.05)',
@@ -111,9 +113,9 @@ const FilterChips: React.FC<FilterChipsProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--ind, #4F46E5)' : 'var(--t3, #888880)' }}>
-              <Icon size={isAll ? 19 : 14} />
+              <Icon size={14} />
             </div>
-            <span style={{ fontSize: isAll ? 10 : 12, fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '.01em', textAlign: isAll ? 'center' : 'left', lineHeight: 1.2 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '.01em', textAlign: 'left', lineHeight: 1.2 }}>
               {filter.label}
             </span>
           </motion.button>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, LayoutGrid, BedDouble, ChevronDown, CheckCircle2, Home } from "lucide-react";
 import { Drawer } from "vaul";
+import { useBackCloseable } from "@/hooks/useBackCloseable";
 
 interface PhotoSortingStepProps {
     photos: string[];
@@ -20,6 +21,8 @@ export default function PhotoSortingStep({ photos, bedroomCount, onNext, onBack 
 
     const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isDrawerOpen, () => setIsDrawerOpen(false));
     const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
     // Helpers

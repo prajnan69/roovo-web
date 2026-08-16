@@ -1,0 +1,62 @@
+// Shown when a guest taps a Karnataka district that has no listings yet.
+// One picked at random per district-focus, matching the getRandomQuote
+// pattern in travelQuotes.ts — playful rather than a flat "no results",
+// matching the voice already used for empty/blocked states elsewhere in the
+// app (see the wittyMessages in MobileWhen.tsx).
+export const districtComingSoonMessages = [
+  "🚧 We haven't unpacked our bags here yet.",
+  "🌱 This district is still just a seed. Check back soon!",
+  "🗺️ Uncharted (by us) territory — for now.",
+  "🔭 We can see it from here, just not listed yet.",
+  "🐣 Too new to have stays yet — give it time.",
+  "🏗️ Under construction, quite literally.",
+  "🎒 We haven't scouted this one yet.",
+  "☕ Still brewing something for this area.",
+  "🚀 Not launched here yet, but it's on the roadmap.",
+  "🌤️ Clear skies, empty listings — for now.",
+  "🧭 Off our map for the moment.",
+  "🪴 Growing our footprint — this one's next in line.",
+  "🔜 Coming soon to a district near you.",
+  "🛠️ We're working on it, promise.",
+  "📭 Nothing here yet — but we're on it.",
+  "🌾 Still scouting stays in this region.",
+  "🗓️ Mark your calendar, not your map — yet.",
+  "🧳 Pack your patience, this one's coming.",
+  "🕊️ Quiet here for now, but not for long.",
+  "🌉 We haven't crossed into this district yet.",
+  "🎈 Nothing to book here — yet!",
+  "🌻 This area's still on our wishlist.",
+  "🚪 Doors not open here just yet.",
+  "🧩 Missing piece — we're finding hosts here.",
+  "🌊 Uncharted waters for Roovo, for now.",
+  "🏞️ Beautiful, we're sure — just not listed yet.",
+  "🐌 Slow and steady, this district's turn is coming.",
+  "🛎️ No hosts checked in here yet.",
+  "🌦️ Forecast: listings arriving eventually.",
+  "🪁 Still finding our footing here.",
+  "🎯 Not on target yet — but it's in our sights.",
+  "🌵 A little empty here, like a desert. For now.",
+  "🧭 We haven't pinned this one down yet.",
+  "🚉 Next stop, eventually.",
+  "🌙 Quiet for now — good things take time.",
+  "🖼️ No stays framed here yet.",
+  "🐦 Early bird hasn't landed here yet.",
+  "🏕️ We haven't pitched camp in this district.",
+  "🌈 Nothing at the end of this rainbow — yet.",
+  "🔍 Still searching for hosts around here.",
+  "🧵 Still stitching this district into the map.",
+  "🍃 Fresh ground, no listings sprouted yet.",
+  "📌 Not pinned on our board just yet.",
+  "🛶 We haven't paddled over here yet.",
+  "🎨 A blank canvas for now.",
+  "⛺ No stays pitched here yet.",
+  "🌰 Early days for this district.",
+  "🚦 Green light coming — just not yet.",
+  "🏔️ On the horizon, not on the map yet.",
+  "✨ Something's coming — just not here yet.",
+];
+
+export const getRandomComingSoonMessage = () => {
+  const randomIndex = Math.floor(Math.random() * districtComingSoonMessages.length);
+  return districtComingSoonMessages[randomIndex];
+};

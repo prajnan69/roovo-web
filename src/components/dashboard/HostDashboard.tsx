@@ -11,6 +11,7 @@ import Bookings from "./Bookings";
 import Payouts from "./Payouts";
 import PayoutMethods from "./PayoutMethods";
 import { useNavigation } from "@/hooks/useNavigation";
+import { usePreloadedData } from "@/context/PreloadContext";
 import supabase, { fetchConversationsByHostId } from "../../services/api";
 
 interface HostDashboardProps {
@@ -20,7 +21,26 @@ interface HostDashboardProps {
 }
 
 const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedConversation, onConversationSelect }) => {
-  const { pathname } = useNavigation();
+  const { pathname, navigate } = useNavigation();
+  const { profileData } = usePreloadedData();
+
+  // Client-side gate: the dashboard is host-only. Logged-out users and
+  // non-host guests (e.g. arriving via /hosting after guest KYC) go home.
+  // The backend must still enforce this on its own endpoints.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!cancelled && !session) navigate('/');
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (profileData && !profileData.is_host) navigate('/');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileData]);
 
   const renderContent = () => {
     if (pathname === "/hosting/calendar") {

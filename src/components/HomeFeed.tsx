@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ListingSection from './ListingSection';
 import { API_BASE_URL } from '@/services/api';
 import MobileSearchBar from './MobileSearchBar';
@@ -11,6 +11,8 @@ import { getCachedListings, setCachedListings, getListingsPrefetch } from '@/ser
 import { useBottomNavBar } from '@/context/BottomNavBarContext';
 import { useNavigation } from '@/hooks/useNavigation';
 import RecentlyViewedBanner from './RecentlyViewedBanner';
+import { Map } from 'lucide-react';
+import FullScreenMap from './search/FullScreenMap';
 import FilterChips from './FilterChips';
 import { AnimatePresence, motion, LayoutGroup } from 'framer-motion';
 import RoovoLogo from './RoovoLogo';
@@ -19,6 +21,12 @@ import { getRandomQuote } from '@/data/travelQuotes';
 import SplitStatusDrawer from './SplitStatusDrawer';
 import Footer from './Footer';
 import { resolveImageUrl } from '@/utils/imageUtils';
+
+// Refetches often return payloads identical to what's already on screen; fresh
+// object identities would re-render every card for nothing, so keep the
+// previous state object when the data hasn't actually changed.
+const keepIfUnchanged = <T,>(next: T) => (prev: T): T =>
+  JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 
 const HomeFeed: React.FC<{
   onSwitchToHost?: () => void;
@@ -33,31 +41,71 @@ const HomeFeed: React.FC<{
   upcomingBooking,
   pendingSplit,
 }) => {
-    console.log('HomeFeed Props - pendingSplit:', pendingSplit, 'upcomingBooking:', upcomingBooking);
     const { setIsNavBarVisible } = useBottomNavBar();
-    const { navigate } = useNavigation();
+    const { navigate, pathname } = useNavigation();
     const [isSplitStatusOpen, setIsSplitStatusOpen] = useState(false);
+    const [isMapOpen, setIsMapOpen] = useState(false);
     const [listings, setListings] = useState<Listing[]>(() => getCachedListings() || []);
-    const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
-    const [recentlyViewed, setRecentlyViewed] = useState<Listing[]>([]);
+    const [recentlyViewed, setRecentlyViewed] = useState<Listing[]>(() => {
+      try {
+        const localHistoryStr = localStorage.getItem('recentlyViewed');
+        if (localHistoryStr) {
+          const parsed = JSON.parse(localHistoryStr);
+          if (Array.isArray(parsed)) {
+            return parsed.filter(item => item && item.inventory_type !== 'private_room').slice(0, 10);
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing local recently viewed for initial state:', e);
+      }
+      return [];
+    });
     const [headerState, setHeaderState] = useState<'greeting' | 'hidden'>('greeting');
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !getCachedListings());
     const [error, setError] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [quote, setQuote] = useState('');
     const [activeFilter, setActiveFilter] = useState('all');
     const [isFiltering, setIsFiltering] = useState(false);
-    const [scrollY, setScrollY] = useState(0);
+    const [isScrolled, setIsScrolled] = useState(false);
+
+    // Derived, not state: keeping this in a useState synced by an effect left
+    // the first paint after a remount with empty sections (the effect only ran
+    // after paint), which flashed the placeholder cards before the real ones.
+    const filteredListings = useMemo(() => {
+      if (activeFilter === 'all') return listings;
+      return listings.filter(listing => {
+        // Check category first (Exact match with activeFilter value)
+        const matches = listing.category === activeFilter;
+        if (matches) return true;
+
+        // Fallback to legacy/property_type filters
+        if (activeFilter === 'apartment') return listing.property_type === 'Apartment';
+        if (activeFilter === 'house') return listing.property_type === 'House';
+        if (activeFilter === 'villa') return listing.property_type === 'Villa';
+
+        // Feature filters
+        if (activeFilter === '1_bed') return listing.total_beds === 1;
+        if (activeFilter === '2_plus_beds') return (listing.total_beds || 0) >= 2;
+        if (activeFilter === 'pet_friendly') return listing.pets_allowed;
+
+        if (activeFilter === 'self_check_in') {
+          return (listing as any).self_check_in === true;
+        }
+        return false;
+      });
+    }, [activeFilter, listings]);
 
     useEffect(() => {
       onLoadingChange?.(loading);
     }, [loading, onLoadingChange]);
 
-    // Ensure nav bar is visible when HomeFeed mounts (fixes missing nav bar after back from Search)
+    // Ensure nav bar is visible whenever home becomes the active route (fixes
+    // missing nav bar after back from Search). Keyed to pathname, not mount:
+    // HomeFeed now stays permanently mounted across navigation.
     useEffect(() => {
-      setIsNavBarVisible(true);
-      return () => setIsNavBarVisible(true); // Safety cleanup
-    }, [setIsNavBarVisible]);
+      if (pathname === '/') setIsNavBarVisible(true);
+    }, [pathname, setIsNavBarVisible]);
 
     const handleFilterChange = (newFilter: string) => {
       if (newFilter === activeFilter) return;
@@ -95,76 +143,93 @@ const HomeFeed: React.FC<{
 
     const fetchListings = async (city?: string) => {
       setError(null);
-      setLoading(true);
+      if (listings.length === 0) {
+        setLoading(true);
+      }
 
       try {
         let listingsWithExtras: Listing[];
 
-        // For the default (no city filter) load, reuse the module-level
-        // prefetch promise that was started in main.tsx — it may already
-        // be resolved, making this effectively synchronous.
+        // For the default (no city filter) load, fetch fresh listings from the network (revalidate)
         if (!city) {
-          const prefetch = getListingsPrefetch();
-          if (prefetch) {
-            listingsWithExtras = await prefetch;
-          } else {
-            const cachedListings = getCachedListings();
-            if (cachedListings) {
-              listingsWithExtras = cachedListings;
-            } else {
-              const response = await fetch(`${API_BASE_URL}/api/listings`);
-              if (!response.ok) throw new Error('Failed to fetch listings');
-              const data = await response.json();
-              listingsWithExtras = (data.data || []).map((listing: Listing) => ({
-                ...listing,
-                rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
-              }));
-              setCachedListings(listingsWithExtras);
+          // Check if cache is fresh enough (e.g. less than 60 seconds old) to skip refetch
+          let isCacheFresh = false;
+          try {
+            const cachedData = localStorage.getItem('listingsCache');
+            if (cachedData) {
+              const { timestamp } = JSON.parse(cachedData);
+              if (Date.now() - timestamp < 60000) { // 60 seconds
+                isCacheFresh = true;
+              }
             }
+          } catch {}
+
+          if (isCacheFresh && listings.length > 0) {
+            return;
           }
+
+          const response = await fetch(`${API_BASE_URL}/api/listings`);
+          if (!response.ok) throw new Error('Failed to fetch listings');
+          const data = await response.json();
+          listingsWithExtras = (data.data || []).map((listing: Listing) => {
+            const idStr = String(listing.id);
+            let hash = 0;
+            for (let i = 0; i < idStr.length; i++) {
+              hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const ratingVal = 4.2 + (Math.abs(hash) % 9) * 0.1;
+            return {
+              ...listing,
+              rating: listing.overall_rating || ratingVal.toFixed(1),
+            };
+          });
+          setCachedListings(listingsWithExtras);
         } else {
           const response = await fetch(`${API_BASE_URL}/api/listings?city=${city}`);
           if (!response.ok) throw new Error('Failed to fetch listings');
           const data = await response.json();
-          listingsWithExtras = (data.data || []).map((listing: Listing) => ({
-            ...listing,
-            rating: listing.overall_rating || (Math.random() * (5.0 - 4.2) + 4.2).toFixed(1),
-          }));
+          listingsWithExtras = (data.data || []).map((listing: Listing) => {
+            const idStr = String(listing.id);
+            let hash = 0;
+            for (let i = 0; i < idStr.length; i++) {
+              hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const ratingVal = 4.2 + (Math.abs(hash) % 9) * 0.1;
+            return {
+              ...listing,
+              rating: listing.overall_rating || ratingVal.toFixed(1),
+            };
+          });
         }
 
-        setListings(listingsWithExtras);
-        setFilteredListings(listingsWithExtras);
+        setListings(keepIfUnchanged(listingsWithExtras));
 
-        // Preload first 4 listings' top 5 images
-        const imagesToPreload = listingsWithExtras
+        // Warm the cache for the first screenful of images so cards don't
+        // pop in blank, but don't hold the skeleton up for it — these are
+        // third-party (Airbnb CDN) images with unpredictable load time, and
+        // the listing data itself is already ready to render.
+        listingsWithExtras
           .slice(0, 4)
           .flatMap((l: any) => (l.all_image_urls || []).slice(0, 5).map((img: any) => {
             const path = typeof img === 'string' ? img : img?.url;
             return resolveImageUrl(path);
           }))
-          .filter(Boolean);
-
-        if (imagesToPreload.length > 0) {
-          await Promise.all(
-            imagesToPreload.map(
-              (src: string) =>
-                new Promise((resolve) => {
-                  const img = new window.Image();
-                  img.onload = resolve;
-                  img.onerror = resolve;
-                  img.src = src;
-                })
-            )
-          );
-        }
+          .filter(Boolean)
+          .forEach((src: string) => {
+            const img = new window.Image();
+            img.src = src;
+          });
       } catch (error) {
         console.error('Error fetching listings:', error);
-        const cachedListings = getCachedListings();
-        if (cachedListings) {
-          setListings(cachedListings);
-          setFilteredListings(cachedListings);
+        if (listings.length > 0) {
+          // Keep showing currently loaded listings
         } else {
-          setError("We couldn't load the listings. Please try again later.");
+          const cachedListings = getCachedListings();
+          if (cachedListings) {
+            setListings(cachedListings);
+          } else {
+            setError('Could not load listings. Please check your internet connection.');
+          }
         }
       } finally {
         setLoading(false);
@@ -175,7 +240,10 @@ const HomeFeed: React.FC<{
     useEffect(() => {
       const handleScroll = () => {
         const currentScrollY = window.scrollY;
-        setScrollY(currentScrollY);
+        // Threshold boolean, not the raw value: setting scrollY in state
+        // re-rendered the entire feed on every scroll frame. React bails out
+        // when the boolean doesn't change, so this only renders at crossings.
+        setIsScrolled(currentScrollY > 10);
 
         // If dragging way down (overscroll simulation)
         if (currentScrollY < -50) {
@@ -202,130 +270,101 @@ const HomeFeed: React.FC<{
       const timer = setTimeout(() => setHeaderState('hidden'), 5000);
       return () => clearTimeout(timer);
     }, []);
-
     // Main Initialization Effect
     useEffect(() => {
       setQuote(getRandomQuote());
+
+      // Previously delayed by 300ms for no clear reason — HomeFeed mounts
+      // only after the splash screen unmounts, so nothing here needs to wait
+      // its turn. That delay was pure added time in front of the skeleton.
       fetchListings();
 
       const fetchUserDataAndHistory = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const combinedRecentlyViewed: Listing[] = [];
+          const { data: { session } } = await supabase.auth.getSession();
+          const combinedRecentlyViewed: Listing[] = [];
 
-        // 1. Get Local items first
-        let localItems: Listing[] = [];
-        try {
-          const localHistoryStr = localStorage.getItem('recentlyViewed');
-          if (localHistoryStr) {
-            localItems = JSON.parse(localHistoryStr);
-          }
-        } catch (e) {
-          console.error('Error parsing local recently viewed:', e);
-        }
-
-        // 2. Validate Local items and fetch DB items
-        try {
-          const apiRequests: Promise<any>[] = [];
-
-          // API request for DB items (if logged in)
-          if (session) {
-            apiRequests.push(fetch(`${API_BASE_URL}/api/recently-viewed/${session.user.id}`).then(res => res.json()));
-          }
-
-          // API request to validate local items
-          if (localItems.length > 0) {
-            const localIds = localItems.map(item => item.id);
-            apiRequests.push(fetch(`${API_BASE_URL}/api/listings/batch`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids: localIds })
-            }).then(res => res.json()));
-          }
-
-          const results = await Promise.all(apiRequests);
-
-          let dbListings: Listing[] = [];
-          let validatedLocalListings: Listing[] = [];
-
-          if (session) {
-            const dbData = results[0];
-            if (Array.isArray(dbData)) {
-              dbListings = dbData.map((item: any) => item.listings);
+          // 1. Get Local items first
+          let localItems: Listing[] = [];
+          try {
+            const localHistoryStr = localStorage.getItem('recentlyViewed');
+            if (localHistoryStr) {
+              localItems = JSON.parse(localHistoryStr);
             }
+          } catch (e) {
+            console.error('Error parsing local recently viewed:', e);
+          }
+
+          // 2. Validate Local items and fetch DB items
+          try {
+            const apiRequests: Promise<any>[] = [];
+
+            // API request for DB items (if logged in)
+            if (session) {
+              apiRequests.push(fetch(`${API_BASE_URL}/api/recently-viewed/${session.user.id}`).then(res => res.json()));
+            }
+
+            // API request to validate local items
             if (localItems.length > 0) {
-              const batchData = results[1];
+              const localIds = localItems.map(item => item.id);
+              apiRequests.push(fetch(`${API_BASE_URL}/api/listings/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: localIds })
+              }).then(res => res.json()));
+            }
+
+            const results = await Promise.all(apiRequests);
+
+            let dbListings: Listing[] = [];
+            let validatedLocalListings: Listing[] = [];
+
+            if (session) {
+              const dbData = results[0];
+              if (Array.isArray(dbData)) {
+                dbListings = dbData.map((item: any) => item.listings);
+              }
+              if (localItems.length > 0) {
+                const batchData = results[1];
+                if (batchData?.data) validatedLocalListings = batchData.data;
+              }
+            } else if (localItems.length > 0) {
+              const batchData = results[0];
               if (batchData?.data) validatedLocalListings = batchData.data;
             }
-          } else if (localItems.length > 0) {
-            const batchData = results[0];
-            if (batchData?.data) validatedLocalListings = batchData.data;
+
+            combinedRecentlyViewed.push(...validatedLocalListings);
+            combinedRecentlyViewed.push(...dbListings);
+
+            // Update localStorage with validated items (optional but good for consistency)
+            if (validatedLocalListings.length !== localItems.length) {
+              localStorage.setItem('recentlyViewed', JSON.stringify(validatedLocalListings));
+            }
+
+          } catch (error) {
+            console.error('Error fetching/validating recently viewed:', error);
+            // Fallback to local items if API fails (better than nothing)
+            combinedRecentlyViewed.push(...localItems);
           }
 
-          combinedRecentlyViewed.push(...validatedLocalListings);
-          combinedRecentlyViewed.push(...dbListings);
+          // 3. Keep first occurrence (newest) of each listing, and filter out individual rooms
+          const seen = new Set();
+          const uniqueRecentlyViewed = combinedRecentlyViewed.filter(item => {
+            if (!item || !item.id) return false;
 
-          // Update localStorage with validated items (optional but good for consistency)
-          if (validatedLocalListings.length !== localItems.length) {
-            localStorage.setItem('recentlyViewed', JSON.stringify(validatedLocalListings));
-          }
+            // Filter out private rooms from home page Recently Viewed
+            if (item.inventory_type === 'private_room') return false;
 
-        } catch (error) {
-          console.error('Error fetching/validating recently viewed:', error);
-          // Fallback to local items if API fails (better than nothing)
-          combinedRecentlyViewed.push(...localItems);
-        }
+            const idString = String(item.id);
+            if (seen.has(idString)) return false;
+            seen.add(idString);
+            return true;
+          }).slice(0, 10);
 
-        // 3. Keep first occurrence (newest) of each listing, and filter out individual rooms
-        const seen = new Set();
-        const uniqueRecentlyViewed = combinedRecentlyViewed.filter(item => {
-          if (!item || !item.id) return false;
-
-          // Filter out private rooms from home page Recently Viewed
-          if (item.inventory_type === 'private_room') return false;
-
-          const idString = String(item.id);
-          if (seen.has(idString)) return false;
-          seen.add(idString);
-          return true;
-        }).slice(0, 10);
-
-        setRecentlyViewed(uniqueRecentlyViewed);
+        setRecentlyViewed(keepIfUnchanged(uniqueRecentlyViewed));
       };
 
       fetchUserDataAndHistory();
     }, []);
-
-    useEffect(() => {
-      const applyFilters = () => {
-        console.log('[HomeFeed] Applying filters. Active Filter:', activeFilter);
-        if (activeFilter === 'all') {
-          setFilteredListings(listings);
-        } else {
-          const filtered = listings.filter(listing => {
-            // Check category first (Exact match with activeFilter value)
-            const matches = listing.category === activeFilter;
-            if (matches) return true;
-
-            // Fallback to legacy/property_type filters
-            if (activeFilter === 'apartment') return listing.property_type === 'Apartment';
-            if (activeFilter === 'house') return listing.property_type === 'House';
-            if (activeFilter === 'villa') return listing.property_type === 'Villa';
-
-            // Feature filters
-            if (activeFilter === '1_bed') return listing.total_beds === 1;
-            if (activeFilter === '2_plus_beds') return (listing.total_beds || 0) >= 2;
-            if (activeFilter === 'pet_friendly') return listing.pets_allowed;
-
-            if (activeFilter === 'self_check_in') {
-              return (listing as any).self_check_in === true;
-            }
-            return false;
-          });
-          setFilteredListings(filtered);
-        }
-      };
-      applyFilters();
-    }, [activeFilter, listings]);
 
     const renderContent = () => {
       if (error) {
@@ -350,11 +389,10 @@ const HomeFeed: React.FC<{
             <AnimatePresence>
               {recentlyViewed.length > 0 && (
                 <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.5, ease: 'easeInOut' }}
-                  style={{ overflow: 'hidden' }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
                 >
                   <RecentlyViewedBanner listings={recentlyViewed} />
                 </motion.div>
@@ -428,7 +466,7 @@ const HomeFeed: React.FC<{
     };
 
     return (
-      <div className="min-h-screen relative" style={{ background: '#FAF9F7' }}>
+      <div className="h-screen w-full overflow-y-auto overflow-x-hidden relative" style={{ background: '#FAF9F7' }}>
         <AnimatePresence>
           {/* Full screen loader removed for skeleton UI */}
         </AnimatePresence>
@@ -438,16 +476,16 @@ const HomeFeed: React.FC<{
           style={{
             background: headerState === 'greeting'
               ? 'rgba(250,249,247,0.78)'
-              : scrollY > 25 ? 'rgba(250,249,247,0.96)' : 'transparent',
+              : isScrolled ? 'rgba(250,249,247,0.96)' : 'transparent',
             backdropFilter: headerState === 'greeting'
               ? 'blur(24px)'
-              : scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+              : isScrolled ? 'blur(20px)' : 'none',
             WebkitBackdropFilter: headerState === 'greeting'
               ? 'blur(24px)'
-              : scrollY > 10 ? `blur(${Math.min(22, (scrollY / 60) * 22)}px)` : 'none',
+              : isScrolled ? 'blur(20px)' : 'none',
             borderBottom: headerState === 'greeting'
               ? '1px solid rgba(0,0,0,.06)'
-              : scrollY > 48 ? '1px solid rgba(0,0,0,.065)' : 'none',
+              : isScrolled ? '1px solid rgba(0,0,0,.065)' : 'none',
             borderRadius: headerState === 'greeting' ? '0 0 28px 28px' : 0,
             transition: 'background .3s, border-color .3s, backdrop-filter .3s, border-radius .3s',
             paddingTop: 'max(env(safe-area-inset-top), 12px)',
@@ -489,13 +527,16 @@ const HomeFeed: React.FC<{
                 <p style={{ fontWeight: 700, color: '#0A0A09', fontSize: 15, letterSpacing: '-.02em' }}>Where To?</p>
                 <p style={{ fontSize: 12, color: '#888880', fontWeight: 500, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Goa · Bengaluru · Pondicherry</p>
               </div>
+              {/* Opens every Karnataka stay on a full-screen map. Replaced a
+                  refresh button that did a hard window.location.reload() —
+                  a full app restart is not something a home screen should
+                  offer, and it threw away all in-memory state. */}
               <div
-                onClick={(e) => { e.stopPropagation(); triggerHaptic(); window.location.reload(); }}
-                style={{ padding: 8, borderRadius: '9999px', border: '1px solid rgba(0,0,0,0.065)', color: '#888880', display: 'flex' }}
+                onClick={(e) => { e.stopPropagation(); triggerHaptic(); setIsMapOpen(true); }}
+                style={{ padding: 8, borderRadius: '9999px', border: '1px solid rgba(0,0,0,0.065)', color: '#4F46E5', display: 'flex' }}
+                aria-label="Browse stays on a map"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 14, height: 14 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <Map style={{ width: 15, height: 15 }} strokeWidth={2.2} />
               </div>
             </div>
 
@@ -572,6 +613,12 @@ const HomeFeed: React.FC<{
           isOpen={isSplitStatusOpen}
           onClose={() => setIsSplitStatusOpen(false)}
           splitData={pendingSplit}
+        />
+
+        <FullScreenMap
+          isOpen={isMapOpen}
+          onClose={() => setIsMapOpen(false)}
+          listings={listings}
         />
 
       </div>

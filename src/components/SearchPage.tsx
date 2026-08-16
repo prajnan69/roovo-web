@@ -8,14 +8,19 @@ import RoovoLoader from './RoovoLoader';
 import { motion } from 'framer-motion';
 import type { ListingData } from '@/types';
 import { useNavigation } from '@/hooks/useNavigation';
-import MobileSearchModal from './MobileSearchModal';
+import SearchFlow from './search/SearchFlow';
 
 import { getDistanceFromLatLonInKm } from '@/lib/utils';
 
 export default function SearchPage() {
   const [listings, setListings] = useState<ListingData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'list' | 'map'>('list');
+  // Arriving with coordinates means the guest picked a place off the district
+  // map, so land them back on a map showing what's there. Plain/text searches
+  // still open as a list.
+  const [view, setView] = useState<'list' | 'map'>(() =>
+    new URLSearchParams(window.location.search).get('lat') ? 'map' : 'list'
+  );
   const { navigate, back, search } = useNavigation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRadiusSearchFailed, setIsRadiusSearchFailed] = useState(false);
@@ -33,6 +38,21 @@ export default function SearchPage() {
   const [childrenState, setChildrenState] = useState(0);
   const [pets, setPets] = useState(params.get('pets') ? parseInt(params.get('pets')!) : 0);
 
+  // Keep the form state matched to the URL. The useState initialisers above
+  // only run on mount, and this page stays mounted across searches — so
+  // without this, reopening the search sheet from the results header showed
+  // "Anywhere" and no guests while the results behind it showed the real
+  // query. The URL is the source of truth for what's on screen.
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    setSelectedCity({ name: p.get('location') || 'Anywhere', img: '' });
+    setDates({
+      checkIn: p.get('checkIn') ? new Date(p.get('checkIn')!) : null,
+      checkOut: p.get('checkOut') ? new Date(p.get('checkOut')!) : null,
+    });
+    setAdults(p.get('guests') ? parseInt(p.get('guests')!) : 0);
+    setPets(p.get('pets') ? parseInt(p.get('pets')!) : 0);
+  }, [search]);
 
   useEffect(() => {
     const fetchSearchResults = async () => {
@@ -99,9 +119,10 @@ export default function SearchPage() {
   }, [search]);
 
   const location = selectedCity.name;
+  const isFlexibleSearch = params.get('flexible') === '1';
   const dateText = dates.checkIn && dates.checkOut
     ? `${dates.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${dates.checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : 'Any week';
+    : isFlexibleSearch ? 'Flexible dates' : 'Any week';
 
   const totalGuests = adults + childrenState;
   const guestsText = totalGuests > 0 ? `${totalGuests} ${totalGuests > 1 ? 'guests' : 'guest'}` : 'Add guests';
@@ -218,7 +239,7 @@ export default function SearchPage() {
           </div>
         </main>
       </div>
-      <MobileSearchModal
+      <SearchFlow
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         selectedCity={selectedCity}

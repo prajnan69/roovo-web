@@ -39,13 +39,13 @@ const SlideToReserve = ({ onSlide, variant = "reserve", text, resetSignal }: { o
   const handleSlide = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
-    triggerHaptic(20);
+    triggerHaptic();
 
     const success = await onSlide();
 
     if (success) {
       setIsSuccess(true);
-      triggerHaptic(40);
+      triggerHaptic();
     } else {
       triggerErrorHaptic();
       controls.start({ x: 0, transition: { type: "spring", stiffness: 400, damping: 25 } });
@@ -101,7 +101,7 @@ const SlideToReserve = ({ onSlide, variant = "reserve", text, resetSignal }: { o
         style={{ x }}
         animate={controls}
         onDragStart={() => {
-          triggerHaptic(10);
+          triggerHaptic();
         }}
         onDragEnd={async (_) => {
           if (x.get() > dragBounds * 0.75) {
@@ -111,7 +111,7 @@ const SlideToReserve = ({ onSlide, variant = "reserve", text, resetSignal }: { o
             await handleSlide();
           } else {
             // Snap back
-            triggerHaptic(10);
+            triggerHaptic();
             controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
           }
         }}

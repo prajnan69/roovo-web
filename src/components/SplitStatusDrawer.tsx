@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Users, CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import supabase from '@/services/api';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface SplitStatusDrawerProps {
     isOpen: boolean;
@@ -11,6 +12,9 @@ interface SplitStatusDrawerProps {
 }
 
 export default function SplitStatusDrawer({ isOpen, onClose, splitData }: SplitStatusDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [currentUserPhone, setCurrentUserPhone] = useState<string>('');
 
     useEffect(() => {

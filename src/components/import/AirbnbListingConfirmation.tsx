@@ -4,6 +4,7 @@ import { Star, Users, BedDouble, Bath, Check, X, ChevronDown, ChevronUp, Home, S
 import { triggerHaptic } from "@/lib/haptics";
 import Toast from "../ui/toast";
 import { Drawer } from "vaul";
+import { useBackCloseable } from "@/hooks/useBackCloseable";
 
 interface AirbnbListingData {
     id: string;
@@ -96,6 +97,8 @@ export default function AirbnbListingConfirmation({ data, onConfirm, onCancel, c
     // Room Splitting State
     const [enableRoomSplitting, setEnableRoomSplitting] = useState(initialRoomSplit);
     const [isRoomSplitDrawerOpen, setIsRoomSplitDrawerOpen] = useState(false);
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isRoomSplitDrawerOpen, () => setIsRoomSplitDrawerOpen(false));
     const [hasDeclinedSmartInventory, setHasDeclinedSmartInventory] = useState(false);
 
     // Animation Stage State

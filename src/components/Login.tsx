@@ -7,6 +7,7 @@ import RoovoLogo from "./RoovoLogo";
 import { triggerHaptic, triggerErrorHaptic } from "@/lib/haptics";
 import Toast from './ui/toast';
 import { useNavigation } from '@/hooks/useNavigation';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 import { API_BASE_URL, default as supabase } from "@/services/api";
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -38,6 +39,9 @@ export default function Login({
   redirectPath,
   isDrawer = false,
 }: LoginProps) {
+  // Hardware back closes the login overlay instead of navigating
+  useBackCloseable(isOpen, onClose);
+
   // State
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phoneNumber, setPhoneNumber] = useState("");

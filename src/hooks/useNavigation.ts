@@ -23,7 +23,18 @@ export const useNavigation = () => {
   };
 
   const back = () => {
+    const pathBeforeBack = window.location.pathname;
     window.history.back();
+    // Safety net: on some Android WebView configurations, history.back() can
+    // silently no-op (no popstate fires) when the only prior entry is a
+    // client-side pushState — not a real page load — leaving the user stuck
+    // on the page they tried to leave. If nothing happened after a beat,
+    // force a deterministic navigation home instead of leaving them stranded.
+    setTimeout(() => {
+      if (window.location.pathname === pathBeforeBack) {
+        navigate('/');
+      }
+    }, 400);
   };
 
   return { pathname, search, navigate, back };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Calendar, Zap, TrendingUp, TrendingDown, Info, Sun } from "lucide-react";
+import { useBackCloseable } from "@/hooks/useBackCloseable";
 
 interface SmartPricingDrawerProps {
     isOpen: boolean;
@@ -52,6 +53,9 @@ export default function SmartPricingDrawer({
     onApplyHolidayPremium,
     onApplyWeekendPremium,
 }: SmartPricingDrawerProps) {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [weekendPercent, setWeekendPercent] = useState(20);
 
     return (

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Keyboard } from "@capacitor/keyboard";
 import supabase from "../services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
 import { triggerHaptic } from "@/lib/haptics";
-import { Keyboard } from "@capacitor/keyboard";
 import { Plus, Sparkles, AlertCircle, ShieldCheck } from "lucide-react";
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
 import { API_BASE_URL } from "../services/api";
@@ -23,6 +24,20 @@ const formatNiceDate = (dateString: string) => {
   return `${day} ${month} ${year}`; // e.g., 12 jun 2026
 };
 
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+// Label for the sticky separator above a run of same-day messages.
+const getDayLabel = (dateString: string) => {
+  const date = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameDay(date, today)) return 'Today';
+  if (isSameDay(date, yesterday)) return 'Yesterday';
+  return formatNiceDate(dateString);
+};
+
 export interface ChatProps {
   conversationId: string;
   otherUser?: any;
@@ -34,6 +49,12 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  // Messages present on the first load of a conversation. Those render in
+  // place with no enter animation — animating a whole screenful of bubbles
+  // up from y:12 while the chat panel is itself sliding in is the jitter.
+  // Only messages that arrive afterwards (sent/received live) animate.
+  const initialMessageIdsRef = useRef<Set<string>>(new Set());
   const [session, setSession] = useState<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -44,26 +65,60 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
   // --- Keyboard & Auth Setup ---
   useEffect(() => {
-    const setupKeyboard = async () => {
-      if (typeof window !== 'undefined') {
-        // Re-enabling manual keyboard handling as native resize wasn't effective
-        Keyboard.addListener("keyboardWillShow", (info) => {
-          setKeyboardHeight(info.keyboardHeight);
-        });
-        Keyboard.addListener("keyboardWillHide", () => {
-          setKeyboardHeight(0);
-        });
-      }
-    };
-    setupKeyboard();
+    // Keyboard occlusion = how much of the layout viewport the keyboard
+    // covers. Two independent signals, take whichever reports more:
+    //  - visualViewport: reports it on platforms where the window keeps its
+    //    size and only the visual viewport shrinks under the keyboard.
+    //  - native Keyboard events: cover WebViews where NEITHER the window nor
+    //    visualViewport react to the keyboard (Android 15 edge-to-edge — the
+    //    visualViewport-only version of this code read 0 there and left the
+    //    input buried). The native height is reduced by however much the
+    //    window itself shrank, so platforms where adjustResize still works
+    //    never double-compensate.
+    const vv = window.visualViewport;
+    let nativeKeyboard = 0;
+    let baselineInnerHeight = window.innerHeight;
 
+    const update = () => {
+      if (nativeKeyboard === 0) baselineInnerHeight = window.innerHeight;
+      const vvOcclusion = vv
+        ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+        : 0;
+      const windowShrank = Math.max(0, baselineInnerHeight - window.innerHeight);
+      const nativeOcclusion = Math.max(0, nativeKeyboard - windowShrank);
+      setKeyboardHeight(Math.max(vvOcclusion, nativeOcclusion));
+    };
+
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+
+    const listeners: Promise<{ remove: () => Promise<void> }>[] = [];
+    if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('Keyboard')) {
+      listeners.push(Keyboard.addListener('keyboardWillShow', (info) => {
+        nativeKeyboard = info.keyboardHeight || 0;
+        update();
+      }));
+      listeners.push(Keyboard.addListener('keyboardWillHide', () => {
+        nativeKeyboard = 0;
+        update();
+      }));
+    }
+    update();
+    return () => {
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      listeners.forEach(l => l.then(h => h.remove()).catch(() => {}));
+    };
+  }, []);
+
+  useEffect(() => {
     const getSession = async () => {
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
     };
     getSession();
-
-    return () => { Keyboard.removeAllListeners(); };
   }, []);
 
   useEffect(() => {
@@ -93,9 +148,9 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         .select("*")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: true });
+      initialMessageIdsRef.current = new Set((data || []).map((m: any) => m.id));
       setMessages(data || []);
       setLoading(false);
-      setTimeout(scrollToBottom, 100);
     };
     fetchMessages();
 
@@ -120,9 +175,12 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
             );
 
             if (optimisticIndex !== -1) {
-              // Replace optimistic message with real one
+              // Replace optimistic message with real one, but keep the
+              // optimistic id as the render key — swapping keys makes framer
+              // unmount/remount the bubble, so every sent message visibly
+              // re-animated ("pop" jitter).
               const updated = [...prev];
-              updated[optimisticIndex] = newMsg;
+              updated[optimisticIndex] = { ...newMsg, clientKey: prev[optimisticIndex].id };
               return updated;
             }
 
@@ -137,13 +195,55 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   }, [conversationId]);
 
   // --- Scroll & Send ---
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Scroll the message container directly rather than via
+  // messagesEndRef.scrollIntoView(): scrollIntoView walks up and scrolls
+  // EVERY scrollable ancestor to bring the element into view, which fights
+  // the chat panel's own slide-in transform (x:100% -> 0) and shows up as a
+  // jitter/kick when opening a conversation. Setting scrollTop only touches
+  // this one container and is immune to that.
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    if (behavior === "smooth") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   };
 
+  // True until the first messages for this conversation have rendered.
+  // Native chat apps open already pinned to the latest message — animating
+  // that first scroll instead makes the screen look like it "scrolls up"
+  // right after opening. Only messages added after that (new sends/
+  // receives while the chat is already open) get the smooth scroll.
+  const isInitialLoadRef = useRef(true);
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, keyboardHeight]);
+    isInitialLoadRef.current = true;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const wasInitialLoad = isInitialLoadRef.current;
+    scrollToBottom(wasInitialLoad ? 'auto' : 'smooth');
+    isInitialLoadRef.current = false;
+    if (wasInitialLoad) {
+      // Catch layout shifts from late-loading avatar images without a second
+      // visible animation — this re-pin is 'auto' too, so it's only visible
+      // if something actually moved.
+      const t = setTimeout(() => scrollToBottom('auto'), 150);
+      return () => clearTimeout(t);
+    }
+  }, [messages]);
+
+  // Keyboard open/close: jump instantly — a smooth scroll here fights the
+  // 260ms padding transition and reads as jitter. Re-pin once the
+  // transition has finished so we always end at the true bottom.
+  useEffect(() => {
+    scrollToBottom("auto");
+    const t = setTimeout(() => scrollToBottom("auto"), 280);
+    return () => clearTimeout(t);
+  }, [keyboardHeight]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,11 +265,32 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
     setMessages(prev => [...prev, optimisticMsg]);
     setNewMessage("");
 
-    await supabase.from("messages").insert([{
-      conversation_id: conversationId,
-      sender_id: session.user.id,
-      content: optimisticMsg.content,
-    }]);
+    // Send via backend so the recipient gets the FCM push + notification row
+    // (a direct supabase insert skips those, and the moderation check too).
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          sender_id: session.user.id,
+          content: optimisticMsg.content,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as any));
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setNewMessage(optimisticMsg.content); // restore the draft
+        alert(err.error === 'Message contains contact information'
+          ? 'Sharing contact details is not allowed in chat.'
+          : 'Message failed to send. Please try again.');
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setNewMessage(optimisticMsg.content);
+      alert('Message failed to send. Please check your connection.');
+    }
   };
 
   const handleAcceptOffer = async () => {
@@ -265,10 +386,17 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
     }
   };
 
-  if (loading) return <div className="flex h-full items-center justify-center"><Spinner /></div>;
+  // NOTE: no early return for `loading`. Returning a different tree while
+  // loading meant the entire chat shell (background, input bar, message
+  // container) unmounted and remounted the moment messages arrived — a
+  // visible flash mid-open. The shell now renders immediately and stays put;
+  // only the message area fills in.
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden" style={{ paddingBottom: keyboardHeight }}>
+    <div
+      className="flex flex-col h-full bg-slate-50 relative overflow-hidden"
+      style={{ paddingBottom: keyboardHeight, transition: 'padding-bottom 260ms cubic-bezier(0.33, 1, 0.68, 1)' }}
+    >
       {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-100/40 rounded-full blur-[80px]" />
@@ -276,19 +404,11 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 z-10 scrollbar-hide">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 z-10 scrollbar-hide overscroll-contain">
+        {loading && (
+          <div className="flex h-full items-center justify-center"><Spinner /></div>
+        )}
         <div className="space-y-1 pb-32">
-          {/* Date Separator */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex justify-center py-6 sticky top-0 z-20"
-          >
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-white">
-              Today
-            </span>
-          </motion.div>
-
           <AnimatePresence initial={false}>
             {messages.map((msg, index) => {
               const isMe = msg.sender_id === session?.user?.id;
@@ -299,6 +419,24 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
               const timeGap = prevMsg ? (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) > 60000 * 5 : false; // 5 mins
 
               const showAvatar = !isMe && (!isSequence || timeGap);
+
+              // Messages from the conversation's first load render in place;
+              // only live sends/receives animate in.
+              const skipEnterAnim = initialMessageIdsRef.current.has(msg.id);
+
+              // One separator per calendar day, above the first message of that day
+              const isNewDay = !prevMsg || !isSameDay(new Date(msg.created_at), new Date(prevMsg.created_at));
+              const dateSeparator = isNewDay ? (
+                <motion.div
+                  initial={skipEnterAnim ? false : { opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-center py-6 sticky top-0 z-20"
+                >
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-white/70 backdrop-blur-md px-4 py-1.5 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-white">
+                    {getDayLabel(msg.created_at)}
+                  </span>
+                </motion.div>
+              ) : null;
 
               // Dynamic border radius
               const roundedTop = isMe
@@ -330,27 +468,29 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                 }
 
                 return (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    className="flex justify-center my-6 px-4 relative"
-                  >
-                    <div className="bg-white/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white shadow-sm max-w-[90%] flex flex-col items-center justify-center gap-1.5 min-w-[200px]">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
-                        <span className="text-[11px] font-bold text-slate-600 text-center uppercase tracking-widest">
-                          {title}
-                        </span>
+                  <Fragment key={msg.clientKey || msg.id}>
+                    {dateSeparator}
+                    <motion.div
+                      initial={skipEnterAnim ? false : { opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+                      className="flex justify-center my-6 px-4 relative"
+                    >
+                      <div className="bg-white/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white shadow-sm max-w-[90%] flex flex-col items-center justify-center gap-1.5 min-w-[200px]">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
+                          <span className="text-[11px] font-bold text-slate-600 text-center uppercase tracking-widest">
+                            {title}
+                          </span>
+                        </div>
+                        {subtitle && (
+                          <span className="text-[11px] font-black text-indigo-600 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-lg w-full text-center whitespace-nowrap shadow-sm">
+                            {subtitle}
+                          </span>
+                        )}
                       </div>
-                      {subtitle && (
-                        <span className="text-[11px] font-black text-indigo-600 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-lg w-full text-center whitespace-nowrap shadow-sm">
-                          {subtitle}
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  </Fragment>
                 );
               }
 
@@ -364,27 +504,24 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                 const isExpired = !isAccepted && (Date.now() - new Date(msg.created_at).getTime() > 24 * 60 * 60 * 1000);
 
                 return (
+                  <Fragment key={msg.clientKey || msg.id}>
+                  {dateSeparator}
                   <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                    initial={skipEnterAnim ? false : { opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
                     className={`flex w-full mt-2 mb-6 relative group ${isMe ? "justify-end pl-12" : "justify-start pr-12"}`}
                   >
                     {!isMe && (
                       <div className="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
                         {showAvatar ? (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white shadow-sm overflow-hidden"
-                          >
+                          <div className="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white shadow-sm overflow-hidden">
                             {otherUser?.avatar_url ? (
                               <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                             ) : (
                               <img src={`https://ui-avatars.com/api/?background=c7d2fe&color=3730a3&name=${encodeURIComponent(otherUser?.name || 'User')}`} alt="avatar" />
                             )}
-                          </motion.div>
+                          </div>
                         ) : <div className="w-8" />}
                       </div>
                     )}
@@ -477,26 +614,23 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                       </div>
                     </div>
                   </motion.div>
+                  </Fragment>
                 );
               }
 
               return (
+                <Fragment key={msg.clientKey || msg.id}>
+                {dateSeparator}
                 <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                  initial={skipEnterAnim ? false : { opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
                   className={`flex w-full ${marginBottom} ${isMe ? "justify-end" : "justify-start"}`}
                 >
                   {!isMe && (
                     <div className="w-8 flex-shrink-0 flex flex-col justify-end">
                       {showAvatar ? (
-                        <motion.div
-                          className="w-7 h-7 -translate-x-1 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden z-10"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", bounce: 0.4 }}
-                        >
+                        <div className="w-7 h-7 -translate-x-1 rounded-full bg-slate-200 border-2 border-white shadow-sm overflow-hidden z-10">
                           {otherUser?.avatar_url ? (
                             <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                           ) : (
@@ -505,7 +639,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                               alt="avatar"
                             />
                           )}
-                        </motion.div>
+                        </div>
                       ) : <div className="w-8" />}
                     </div>
                   )}
@@ -522,6 +656,7 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                     </div>
                   </div>
                 </motion.div>
+                </Fragment>
               );
             })}
           </AnimatePresence>
@@ -529,8 +664,16 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
         </div>
       </div>
 
-      {/* Floating Input Bar */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-6 px-4 bg-gradient-to-t from-slate-50 via-slate-50/90 to-transparent pointer-events-none">
+      {/* Floating Input Bar — bottom offset tracks the keyboard: absolute
+          children don't move with the container's padding compensation */}
+      <div
+        className="absolute left-0 right-0 z-20 pt-6 px-4 bg-gradient-to-t from-slate-50 via-slate-50/90 to-transparent pointer-events-none"
+        style={{
+          bottom: keyboardHeight,
+          paddingBottom: keyboardHeight > 0 ? '0.75rem' : 'calc(env(safe-area-inset-bottom) + 1rem)',
+          transition: 'bottom 260ms cubic-bezier(0.33, 1, 0.68, 1)',
+        }}
+      >
         <form
           onSubmit={handleSendMessage}
           className="flex items-center gap-2 bg-white/80 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] rounded-full p-1.5 pointer-events-auto transition-shadow focus-within:shadow-[0_8px_40px_rgb(79,70,229,0.12)]"
@@ -553,7 +696,10 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Message..."
-              className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none px-2 py-2 text-slate-800 font-medium placeholder:text-slate-400 min-w-0 tracking-tight"
+              enterKeyHint="send"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              className="flex-1 bg-transparent border-none outline-none ring-0 focus:ring-0 focus:outline-none px-2 py-2 text-slate-800 font-medium placeholder:text-slate-400 min-w-0 tracking-tight text-[16px]"
             />
           </div>
 

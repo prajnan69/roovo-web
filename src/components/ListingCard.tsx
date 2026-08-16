@@ -76,11 +76,20 @@ interface ListingCardProps {
   variant?: 'default' | 'search';
 }
 
+// The hover tilt is desktop-only. Android WebView fires synthetic mouse
+// events on every tap but never a matching mouseleave, so on touch devices
+// the tilt's inline scale(1.04) + box-shadow froze on the tapped card — and
+// with the home feed now kept alive across navigation, it stayed frozen
+// after coming back from the listing.
+const supportsHover =
+  typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
+
 // --- Main ListingCard Component ---
 const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', variant = 'default' }) => {
   const [fetchedLocation, setFetchedLocation] = useState<string | null>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!supportsHover) return;
     const el = tiltRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -123,7 +132,9 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
     }
   }, [listing, locationFromProps, fetchedLocation]);
 
-  const images = (listing.all_image_urls || []).slice(0, size === 'small' ? 1 : 5).map((src, index) => {
+  // 3 images per stack, not 5: each stack layer is a composited motion node,
+  // and the feed renders ~25+ cards at once.
+  const images = (listing.all_image_urls || []).slice(0, size === 'small' ? 1 : 3).map((src, index) => {
     const path = typeof src === 'string' ? src : src.url;
     return { id: index, img: resolveImageUrl(path) };
   });
@@ -140,45 +151,45 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, size = 'normal', var
     const navEvent = new PopStateEvent('popstate');
     window.dispatchEvent(navEvent);
   };
-  const handleClick = async () => {
-    // Add to localStorage recently viewed
-    try {
-      const localHistory = localStorage.getItem('recentlyViewed');
-      let history = localHistory ? JSON.parse(localHistory) : [];
+  const handleClick = () => {
+    // Reset any in-flight tilt so no inline transform/shadow survives the
+    // navigation (the card stays mounted and would keep it forever).
+    handleMouseLeave();
 
-      // Remove existing entry if it exists to move it to the front
-      history = history.filter((item: any) => item.id !== listing.id);
-
-      // Add current listing to the front
-      history.unshift(listing);
-
-      // Keep only last 20 items
-      history = history.slice(0, 20);
-
-      localStorage.setItem('recentlyViewed', JSON.stringify(history));
-    } catch (e) {
-      console.error('Error updating local recently viewed:', e);
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    console.log('[ListingCard] Session:', session?.user?.id);
-    console.log('[ListingCard] Listing:', listing.id, listing.host_id);
-
-    if (session) {
-      // Only add to recently viewed if user is not the host
-      if (listing.host_id && session.user.id !== listing.host_id) {
-        console.log('[ListingCard] Calling addRecentlyViewed API...');
-        await addRecentlyViewed(session.user.id, listing.id as any);
-      } else {
-        console.log('[ListingCard] Skipping session storage: user is host or host_id missing');
-      }
-    } else {
-      console.log('[ListingCard] Skipping session storage: no active session');
-    }
+    // Navigate immediately — all recently-viewed bookkeeping is deferred past
+    // the 300ms push transition. Parsing/stringifying the localStorage history
+    // (20 full listing objects) on the tap itself blocked the main thread just
+    // as the slide animation started.
     navigate(`/listing/${listing.id}`);
+
+    setTimeout(() => {
+      try {
+        const localHistory = localStorage.getItem('recentlyViewed');
+        let history = localHistory ? JSON.parse(localHistory) : [];
+
+        // Remove existing entry if it exists to move it to the front
+        history = history.filter((item: any) => item.id !== listing.id);
+
+        // Add current listing to the front
+        history.unshift(listing);
+
+        // Keep only last 20 items
+        history = history.slice(0, 20);
+
+        localStorage.setItem('recentlyViewed', JSON.stringify(history));
+      } catch (e) {
+        console.error('Error updating local recently viewed:', e);
+      }
+
+      (async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session && listing.host_id && session.user.id !== listing.host_id) {
+          await addRecentlyViewed(session.user.id, listing.id as any);
+        }
+      })().catch((e) => console.error('[ListingCard] Failed to record recently viewed:', e));
+    }, 400);
   };
 
   if (variant === 'search') {

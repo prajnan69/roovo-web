@@ -4,6 +4,7 @@ import { motion, type PanInfo } from 'framer-motion';
 import { X, Send, CheckCircle } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import { Spinner } from '@/components/ui/shadcn-io/spinner';
+import { useBackCloseable } from '@/hooks/useBackCloseable';
 
 interface ChatDrawerProps {
     isOpen: boolean;
@@ -28,6 +29,9 @@ const ChatDrawer: React.FC<ChatDrawerProps> = ({
     userPhone,
     isBooking = false,
 }) => {
+    // Hardware back closes the drawer instead of navigating
+    useBackCloseable(isOpen, onClose);
+
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
