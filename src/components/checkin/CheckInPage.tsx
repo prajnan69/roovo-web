@@ -11,192 +11,13 @@ import RoovoLoader from '@/components/RoovoLoader';
 import { useNavigation } from '@/hooks/useNavigation';
 import Login from '@/components/Login';
 import Toast from '@/components/ui/toast';
+import SlideToReserve from '@/components/SlideToReserve';
 import { 
     RaiseIssueModal, 
     RequestCleaningModal, 
     ConciergeModal, 
     CheckOutModal 
 } from './InStayModals';
-
-interface SlideToCheckInProps {
-    onSlide: () => Promise<boolean | void> | boolean | void;
-    disabled?: boolean;
-    isProcessing?: boolean;
-    disabledReason?: string;
-}
-
-function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: SlideToCheckInProps) {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [dragBounds, setDragBounds] = useState<number>(() => {
-        if (typeof window !== 'undefined') {
-            return Math.max(window.innerWidth - 48 - 64, 180);
-        }
-        return 220;
-    });
-    const x = useMotionValue(0);
-    const controls = useAnimation();
-    const [isSuccess, setIsSuccess] = useState(false);
-
-    const updateBounds = useCallback(() => {
-        if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            const width = rect.width || containerRef.current.offsetWidth;
-            if (width > 64) {
-                // container width - handle width (52) - horizontal padding (6 * 2)
-                setDragBounds(Math.max(width - 52 - 12, 100));
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        updateBounds();
-        const el = containerRef.current;
-        let ro: ResizeObserver | null = null;
-        if (typeof ResizeObserver !== 'undefined' && el) {
-            ro = new ResizeObserver(() => updateBounds());
-            ro.observe(el);
-        }
-        window.addEventListener('resize', updateBounds);
-        window.addEventListener('orientationchange', updateBounds);
-
-        const t1 = setTimeout(updateBounds, 100);
-        const t2 = setTimeout(updateBounds, 400);
-
-        return () => {
-            if (ro && el) ro.unobserve(el);
-            window.removeEventListener('resize', updateBounds);
-            window.removeEventListener('orientationchange', updateBounds);
-            clearTimeout(t1);
-            clearTimeout(t2);
-        };
-    }, [updateBounds]);
-
-    const textOpacity = useTransform(x, [0, Math.max(dragBounds * 0.4, 1)], [1, 0]);
-    const activeTrackWidth = useTransform(x, (latest) => Math.max(latest + 52 + 12, 52 + 12));
-    const activeBgColor = useTransform(
-        x,
-        [0, Math.max(dragBounds, 1)],
-        ['#4f46e5', '#10b981'] // Indigo to Emerald
-    );
-
-    const completeSlide = async () => {
-        if (disabled || isProcessing || isSuccess) return;
-        setIsSuccess(true);
-        await controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
-        await triggerHaptic();
-        try {
-            const result = await onSlide();
-            if (result === false) {
-                throw new Error('Check-in was not completed');
-            }
-        } catch (err) {
-            console.error('Check-in failed, resetting slider:', err);
-            setIsSuccess(false);
-            controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
-        }
-    };
-
-    const handleDragEnd = async (_: any, info: any) => {
-        if (disabled || isProcessing || isSuccess) return;
-
-        const currentX = x.get();
-        const offset = info?.offset?.x || 0;
-        const threshold = Math.max(dragBounds * 0.45, 50);
-
-        if (currentX > threshold || offset > threshold) {
-            await completeSlide();
-        } else {
-            await triggerHaptic();
-            controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
-        }
-    };
-
-    if (disabled) {
-        return (
-            <div className="w-full h-[64px] rounded-full bg-slate-100 border border-slate-200 flex items-center px-2 py-1.5 opacity-80 cursor-not-allowed select-none">
-                <div className="w-[50px] h-[50px] rounded-full bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
-                    <Lock size={18} />
-                </div>
-                <div className="flex-1 text-center pr-10 text-xs font-bold text-slate-400">
-                    {disabledReason || 'Upload photo above to unlock'}
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div
-            ref={containerRef}
-            onClick={() => {
-                if (!disabled && !isProcessing && !isSuccess) {
-                    completeSlide();
-                }
-            }}
-            style={{ touchAction: 'none' }}
-            className={`relative w-full h-[64px] rounded-full flex items-center p-1.5 overflow-hidden transition-colors duration-500 select-none cursor-pointer touch-none ${
-                isSuccess ? 'bg-emerald-500' : 'bg-slate-900 shadow-xl'
-            }`}
-        >
-            {/* Sliding Color Track */}
-            {!isSuccess && dragBounds > 0 && (
-                <motion.div
-                    className="absolute left-1.5 top-1.5 bottom-1.5 rounded-full z-0 shadow-sm pointer-events-none"
-                    style={{
-                        width: activeTrackWidth,
-                        backgroundColor: activeBgColor,
-                    }}
-                />
-            )}
-
-            {/* Guide Text */}
-            <motion.div
-                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 pl-8"
-                style={{ opacity: textOpacity }}
-            >
-                <span className="font-bold text-xs tracking-wider uppercase text-slate-200 flex items-center gap-1.5">
-                    <span>Slide to Confirm Check-in</span>
-                    <ChevronRight size={15} className="animate-pulse text-amber-300" />
-                </span>
-            </motion.div>
-
-            {/* Draggable Handle */}
-            <motion.div
-                drag={!isProcessing && !isSuccess ? "x" : false}
-                dragConstraints={{ left: 0, right: dragBounds }}
-                dragElastic={0.08}
-                dragMomentum={false}
-                style={{ x, touchAction: 'none' }}
-                animate={controls}
-                onDragStart={() => {
-                    updateBounds();
-                    triggerHaptic();
-                }}
-                onDragEnd={handleDragEnd}
-                onClick={(e) => {
-                    e.stopPropagation();
-                    if (!disabled && !isProcessing && !isSuccess) {
-                        completeSlide();
-                    }
-                }}
-                className={`relative z-20 w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 touch-none select-none ${
-                    isSuccess
-                        ? 'bg-white text-emerald-500 scale-105'
-                        : 'bg-white text-indigo-600 cursor-grab active:cursor-grabbing hover:scale-[1.02]'
-                }`}
-            >
-                {isProcessing ? (
-                    <RoovoLoader className="w-10 h-auto" color="#4f46e5" />
-                ) : isSuccess ? (
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5 }}>
-                        <Check className="w-6 h-6 text-emerald-600" strokeWidth={3} />
-                    </motion.div>
-                ) : (
-                    <KeyRound className="w-5 h-5 text-indigo-600" />
-                )}
-            </motion.div>
-        </div>
-    );
-}
 
 interface CheckInPageProps {
     match?: any;
@@ -248,6 +69,14 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     // Toast State
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
+
+    const showNotification = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToastMsg(msg);
+        setToastType(type);
+        setShowToast(true);
+    };
+
     const [wifiCopied, setWifiCopied] = useState(false);
     const [accessCodeCopied, setAccessCodeCopied] = useState(false);
 
@@ -498,8 +327,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 setMaskedAadhaarUrl(data.maskedBase64 || data.maskedUrl);
                 setAadhaarLast4(data.last4 || 'XXXX');
                 await triggerHaptic();
-                setToastMsg(`Aadhaar verified! Now take a live selfie.`);
-                setShowToast(true);
+                showNotification(`Aadhaar verified! Now take a live selfie.`, 'success');
             } else {
                 throw new Error(data.error || 'Please upload a clear photo of your Aadhaar card.');
             }
@@ -508,8 +336,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             setMaskedAadhaarUrl(null);
             setAadhaarLast4(null);
             await triggerErrorHaptic();
-            setToastMsg(err.message || 'Please upload a clear photo of your Aadhaar card.');
-            setShowToast(true);
+            showNotification(err.message || 'Please upload a clear photo of your Aadhaar card.', 'error');
         } finally {
             setUploadingAadhaar(false);
             // Reset input so same file can be re-selected if needed
@@ -550,16 +377,14 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 setSelfieImageUrl(data.selfieUrl || data.imageUrl);
                 setGuestImageUrl(data.imageUrl);
                 await triggerHaptic();
-                setToastMsg('Selfie verified! Slide below to complete check-in.');
-                setShowToast(true);
+                showNotification('Selfie verified! Slide below to complete check-in.', 'success');
             } else {
                 throw new Error(data.error || 'Failed to upload selfie');
             }
         } catch (err: any) {
             console.warn('Selfie upload error:', err);
             await triggerErrorHaptic();
-            setToastMsg(err.message || 'Selfie upload failed. Please try again.');
-            setShowToast(true);
+            showNotification(err.message || 'Selfie upload failed. Please try again.', 'error');
         } finally {
             setUploadingSelfie(false);
             e.target.value = '';
@@ -573,11 +398,10 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     );
 
     // Execute Check-In
-    const handleCompleteCheckIn = async () => {
+    const handleCompleteCheckIn = async (): Promise<boolean> => {
         if (checkIn?.require_image_upload && !isVerificationComplete) {
             await triggerErrorHaptic();
-            setToastMsg('Please complete Aadhaar verification & live selfie before checking in');
-            setShowToast(true);
+            showNotification('Please complete Aadhaar verification & live selfie before checking in', 'error');
             return false;
         }
 
@@ -636,8 +460,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         } catch (err: any) {
             console.error('Check-in confirm error:', err);
             await triggerErrorHaptic();
-            setToastMsg(err.message || 'Check-in error. Please try again.');
-            setShowToast(true);
+            showNotification(err.message || 'Check-in error. Please try again.', 'error');
             return false;
         } finally {
             setIsCheckingIn(false);
@@ -657,8 +480,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     };
 
     const handleModalSuccess = (type: string, message: string, newRequest?: any) => {
-        setToastMsg(message);
-        setShowToast(true);
+        showNotification(message, 'success');
         if (newRequest) {
             setCheckIn((prev: any) => {
                 if (!prev) return prev;
@@ -669,7 +491,6 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 };
             });
         }
-        loadCheckInDetails();
     };
 
     // Live real-time sync for guest: instantly see host replies & status changes
@@ -1114,12 +935,24 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
 
                         {/* Interactive Slide to Check In Slider */}
                         <div className="pt-2">
-                            <SlideToCheckIn
-                                onSlide={handleCompleteCheckIn}
-                                disabled={Boolean(checkIn.require_image_upload && !isVerificationComplete)}
-                                isProcessing={isCheckingIn}
-                                disabledReason={!maskedAadhaarUrl ? "Upload Aadhaar card above to unlock" : !selfieImageUrl ? "Take live selfie above to unlock" : "Complete verification above to unlock"}
-                            />
+                            {checkIn.require_image_upload && !isVerificationComplete ? (
+                                <div className="w-full h-[64px] rounded-full bg-slate-100 border border-slate-200 flex items-center px-2 py-1.5 opacity-80 cursor-not-allowed select-none shadow-inner">
+                                    <div className="w-[52px] h-[52px] rounded-full bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
+                                        <Lock size={18} />
+                                    </div>
+                                    <div className="flex-1 text-center pr-10 text-xs font-bold text-slate-400">
+                                        {!maskedAadhaarUrl ? "Upload Aadhaar card above to unlock" : "Take live selfie above to unlock"}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-full">
+                                    <SlideToReserve
+                                        onSlide={handleCompleteCheckIn}
+                                        text="Slide to Confirm Check-in"
+                                        variant="confirm"
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1487,6 +1320,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             <Toast
                 isOpen={showToast}
                 message={toastMsg}
+                type={toastType}
                 onClose={() => setShowToast(false)}
             />
         </div>
