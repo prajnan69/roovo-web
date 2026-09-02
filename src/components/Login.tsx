@@ -98,9 +98,10 @@ export default function Login({
   useEffect(() => {
     setIsVisible(isOpen);
     if (isOpen) {
-      resetState();
       document.body.style.overflow = 'hidden';
-
+      if (step !== 'otp') {
+        resetState();
+      }
     } else {
       document.body.style.overflow = '';
     }
@@ -250,6 +251,31 @@ export default function Login({
 
     try {
       if (Capacitor.isNativePlatform()) {
+        FirebaseAuthentication.addListener('phoneCodeSent', (event: any) => {
+          console.log('[Native phoneCodeSent event received]:', event?.verificationId);
+          if (event?.verificationId) {
+            globalNativeVerificationId = event.verificationId;
+            setNativeVerificationId(event.verificationId);
+            if (typeof window !== 'undefined') (window as any).__ROOVO_VID__ = event.verificationId;
+            try {
+              sessionStorage.setItem('roovo_auth_vid', event.verificationId);
+              localStorage.setItem('roovo_auth_vid', event.verificationId);
+            } catch (e) {}
+          }
+        }).catch(() => {});
+
+        FirebaseAuthentication.addListener('phoneVerificationCompleted', async () => {
+          console.log('[Native phoneVerificationCompleted]: Android auto-retrieval completed');
+          try {
+            const { token } = await FirebaseAuthentication.getIdToken();
+            if (token) {
+              await completeBackendLogin(token);
+            }
+          } catch (e) {
+            console.warn('Auto verification completion error:', e);
+          }
+        }).catch(() => {});
+
         await FirebaseAuthentication.signInWithPhoneNumber({
           phoneNumber: `+91${phoneNumber}`,
         });
@@ -258,6 +284,7 @@ export default function Login({
         const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
         confirmationResult.current = result;
         globalConfirmationResult = result;
+        if (typeof window !== 'undefined') (window as any).__ROOVO_CONFIRMATION__ = result;
       }
 
       setStep('otp');
@@ -285,6 +312,50 @@ export default function Login({
     }
   };
 
+  const completeBackendLogin = async (idToken: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Login failed");
+    }
+
+    if (data.session) {
+      const { error: sessionError } = await supabase.auth.setSession(data.session);
+      if (sessionError) console.error("Error setting session:", sessionError);
+    }
+
+    // Clear saved auth IDs on success
+    globalNativeVerificationId = null;
+    globalConfirmationResult = null;
+    if (typeof window !== 'undefined') {
+      delete (window as any).__ROOVO_VID__;
+      delete (window as any).__ROOVO_CONFIRMATION__;
+    }
+    try {
+      sessionStorage.removeItem('roovo_auth_vid');
+      localStorage.removeItem('roovo_auth_vid');
+    } catch (e) {}
+
+    setLoginStatus('success');
+    triggerHapticFeedback('success');
+    setToastMessage("Login Successful!");
+    setShowToast(true);
+
+    setTimeout(() => {
+      setIsVisible(false);
+      setTimeout(() => {
+        onLoginSuccess();
+        if (redirectPath) navigate(redirectPath);
+      }, 400);
+    }, 1500);
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -296,85 +367,88 @@ export default function Login({
       return;
     }
 
-    const activeVerificationId =
-      nativeVerificationId ||
-      globalNativeVerificationId ||
-      (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('roovo_auth_vid') : null) ||
-      (typeof localStorage !== 'undefined' ? localStorage.getItem('roovo_auth_vid') : null);
-
-    const activeConfirmation = confirmationResult.current || globalConfirmationResult;
-
-    if (Capacitor.isNativePlatform()) {
-      if (!activeVerificationId) {
-        setError("Session expired. Please request OTP again.");
-        setStep('phone');
-        setLoading(false);
-        return;
-      }
-    } else {
-      if (!activeConfirmation) {
-        setError("Session expired. Please request OTP again.");
-        setStep('phone');
-        setLoading(false);
-        return;
-      }
-    }
-
     try {
       let idToken = "";
 
       if (Capacitor.isNativePlatform()) {
-        await FirebaseAuthentication.confirmVerificationCode({
-          verificationId: activeVerificationId!,
-          verificationCode: otp,
-        });
-        const { token } = await FirebaseAuthentication.getIdToken();
-        if (!token) {
-          throw new Error("Failed to retrieve ID Token");
+        // 1. Check if user is already authenticated via auto-retrieval / SMS Retriever
+        try {
+          const current = await FirebaseAuthentication.getCurrentUser();
+          if (current?.user) {
+            const { token } = await FirebaseAuthentication.getIdToken();
+            if (token) {
+              idToken = token;
+            }
+          }
+        } catch (e) {
+          console.warn('[Login] getCurrentUser check:', e);
         }
-        idToken = token;
+
+        // 2. If not already authenticated, find the active verification ID
+        if (!idToken) {
+          let vid =
+            nativeVerificationId ||
+            globalNativeVerificationId ||
+            (typeof window !== 'undefined' ? (window as any).__ROOVO_VID__ : null) ||
+            (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('roovo_auth_vid') : null) ||
+            (typeof localStorage !== 'undefined' ? localStorage.getItem('roovo_auth_vid') : null);
+
+          // If still null, wait briefly (up to 2.5s) in case phoneCodeSent is in transit
+          if (!vid) {
+            for (let i = 0; i < 5 && !vid; i++) {
+              await new Promise((r) => setTimeout(r, 500));
+              vid =
+                globalNativeVerificationId ||
+                (typeof window !== 'undefined' ? (window as any).__ROOVO_VID__ : null) ||
+                (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('roovo_auth_vid') : null) ||
+                (typeof localStorage !== 'undefined' ? localStorage.getItem('roovo_auth_vid') : null);
+            }
+          }
+
+          if (vid) {
+            await FirebaseAuthentication.confirmVerificationCode({
+              verificationId: vid,
+              verificationCode: otp,
+            });
+            const { token } = await FirebaseAuthentication.getIdToken();
+            if (!token) throw new Error("Failed to retrieve ID Token");
+            idToken = token;
+          } else {
+            // Check if web confirmation result exists as fallback
+            const activeConfirmation =
+              confirmationResult.current ||
+              globalConfirmationResult ||
+              (typeof window !== 'undefined' ? (window as any).__ROOVO_CONFIRMATION__ : null);
+
+            if (activeConfirmation) {
+              const credential = await activeConfirmation.confirm(otp);
+              idToken = await credential.user.getIdToken();
+            } else {
+              setError("Session expired. Please request OTP again.");
+              setStep('phone');
+              setLoading(false);
+              return;
+            }
+          }
+        }
       } else {
+        const activeConfirmation =
+          confirmationResult.current ||
+          globalConfirmationResult ||
+          (typeof window !== 'undefined' ? (window as any).__ROOVO_CONFIRMATION__ : null);
+
+        if (!activeConfirmation) {
+          setError("Session expired. Please request OTP again.");
+          setStep('phone');
+          setLoading(false);
+          return;
+        }
+
         const credential = await activeConfirmation.confirm(otp);
         idToken = await credential.user.getIdToken();
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/firebase-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed");
-      }
-
-      if (data.session) {
-        const { error: sessionError } = await supabase.auth.setSession(data.session);
-        if (sessionError) console.error("Error setting session:", sessionError);
-      }
-
-      // Clear saved auth IDs on success
-      globalNativeVerificationId = null;
-      globalConfirmationResult = null;
-      try {
-        sessionStorage.removeItem('roovo_auth_vid');
-        localStorage.removeItem('roovo_auth_vid');
-      } catch (e) {}
-
-      setLoginStatus('success');
-      triggerHapticFeedback('success');
-      setToastMessage("Login Successful!");
-      setShowToast(true);
-
-      setTimeout(() => {
-        setIsVisible(false);
-        setTimeout(() => {
-          onLoginSuccess();
-          if (redirectPath) navigate(redirectPath);
-        }, 400);
-      }, 1500);
+      await completeBackendLogin(idToken);
 
     } catch (err: any) {
       console.error("Error verifying OTP:", err);
@@ -385,6 +459,7 @@ export default function Login({
         : err.code === 'auth/code-expired'
           ? 'OTP expired. Please request a new one.'
           : err.message || 'Invalid OTP. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
