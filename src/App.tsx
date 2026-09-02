@@ -735,6 +735,7 @@ function AppContent() {
         <Route path="/check-in/:id" render={(props) => (
           <CheckInPage
             {...props}
+            onOpenLogin={handleOpenLogin}
           />
         )} />
         <Route path="/search" render={() => <SearchPage />} />

@@ -21,9 +21,10 @@ import {
 interface CheckInPageProps {
     match?: any;
     id?: string;
+    onOpenLogin?: (subtitle?: string, asDrawer?: boolean) => void;
 }
 
-export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
+export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInPageProps) {
     const checkInId = propId || match?.[1];
     const { navigate } = useNavigation();
 
@@ -38,6 +39,15 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
     const [sessionUser, setSessionUser] = useState<any>(null);
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [showLoginModal, setShowLoginModal] = useState(false);
+
+    const handleTriggerLogin = async () => {
+        await triggerHaptic();
+        if (onOpenLogin) {
+            onOpenLogin('Log in with your registered phone number', true);
+        } else {
+            setShowLoginModal(true);
+        }
+    };
 
     // Guest Upload State (Mandatory if host enabled)
     const [uploadingImage, setUploadingImage] = useState(false);
@@ -146,6 +156,16 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
             loadCheckInDetails();
         }
         checkAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session?.user) {
+                setSessionUser(session.user);
+            } else {
+                setSessionUser(null);
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, [checkInId]);
 
     // Handle Phone Verification Check
@@ -313,7 +333,7 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
     // ── 1. GUEST AUTHENTICATION LOCK ──
     if (!sessionUser) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col justify-between p-6 relative overflow-hidden">
+            <div className="min-h-dvh bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col justify-between p-6 relative overflow-hidden">
                 {/* Ambient Glows */}
                 <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-32 -right-32 w-80 h-80 rounded-full bg-amber-500/15 blur-3xl pointer-events-none" />
@@ -326,13 +346,21 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
                         </div>
                         <span className="text-sm font-bold tracking-tight">Roovo In-Stay</span>
                     </div>
+
+                    <button
+                        onClick={handleTriggerLogin}
+                        className="px-4 py-1.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 border border-white/20 text-xs font-bold text-white transition-all flex items-center gap-1.5"
+                    >
+                        <User size={13} />
+                        <span>Log in</span>
+                    </button>
                 </div>
 
                 {/* Center Content */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="my-auto text-center space-y-4 z-10"
+                    className="my-auto text-center space-y-5 z-10 max-w-sm mx-auto w-full py-6"
                 >
                     <div className="w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 mx-auto flex items-center justify-center shadow-2xl">
                         <Lock className="w-9 h-9 text-amber-300" />
@@ -346,22 +374,30 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
                     </div>
 
                     {checkIn?.guest_phone && (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-[11px] font-mono text-slate-300">
-                            <Phone size={12} className="text-amber-300" />
+                        <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/10 border border-white/15 text-xs font-mono text-slate-200">
+                            <Phone size={13} className="text-amber-300" />
                             Registered for: +91 •••••••{checkIn.guest_phone.slice(-4)}
                         </div>
                     )}
+
+                    {/* Prominent Center Login Button */}
+                    <div className="pt-2">
+                        <button
+                            onClick={handleTriggerLogin}
+                            className="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-sm shadow-xl shadow-indigo-600/40 flex items-center justify-center gap-2.5 transition-all"
+                        >
+                            <Phone size={16} />
+                            <span>Log in with Mobile OTP</span>
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
                 </motion.div>
 
-                {/* Bottom Action */}
-                <div className="z-10 pb-6">
-                    <button
-                        onClick={() => { triggerHaptic(); setShowLoginModal(true); }}
-                        className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                    >
-                        <span>Log in with Mobile OTP</span>
-                        <ChevronRight size={16} />
-                    </button>
+                {/* Bottom Brand Note */}
+                <div className="z-10 pb-4 text-center">
+                    <p className="text-[11px] text-slate-400">
+                        Secure instant check-in powered by Roovo
+                    </p>
                 </div>
 
                 <Login
@@ -382,7 +418,7 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
     // ── 2. PHONE MISMATCH RESTRICTION ──
     if (!isPhoneMatched) {
         return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+            <div className="min-h-dvh bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
                     <Lock size={32} />
                 </div>
@@ -392,18 +428,20 @@ export default function CheckInPage({ match, id: propId }: CheckInPageProps) {
                     <span className="font-bold text-slate-900">•{cleanGuestPhone.slice(-4)}</span>.
                 </p>
                 <p className="text-[11px] text-slate-400 mt-1">
-                    You are currently signed in as +91 {cleanUserPhone}.
+                    {cleanUserPhone ? `You are signed in as +91 ${cleanUserPhone}.` : 'Please log in with the registered guest phone number.'}
                 </p>
 
                 <button
                     onClick={async () => {
                         await supabase.auth.signOut();
                         setSessionUser(null);
-                        setShowLoginModal(true);
+                        handleTriggerLogin();
                     }}
-                    className="mt-6 px-6 py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold shadow-sm"
+                    className="mt-6 w-full max-w-xs py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-100 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
-                    Switch to Registered Phone Number
+                    <Phone size={15} />
+                    <span>Log in as Registered Guest</span>
+                    <ChevronRight size={15} />
                 </button>
             </div>
         );
