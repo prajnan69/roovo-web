@@ -111,12 +111,8 @@ const HomeFeed: React.FC<{
 
     const handleFilterChange = (newFilter: string) => {
       if (newFilter === activeFilter) return;
-      setIsFiltering(true);
       setActiveFilter(newFilter);
       triggerHaptic();
-      setTimeout(() => {
-        setIsFiltering(false);
-      }, 500);
     };
 
     const getDynamicTitle = (filter: string, location: string) => {
@@ -404,30 +400,19 @@ const HomeFeed: React.FC<{
 
           <FilterChips activeFilter={activeFilter} setActiveFilter={handleFilterChange} />
 
-          <LayoutGroup id="popular-section">
-            <div className="relative">
-              {isFiltering && (
-                <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
-                  <RoovoLoader className="w-12 h-auto text-indigo-600" />
-                </div>
-              )}
-              <ListingSection
-                key={`popular-${activeFilter}`}
-                title={getDynamicTitle(activeFilter, 'Karnataka')}
-                listings={popularHomes}
-                loading={loading}
-              />
-            </div>
-          </LayoutGroup>
-
-          <LayoutGroup id="weekend-section">
+          <div className="relative">
             <ListingSection
-              key={`weekend-${activeFilter}`}
-              title="Available this weekend"
-              listings={weekendHomes}
+              title={getDynamicTitle(activeFilter, 'Karnataka')}
+              listings={popularHomes}
               loading={loading}
             />
-          </LayoutGroup>
+          </div>
+
+          <ListingSection
+            title="Available this weekend"
+            listings={weekendHomes}
+            loading={loading}
+          />
 
           {/* ── Why Roovo Trust Strip (from prototype) ── */}
           <div style={{ margin: '8px 20px 0', background: 'linear-gradient(135deg,#4F46E5,#6D28D9)', borderRadius: 24, padding: '24px 22px', position: 'relative', overflow: 'hidden' }}>
@@ -435,11 +420,11 @@ const HomeFeed: React.FC<{
             <div style={{ position: 'absolute', bottom: -30, left: -30, width: 140, height: 140, borderRadius: '9999px', background: 'rgba(255,255,255,.05)' }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.65)', textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Why Roovo?</div>
             <div className="font-display" style={{ fontSize: 20, fontWeight: 600, color: '#fff', letterSpacing: '-.03em', lineHeight: 1.25, marginBottom: 16 }}>
-              8–10% cheaper<br /><span style={{ fontStyle: 'italic' }}>than Airbnb, always.</span>
+              Better value,<br /><span style={{ fontStyle: 'italic' }}>every single stay.</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                { icon: '✓', text: 'Always cheaper than Airbnb' },
+                { icon: '✓', text: 'Always cheaper than the competition' },
                 { icon: '⬡', text: 'Roovo Verified stays' },
               ].map((p, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -451,14 +436,11 @@ const HomeFeed: React.FC<{
           </div>
 
           {activeFilter === 'all' && (
-            <LayoutGroup id="new-section">
-              <ListingSection
-                key={`new-${activeFilter}`}
-                title="Just added to Roovo"
-                listings={newHomes}
-                loading={loading}
-              />
-            </LayoutGroup>
+            <ListingSection
+              title="Just added to Roovo"
+              listings={newHomes}
+              loading={loading}
+            />
           )}
 
           <Footer />

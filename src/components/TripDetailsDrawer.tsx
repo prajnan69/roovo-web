@@ -112,6 +112,18 @@ const TripDetailsDrawer: React.FC<TripDetailsDrawerProps> = ({
                             <button
                                 onClick={() => {
                                     triggerHaptic();
+                                    onClose();
+                                    window.location.href = `/check-in/${booking.check_in_id || booking.id}`;
+                                }}
+                                className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+                            >
+                                <span className="text-amber-400">✨</span>
+                                Digital Check-in & In-Stay Hub
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    triggerHaptic();
                                     onMessageHost(booking);
                                 }}
                                 className="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"

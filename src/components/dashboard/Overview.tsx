@@ -4,13 +4,14 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, useScroll, useTransform, AnimatePresence, MotionValue } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { SlidingNumber } from "@/components/ui/shadcn-io/sliding-number";
-import { ChevronRight, CreditCard, ShieldCheck, MessageSquare, CheckCircle2, Sparkles } from "lucide-react";
+import { ChevronRight, CreditCard, ShieldCheck, MessageSquare, CheckCircle2, Sparkles, KeyRound } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { usePreloadedData } from "@/context/PreloadContext";
 import { fetchHostState, fetchHostDrafts } from "@/services/api";
 import { useNavigation } from "@/hooks/useNavigation";
 import ImportListingPage from "../import/ImportListingPage";
 import PaymentLinkDrawer from "./PaymentLinkDrawer";
+import CheckInLinkDrawer from "./CheckInLinkDrawer";
 
 interface ActionCardProps {
   title: string;
@@ -186,6 +187,7 @@ const Overview = () => {
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showPaymentLinkDrawer, setShowPaymentLinkDrawer] = useState(false);
+  const [showCheckInDrawer, setShowCheckInDrawer] = useState(false);
   const { navigate } = useNavigation();
 
   useEffect(() => {
@@ -378,16 +380,27 @@ const Overview = () => {
             )}
 
             {/* Quick Actions / Host Tools */}
-            <div className="mb-6 mt-8">
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 px-1">Host Tools</h3>
+            <div className="mb-6 mt-8 space-y-3">
+              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Host Tools</h3>
+              
               <ActionCard
                 index={notifications.length}
+                title="Generate Check-in Link"
+                description="Create a digital check-in & in-stay concierge hub for your upcoming guest with optional ID/photo verification."
+                buttonText="Create Link"
+                icon={KeyRound}
+                onButtonClick={() => setShowCheckInDrawer(true)}
+                priority="high"
+              />
+
+              <ActionCard
+                index={notifications.length + 1}
                 title="Send Payment Link"
                 description="Generate a custom booking link with a set price and date range to share directly with a guest."
                 buttonText="Create Link"
                 icon={Sparkles}
                 onButtonClick={() => setShowPaymentLinkDrawer(true)}
-                priority="high"
+                priority="normal"
               />
             </div>
           </div>
@@ -414,6 +427,13 @@ const Overview = () => {
           <PaymentLinkDrawer
             isOpen={showPaymentLinkDrawer}
             onClose={() => setShowPaymentLinkDrawer(false)}
+            hostId={profileData?.id || ""}
+          />
+        )}
+        {showCheckInDrawer && (
+          <CheckInLinkDrawer
+            isOpen={showCheckInDrawer}
+            onClose={() => setShowCheckInDrawer(false)}
             hostId={profileData?.id || ""}
           />
         )}

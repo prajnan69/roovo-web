@@ -33,6 +33,7 @@ import PaymentStatus from './components/PaymentStatus';
 import { useWebPush } from './hooks/useWebPush';
 import NotificationPromptDrawer from './components/NotificationPromptDrawer';
 import PaymentLinkPage from './components/PaymentLinkPage';
+import CheckInPage from './components/checkin/CheckInPage';
 
 import ImportListingPage from './components/import/ImportListingPage';
 import CohostInvitationPage from './components/invitation/CohostInvitationPage';
@@ -728,6 +729,11 @@ function AppContent() {
           <PaymentLinkPage
             {...props}
             onOpenLogin={handleOpenLogin}
+          />
+        )} />
+        <Route path="/check-in/:id" render={(props) => (
+          <CheckInPage
+            {...props}
           />
         )} />
         <Route path="/search" render={() => <SearchPage />} />

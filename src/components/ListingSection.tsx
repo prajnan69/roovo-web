@@ -103,21 +103,11 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
         {/* Keyed on loading only (not the listing ids): re-keying on ids
             remounted every card — and its <img> nodes — whenever the data
             identity changed, flashing the whole row. */}
-        <motion.div
+        <div
           ref={scrollContainerRef}
-          key={loading ? 'loading' : 'content'}
           onScroll={checkScrollability}
           className="flex overflow-x-auto pb-4 scrollbar-hide"
           style={{ gap: size === 'small' ? 12 : 14, paddingLeft: 20, paddingRight: 20 }}
-          initial={playEntrance ? 'hidden' : false}
-          animate="visible"
-          variants={{
-            visible: {
-              transition: {
-                staggerChildren: 0.08,
-              },
-            },
-          }}
         >
           {loading
             ? Array.from({ length: 4 }).map((_, index) => (
@@ -126,17 +116,15 @@ const ListingSection: React.FC<ListingSectionProps> = ({ title, listings, loadin
               </div>
             ))
             : listings.map((listing) => (
-              <motion.div
+              <div
                 key={listing.id}
                 style={{ flexShrink: 0, width: size === 'small' ? 150 : 180 }}
-                variants={playEntrance ? cardVariants : undefined}
-                transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 <ListingCard listing={listing} onImageLoad={onImageLoad} size={size} />
-              </motion.div>
+              </div>
             ))
           }
-        </motion.div>
+        </div>
 
         {/* Upcoming Property placeholders when empty */}
         {!loading && listings.length === 0 && (

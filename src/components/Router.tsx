@@ -17,7 +17,7 @@ type NavInfo = { other: string; direction: 'push' | 'pop' };
 const COVERED = { x: '-24%', opacity: 0.85 };
 
 const SLIDE_PAGES = [
-  '/listing/', '/pay-link/', '/preferences', '/trips', '/past-trips',
+  '/listing/', '/pay-link/', '/check-in/', '/preferences', '/trips', '/past-trips',
   '/notifications', '/verify-identity', '/import-listing', '/about-us',
   '/contact-us', '/terms', '/privacy-policy', '/refund-policy',
   '/catalogue', '/booking-flow',

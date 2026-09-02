@@ -79,36 +79,48 @@ const FilterChips: React.FC<FilterChipsProps> = ({
     }))
   ];
 
+  // Unselected chips sit raised (convex / protruded): clean top-edge specular highlight + crisp drop shadow below.
+  // The SELECTED chip is cleanly depressed into the screen:
+  // - Top and sides receive deep inner cavity shadows
+  // - Zero outer drop shadows or harsh outer lines
+  // - Seamless, uniform border matching the indigo active theme
+  const RAISED = 'inset 0 1.5px 0 rgba(255,255,255,1), inset 0 -1px 1px rgba(0,0,0,.03), 0 4px 8px -1px rgba(0,0,0,.10), 0 2px 4px -1px rgba(0,0,0,.06)';
+  const SUNK = 'inset 0 4px 7px rgba(0,0,0,.22), inset 0 2px 4px rgba(49,46,129,.24), inset 2px 0 4px rgba(0,0,0,.06), inset -2px 0 4px rgba(0,0,0,.06), inset 0 -1px 2px rgba(255,255,255,.6)';
+  const SUNK_DEEPER = 'inset 0 5px 10px rgba(0,0,0,.28), inset 0 2.5px 5px rgba(49,46,129,.30), inset 2px 0 5px rgba(0,0,0,.10), inset -2px 0 5px rgba(0,0,0,.10), inset 0 -1px 1.5px rgba(255,255,255,.5)';
+  const PRESSING = 'inset 0 4px 8px rgba(0,0,0,.22), inset 0 2px 4px rgba(0,0,0,.14), inset 0 -1px 1px rgba(255,255,255,.5)';
+
   return (
     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 20px 12px', scrollbarWidth: 'none' }}>
       {dynamicFilters.map((filter) => {
         const isActive = activeFilter === filter.value || (filter as any).originalValue === activeFilter;
         const Icon = filter.icon;
 
-        // Every chip — including "All" — is the same pill. "All" used to be
-        // special-cased to a 64x68 rounded square with a stacked icon-over-
-        // label layout and smaller text, so it sat visibly taller and wider
-        // than its neighbours in the same row.
         return (
           <motion.button
             key={filter.value}
             onClick={() => setActiveFilter((filter as any).originalValue || filter.value)}
-            whileTap={{ scale: 0.94 }}
-            transition={{ type: 'spring', stiffness: 280, damping: 18 }}
+            animate={isActive
+              ? { y: 2.5, scale: 0.97, boxShadow: SUNK }
+              : { y: 0, scale: 1, boxShadow: RAISED }}
+            whileTap={isActive
+              ? { y: 3.5, scale: 0.95, boxShadow: SUNK_DEEPER }
+              : { y: 2, scale: 0.96, boxShadow: PRESSING }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24, mass: 0.8 }}
             style={{
               flexShrink: 0,
               height: 40,
-              borderRadius: 99,
+              borderRadius: 12,
               padding: '0 14px',
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              border: isActive ? '1.5px solid var(--ind, #4F46E5)' : '1.5px solid rgba(0,0,0,.10)',
-              background: isActive ? 'var(--indbg, #EEEEFF)' : 'var(--bg-card, #fff)',
-              boxShadow: isActive ? '0 0 0 3px var(--indring, rgba(79,70,229,.13)), 0 1px 3px rgba(0,0,0,.05)' : '0 1px 3px rgba(0,0,0,.05)',
-              transition: 'all .2s cubic-bezier(.4,0,.2,1)',
+              border: isActive ? '1.5px solid rgba(79,70,229,.35)' : '1.5px solid rgba(0,0,0,.08)',
+              // Sunken gradient: dark at top under cavity lip, blending to ambient light at bottom
+              background: isActive
+                ? 'linear-gradient(180deg, #C8C3F8 0%, #DAD6FD 30%, #EEEEFF 80%, #F5F4FF 100%)'
+                : 'linear-gradient(180deg, #ffffff 0%, #f6f6f4 100%)',
               color: isActive ? 'var(--ind, #4F46E5)' : 'var(--t2, #3A3A37)',
             }}
           >
