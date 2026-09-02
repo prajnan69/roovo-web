@@ -18,7 +18,7 @@ interface CheckInLinkDrawerProps {
     initialTab?: 'create' | 'links';
 }
 
-export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLinkDrawerProps) {
+export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab = 'create' }: CheckInLinkDrawerProps) {
     useBackCloseable(isOpen, onClose);
 
     const [listings, setListings] = useState<any[]>([]);
