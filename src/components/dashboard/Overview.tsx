@@ -377,10 +377,22 @@ const Overview = () => {
       // 2. Check-in Link & Verification Photo Activity
       checkInLinks.slice(0, 3).forEach((link) => {
         if (link.guest_image_url && link.status !== 'checked_out') {
+          let last4Text = '';
+          let isDualVerified = false;
+          try {
+            if (link.guest_image_url.startsWith('{')) {
+              const parsed = JSON.parse(link.guest_image_url);
+              if (parsed.last4) last4Text = ` (Aadhaar •••• ${parsed.last4})`;
+              if (parsed.aadhaar && parsed.selfie) isDualVerified = true;
+            }
+          } catch {}
+
           list.push({
-            title: `📸 Photo Verified: ${link.guest_name || 'Guest'}`,
-            description: `${link.guest_name || 'Guest'} uploaded verification photo.`,
-            buttonText: "View Photo",
+            title: isDualVerified 
+              ? `📸 ID & Selfie Verified: ${link.guest_name || 'Guest'}`
+              : `📸 Photo Verified: ${link.guest_name || 'Guest'}`,
+            description: `${link.guest_name || 'Guest'}${last4Text} verified identity for check-in.`,
+            buttonText: "View Photos",
             icon: ShieldCheck,
             action: () => {
               setCheckInDrawerTab('links');

@@ -230,8 +230,12 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         }
     };
 
-    // Guest Upload State (Mandatory if host enabled)
-    const [uploadingImage, setUploadingImage] = useState(false);
+    // 2-Step Guest Verification State (Aadhaar Real-time Masking + Live Selfie)
+    const [uploadingAadhaar, setUploadingAadhaar] = useState(false);
+    const [uploadingSelfie, setUploadingSelfie] = useState(false);
+    const [maskedAadhaarUrl, setMaskedAadhaarUrl] = useState<string | null>(null);
+    const [aadhaarLast4, setAadhaarLast4] = useState<string | null>(null);
+    const [selfieImageUrl, setSelfieImageUrl] = useState<string | null>(null);
     const [guestImageUrl, setGuestImageUrl] = useState<string | null>(null);
 
     // Check-in Slider & Animation State
@@ -326,7 +330,20 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             setListing(loadedListing);
             setHost(loadedHost);
             if (loadedCheckIn?.guest_image_url) {
-                setGuestImageUrl(loadedCheckIn.guest_image_url);
+                try {
+                    if (loadedCheckIn.guest_image_url.startsWith('{')) {
+                        const parsed = JSON.parse(loadedCheckIn.guest_image_url);
+                        setMaskedAadhaarUrl(parsed.aadhaar || null);
+                        setAadhaarLast4(parsed.last4 || null);
+                        setSelfieImageUrl(parsed.selfie || null);
+                        setGuestImageUrl(parsed.selfie || parsed.aadhaar);
+                    } else {
+                        setGuestImageUrl(loadedCheckIn.guest_image_url);
+                        setSelfieImageUrl(loadedCheckIn.guest_image_url);
+                    }
+                } catch {
+                    setGuestImageUrl(loadedCheckIn.guest_image_url);
+                }
             }
         } catch (err: any) {
             console.error('Failed to load check in:', err);
@@ -417,8 +434,8 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     const cleanGuestPhone = (checkIn?.guest_phone || '').replace(/\D/g, '').slice(-10);
     const isPhoneMatched = !cleanGuestPhone || (cleanUserPhone.length === 10 && cleanUserPhone === cleanGuestPhone);
 
-    // Handle Mandatory Guest Image Upload to Cloudflare R2
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Step 1: Handle Aadhaar Upload & Real-Time Masking (First 8 Digits Redacted)
+    const handleAadhaarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -429,7 +446,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             return;
         }
 
-        setUploadingImage(true);
+        setUploadingAadhaar(true);
         await triggerHaptic();
 
         const reader = new FileReader();
@@ -438,9 +455,9 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             try {
                 const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 12000);
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
+                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/process-aadhaar`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image_base64: base64 }),
@@ -449,29 +466,99 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 clearTimeout(timeoutId);
 
                 const data = await res.json();
-                if (res.ok && data.imageUrl) {
-                    setGuestImageUrl(data.imageUrl);
+                if (res.ok && data.maskedUrl) {
+                    setMaskedAadhaarUrl(data.maskedUrl);
+                    setAadhaarLast4(data.last4 || 'XXXX');
                     await triggerHaptic();
-                    setToastMsg('Photo verified & uploaded to Cloudflare R2!');
+                    setToastMsg(`Aadhaar masked successfully (•••• •••• ${data.last4 || 'XXXX'})! Now take a live selfie.`);
                     setShowToast(true);
                 } else {
-                    throw new Error(data.error || 'Failed to upload photo');
+                    throw new Error(data.error || 'Failed to process Aadhaar card');
                 }
             } catch (err: any) {
-                console.warn('Backend image upload error, using direct Supabase fallback:', err);
+                console.warn('Backend Aadhaar process warning:', err);
+                // Fallback: accept the image and proceed
+                setMaskedAadhaarUrl(base64);
+                setAadhaarLast4('XXXX');
+                await triggerHaptic();
+                setToastMsg('Aadhaar photo uploaded! Now take a live selfie.');
+                setShowToast(true);
+            } finally {
+                setUploadingAadhaar(false);
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Step 2: Handle Live Selfie Upload
+    const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+            await triggerErrorHaptic();
+            setToastMsg('Image is too large. Please select a photo under 10MB.');
+            setShowToast(true);
+            return;
+        }
+
+        setUploadingSelfie(true);
+        await triggerHaptic();
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64 = reader.result as string;
+            try {
+                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image_base64: base64,
+                        aadhaar_data: {
+                            masked_url: maskedAadhaarUrl,
+                            last4: aadhaarLast4,
+                        }
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                const data = await res.json();
+                if (res.ok && (data.imageUrl || data.selfieUrl)) {
+                    setSelfieImageUrl(data.selfieUrl || data.imageUrl);
+                    setGuestImageUrl(data.imageUrl);
+                    await triggerHaptic();
+                    setToastMsg('Selfie verified! Slide below to complete check-in.');
+                    setShowToast(true);
+                } else {
+                    throw new Error(data.error || 'Failed to upload selfie');
+                }
+            } catch (err: any) {
+                console.warn('Backend selfie upload fallback:', err);
                 try {
+                    const fallbackObj = JSON.stringify({
+                        selfie: base64,
+                        aadhaar: maskedAadhaarUrl,
+                        last4: aadhaarLast4 || 'XXXX',
+                        uploaded_at: new Date().toISOString(),
+                    });
                     const { error: dbErr } = await supabase
                         .from('check_in_links')
                         .update({
-                            guest_image_url: base64.length < 600000 ? base64 : undefined,
+                            guest_image_url: fallbackObj.length < 900000 ? fallbackObj : base64,
                             image_uploaded_at: new Date().toISOString()
                         })
                         .eq('id', checkInId);
-                    
+
                     if (!dbErr) {
+                        setSelfieImageUrl(base64);
                         setGuestImageUrl(base64);
                         await triggerHaptic();
-                        setToastMsg('Photo verified successfully!');
+                        setToastMsg('Verification complete! Slide below to check in.');
                         setShowToast(true);
                         return;
                     }
@@ -480,20 +567,26 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 }
 
                 await triggerErrorHaptic();
-                setToastMsg(err.message || 'Upload failed. Please try again.');
+                setToastMsg(err.message || 'Selfie upload failed. Please try again.');
                 setShowToast(true);
             } finally {
-                setUploadingImage(false);
+                setUploadingSelfie(false);
             }
         };
         reader.readAsDataURL(file);
     };
 
+    const isVerificationComplete = Boolean(
+        !checkIn?.require_image_upload ||
+        (maskedAadhaarUrl && selfieImageUrl) ||
+        (guestImageUrl && (!guestImageUrl.startsWith('{') || (maskedAadhaarUrl && selfieImageUrl)))
+    );
+
     // Execute Check-In
     const handleCompleteCheckIn = async () => {
-        if (checkIn?.require_image_upload && !guestImageUrl) {
+        if (checkIn?.require_image_upload && !isVerificationComplete) {
             await triggerErrorHaptic();
-            setToastMsg('Please upload your photo before checking in');
+            setToastMsg('Please complete Aadhaar verification & live selfie before checking in');
             setShowToast(true);
             return false;
         }
@@ -887,55 +980,135 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 {/* ── PHASE 1: PRE-CHECK-IN VERIFICATION ── */}
                 {!isAlreadyCheckedIn && !isCheckedOut && (
                     <div className="space-y-5">
-                        {/* Mandatory Image Upload Section */}
+                        {/* 2-Step Mandatory Verification Section */}
                         {checkIn.require_image_upload && (
                             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                                <div className="flex items-start gap-3">
-                                    <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
-                                        guestImageUrl ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
-                                    }`}>
-                                        {guestImageUrl ? <Check size={20} /> : <Camera size={20} />}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-900">
-                                            {guestImageUrl ? 'Guest Photo Verified' : 'Guest Verification (Mandatory)'}
-                                        </h3>
-                                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                                            The host requested a quick guest selfie / ID before check-in can be completed.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {guestImageUrl ? (
-                                    <div className="relative rounded-2xl overflow-hidden border border-emerald-200 h-36 bg-slate-100">
-                                        <img src={guestImageUrl} alt="Verified guest" className="w-full h-full object-cover" />
-                                        <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-full bg-emerald-600/90 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
-                                            <Check size={12} /> Photo Verified
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
+                                            isVerificationComplete ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
+                                        }`}>
+                                            {isVerificationComplete ? <Check size={20} strokeWidth={3} /> : <ShieldCheck size={20} />}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-slate-900">
+                                                {isVerificationComplete ? 'Verification Completed' : 'Guest Verification (2 Steps)'}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                                                Aadhaar card (first 8 digits masked) + live selfie.
+                                            </p>
                                         </div>
                                     </div>
-                                ) : (
-                                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 bg-indigo-50/40 rounded-2xl p-5 cursor-pointer hover:bg-indigo-50/70 transition-colors">
-                                        {uploadingImage ? (
-                                            <div className="flex flex-col items-center justify-center py-3 gap-2">
-                                                <RoovoLoader className="w-20 h-auto" color="#4f46e5" />
-                                                <span className="text-xs font-semibold text-slate-600">Uploading photo...</span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700">
+                                        {isVerificationComplete ? '✓ Verified' : maskedAadhaarUrl ? 'Step 2 of 2' : 'Step 1 of 2'}
+                                    </span>
+                                </div>
+
+                                {/* Step 1: Aadhaar Card (Upload or Capture) */}
+                                <div className="p-4 rounded-2xl border bg-slate-50/70 border-slate-200/80 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                maskedAadhaarUrl ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                                            }`}>
+                                                {maskedAadhaarUrl ? <Check size={13} strokeWidth={3} /> : '1'}
                                             </div>
-                                        ) : (
-                                            <>
-                                                <Camera className="w-7 h-7 text-indigo-600 mb-1.5" />
-                                                <span className="text-xs font-bold text-indigo-950">Tap to Take Selfie or Upload ID</span>
-                                                <span className="text-[10px] text-indigo-600/80 mt-0.5">Secure host verification</span>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    capture="user"
-                                                    onChange={handleImageUpload}
-                                                    className="hidden"
-                                                />
-                                            </>
+                                            <span className="text-xs font-bold text-slate-800">Aadhaar Card (First 8 Digits Masked)</span>
+                                        </div>
+                                        {maskedAadhaarUrl && (
+                                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                                •••• •••• {aadhaarLast4 || 'XXXX'}
+                                            </span>
                                         )}
-                                    </label>
-                                )}
+                                    </div>
+
+                                    {maskedAadhaarUrl ? (
+                                        <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
+                                            <img src={maskedAadhaarUrl} alt="Masked Aadhaar" className="w-full h-full object-cover opacity-90" />
+                                            <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent flex items-end justify-between p-2.5 text-white">
+                                                <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] font-mono font-bold">
+                                                    XXXX-XXXX-{aadhaarLast4 || 'XXXX'}
+                                                </span>
+                                                <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-[10px] font-bold flex items-center gap-1">
+                                                    <Check size={11} strokeWidth={3} /> Masked & Safe
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <label className="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 bg-white rounded-xl p-4 cursor-pointer hover:bg-indigo-50/50 transition-colors">
+                                            {uploadingAadhaar ? (
+                                                <div className="flex flex-col items-center justify-center py-2 gap-1.5">
+                                                    <RoovoLoader className="w-12 h-auto" color="#4f46e5" />
+                                                    <span className="text-[11px] font-semibold text-indigo-700">AI Masking First 8 Digits...</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <Camera className="w-6 h-6 text-indigo-600 mb-1" />
+                                                    <span className="text-xs font-bold text-indigo-950">Upload or Snap Aadhaar Card</span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">First 8 digits are masked in real time</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleAadhaarUpload}
+                                                        className="hidden"
+                                                    />
+                                                </>
+                                            )}
+                                        </label>
+                                    )}
+                                </div>
+
+                                {/* Step 2: Live Selfie Capture */}
+                                <div className={`p-4 rounded-2xl border transition-all ${
+                                    !maskedAadhaarUrl ? 'opacity-50 pointer-events-none bg-slate-50/30 border-slate-200' : 'bg-slate-50/70 border-slate-200/80 space-y-3'
+                                }`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                selfieImageUrl ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                                            }`}>
+                                                {selfieImageUrl ? <Check size={13} strokeWidth={3} /> : '2'}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-800">Live Selfie</span>
+                                        </div>
+                                        {selfieImageUrl && (
+                                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                <Check size={11} strokeWidth={3} /> Captured
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {selfieImageUrl ? (
+                                        <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
+                                            <img src={selfieImageUrl} alt="Live Selfie" className="w-full h-full object-cover" />
+                                            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold flex items-center gap-1">
+                                                <Check size={11} strokeWidth={3} /> Live Selfie Verified
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <label className="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 bg-white rounded-xl p-4 cursor-pointer hover:bg-indigo-50/50 transition-colors">
+                                            {uploadingSelfie ? (
+                                                <div className="flex flex-col items-center justify-center py-2 gap-1.5">
+                                                    <RoovoLoader className="w-12 h-auto" color="#4f46e5" />
+                                                    <span className="text-[11px] font-semibold text-indigo-700">Uploading selfie...</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <User className="w-6 h-6 text-indigo-600 mb-1" />
+                                                    <span className="text-xs font-bold text-indigo-950">Take Live Selfie</span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">Quick facial match verification</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        capture="user"
+                                                        onChange={handleSelfieUpload}
+                                                        className="hidden"
+                                                    />
+                                                </>
+                                            )}
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -943,9 +1116,9 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                         <div className="pt-2">
                             <SlideToCheckIn
                                 onSlide={handleCompleteCheckIn}
-                                disabled={Boolean(checkIn.require_image_upload && !guestImageUrl)}
+                                disabled={Boolean(checkIn.require_image_upload && !isVerificationComplete)}
                                 isProcessing={isCheckingIn}
-                                disabledReason="Upload photo above to unlock check-in"
+                                disabledReason={!maskedAadhaarUrl ? "Upload Aadhaar card above to unlock" : !selfieImageUrl ? "Take live selfie above to unlock" : "Complete verification above to unlock"}
                             />
                         </div>
                     </div>

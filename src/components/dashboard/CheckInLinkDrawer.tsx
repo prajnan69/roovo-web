@@ -28,7 +28,15 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
     const [drawerTab, setDrawerTab] = useState<'create' | 'links'>(initialTab || 'create');
     const [activeLinks, setActiveLinks] = useState<any[]>([]);
     const [loadingLinks, setLoadingLinks] = useState(false);
-    const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<{ url: string; guestName: string; uploadedAt?: string } | null>(null);
+    const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<{
+        url?: string;
+        selfie?: string;
+        aadhaar?: string;
+        last4?: string;
+        guestName: string;
+        uploadedAt?: string;
+        activeTab?: 'aadhaar' | 'selfie';
+    } | null>(null);
     const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
     // Form State
@@ -439,8 +447,30 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                         </div>
                                     ) : (
                                         activeLinks.map((link) => {
+                                            const parseGuestPhotos = (raw: string | null) => {
+                                                if (!raw) return null;
+                                                try {
+                                                    if (raw.startsWith('{')) {
+                                                        const parsed = JSON.parse(raw);
+                                                        return {
+                                                            selfie: parsed.selfie || null,
+                                                            aadhaar: parsed.aadhaar || null,
+                                                            last4: parsed.last4 || null,
+                                                            uploaded_at: parsed.uploaded_at || null,
+                                                        };
+                                                    }
+                                                } catch {
+                                                    // legacy fallback
+                                                }
+                                                return { selfie: raw, aadhaar: null, last4: null, uploaded_at: null };
+                                            };
+
+                                            const photos = parseGuestPhotos(link.guest_image_url);
+                                            const hasAadhaar = Boolean(photos?.aadhaar);
+                                            const hasSelfie = Boolean(photos?.selfie);
+                                            const hasPhoto = Boolean(photos?.selfie || photos?.aadhaar);
                                             const isCheckedIn = link.status === 'checked_in';
-                                            const hasPhoto = Boolean(link.guest_image_url);
+
                                             const matchedListing = listings.find(l => l.id === link.listing_id);
                                             const listingTitle = link.listing_title || matchedListing?.title || matchedListing?.name || 'Your Property';
                                             const origin = typeof window !== 'undefined' ? (window.location.origin.includes('localhost') ? 'https://roovo.in' : window.location.origin) : 'https://roovo.in';
@@ -474,13 +504,17 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shadow-2xs">
                                                                     <Check size={11} strokeWidth={3} /> Checked In
                                                                 </span>
+                                                            ) : hasAadhaar && hasSelfie ? (
+                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shadow-2xs">
+                                                                    <ShieldCheck size={11} /> ID & Selfie Verified
+                                                                </span>
                                                             ) : hasPhoto ? (
                                                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1 shadow-2xs">
                                                                     <ShieldCheck size={11} /> Photo Verified
                                                                 </span>
                                                             ) : link.require_image_upload ? (
                                                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 shadow-2xs">
-                                                                    <Clock size={11} /> Awaiting Photo
+                                                                    <Clock size={11} /> Awaiting Verification
                                                                 </span>
                                                             ) : (
                                                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-200 text-slate-700">
@@ -492,45 +526,88 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
 
                                                     {/* Guest Photo Preview Section */}
                                                     <div className="p-3 bg-white rounded-xl border border-slate-100 flex items-center justify-between gap-3">
-                                                        <div className="flex items-center gap-2.5 min-w-0">
-                                                            {hasPhoto ? (
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            {/* Aadhaar Thumbnail */}
+                                                            {hasAadhaar && (
                                                                 <div
                                                                     onClick={() => {
                                                                         triggerHaptic();
                                                                         setSelectedPhotoPreview({
-                                                                            url: link.guest_image_url,
+                                                                            selfie: photos?.selfie || undefined,
+                                                                            aadhaar: photos?.aadhaar || undefined,
+                                                                            last4: photos?.last4 || undefined,
+                                                                            url: photos?.aadhaar || undefined,
                                                                             guestName: link.guest_name || 'Guest',
                                                                             uploadedAt: link.image_uploaded_at,
+                                                                            activeTab: 'aadhaar',
                                                                         });
                                                                     }}
-                                                                    className="relative w-12 h-12 rounded-xl overflow-hidden border-2 border-emerald-400 shrink-0 cursor-pointer shadow-xs active:scale-95 group"
+                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-indigo-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900"
                                                                 >
                                                                     <img
-                                                                        src={link.guest_image_url}
-                                                                        alt="Guest photo"
+                                                                        src={photos?.aadhaar || ''}
+                                                                        alt="Masked Aadhaar"
                                                                         className="w-full h-full object-cover"
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                                                        <Eye size={14} />
+                                                                        <Eye size={13} />
                                                                     </div>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shrink-0 flex flex-col items-center justify-center text-slate-400">
+                                                            )}
+
+                                                            {/* Selfie Thumbnail */}
+                                                            {hasSelfie && (
+                                                                <div
+                                                                    onClick={() => {
+                                                                        triggerHaptic();
+                                                                        setSelectedPhotoPreview({
+                                                                            selfie: photos?.selfie || undefined,
+                                                                            aadhaar: photos?.aadhaar || undefined,
+                                                                            last4: photos?.last4 || undefined,
+                                                                            url: photos?.selfie || undefined,
+                                                                            guestName: link.guest_name || 'Guest',
+                                                                            uploadedAt: link.image_uploaded_at,
+                                                                            activeTab: 'selfie',
+                                                                        });
+                                                                    }}
+                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-emerald-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900"
+                                                                >
+                                                                    <img
+                                                                        src={photos?.selfie || ''}
+                                                                        alt="Live Selfie"
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                        <Eye size={13} />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {!hasPhoto && (
+                                                                <div className="w-11 h-11 rounded-xl bg-slate-100 border border-slate-200 shrink-0 flex flex-col items-center justify-center text-slate-400">
                                                                     <Camera size={16} />
                                                                 </div>
                                                             )}
 
                                                             <div className="min-w-0">
-                                                                <p className="text-xs font-bold text-slate-800">
-                                                                    {hasPhoto ? 'Guest Photo Verified' : link.require_image_upload ? 'Photo Required' : 'No Photo Required'}
+                                                                <p className="text-xs font-bold text-slate-800 truncate">
+                                                                    {hasAadhaar && hasSelfie
+                                                                        ? `Aadhaar (•••• ${photos?.last4 || 'XXXX'}) + Selfie`
+                                                                        : hasAadhaar
+                                                                        ? `Aadhaar (•••• ${photos?.last4 || 'XXXX'})`
+                                                                        : hasSelfie
+                                                                        ? 'Live Selfie Verified'
+                                                                        : link.require_image_upload
+                                                                        ? 'Aadhaar + Selfie Required'
+                                                                        : 'No Photo Required'}
                                                                 </p>
                                                                 <p className="text-[11px] text-slate-500 truncate">
                                                                     {hasPhoto ? (
                                                                         link.image_uploaded_at ? `Uploaded ${new Date(link.image_uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Uploaded to Cloudflare R2'
                                                                     ) : link.require_image_upload ? (
-                                                                        'Guest must upload selfie before check-in'
+                                                                        'Guest must upload ID & selfie'
                                                                     ) : (
-                                                                        'Host turned verification requirement off'
+                                                                        'Host turned verification off'
                                                                     )}
                                                                 </p>
                                                             </div>
@@ -541,12 +618,16 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                                 onClick={() => {
                                                                     triggerHaptic();
                                                                     setSelectedPhotoPreview({
-                                                                        url: link.guest_image_url,
+                                                                        selfie: photos?.selfie || undefined,
+                                                                        aadhaar: photos?.aadhaar || undefined,
+                                                                        last4: photos?.last4 || undefined,
+                                                                        url: photos?.aadhaar || photos?.selfie || undefined,
                                                                         guestName: link.guest_name || 'Guest',
                                                                         uploadedAt: link.image_uploaded_at,
+                                                                        activeTab: photos?.aadhaar ? 'aadhaar' : 'selfie',
                                                                     });
                                                                 }}
-                                                                className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1 border border-emerald-200 transition-colors shrink-0"
+                                                                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center gap-1 border border-indigo-200 transition-colors shrink-0"
                                                             >
                                                                 <Eye size={12} />
                                                                 <span>View</span>
@@ -922,11 +1003,49 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                 className="bg-white rounded-3xl overflow-hidden max-w-sm w-full shadow-2xl space-y-3"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <div className="relative aspect-4/3 bg-slate-100">
+                                {/* Tab Switcher if both Aadhaar and Selfie exist */}
+                                {selectedPhotoPreview.aadhaar && selectedPhotoPreview.selfie && (
+                                    <div className="p-3 pb-0 flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                triggerHaptic();
+                                                setSelectedPhotoPreview(prev => prev ? ({ ...prev, activeTab: 'aadhaar' }) : null);
+                                            }}
+                                            className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                                selectedPhotoPreview.activeTab === 'aadhaar'
+                                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            <ShieldCheck size={13} />
+                                            <span>Aadhaar (•••• {selectedPhotoPreview.last4 || 'XXXX'})</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                triggerHaptic();
+                                                setSelectedPhotoPreview(prev => prev ? ({ ...prev, activeTab: 'selfie' }) : null);
+                                            }}
+                                            className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                                selectedPhotoPreview.activeTab === 'selfie'
+                                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            <User size={13} />
+                                            <span>Live Selfie</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="relative aspect-4/3 bg-slate-900 flex items-center justify-center">
                                     <img
-                                        src={selectedPhotoPreview.url}
+                                        src={
+                                            selectedPhotoPreview.activeTab === 'selfie'
+                                                ? (selectedPhotoPreview.selfie || selectedPhotoPreview.url || '')
+                                                : (selectedPhotoPreview.aadhaar || selectedPhotoPreview.url || selectedPhotoPreview.selfie || '')
+                                        }
                                         alt={selectedPhotoPreview.guestName}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-contain"
                                     />
                                     <button
                                         onClick={() => setSelectedPhotoPreview(null)}
@@ -941,7 +1060,9 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                             {selectedPhotoPreview.guestName}
                                         </h4>
                                         <p className="text-xs text-slate-500">
-                                            Verified Guest Photo
+                                            {selectedPhotoPreview.activeTab === 'aadhaar' || (!selectedPhotoPreview.selfie && selectedPhotoPreview.aadhaar)
+                                                ? `Masked Aadhaar (•••• ${selectedPhotoPreview.last4 || 'XXXX'})`
+                                                : 'Verified Live Selfie'}
                                             {selectedPhotoPreview.uploadedAt && ` · ${new Date(selectedPhotoPreview.uploadedAt).toLocaleDateString()}`}
                                         </p>
                                     </div>
