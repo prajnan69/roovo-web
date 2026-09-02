@@ -115,6 +115,7 @@ function AppContent() {
     !pathname.startsWith('/hosting/verify') &&
     !pathname.startsWith('/hosting/payout-methods') &&
     !pathname.startsWith('/pay-link/') &&
+    !pathname.startsWith('/check-in/') &&
     !isSwitchingToHost &&
     !selectedConversation &&
     !isSearchOpen &&
