@@ -434,59 +434,87 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     const cleanGuestPhone = (checkIn?.guest_phone || '').replace(/\D/g, '').slice(-10);
     const isPhoneMatched = !cleanGuestPhone || (cleanUserPhone.length === 10 && cleanUserPhone === cleanGuestPhone);
 
+    // Client-side image compression for fast & reliable network uploads
+    const compressImageForUpload = (file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.85): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = reject;
+            reader.onload = () => {
+                const img = new Image();
+                img.onerror = reject;
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (width > maxWidth || height > maxHeight) {
+                        if (width > height) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        } else {
+                            width = Math.round((width * maxHeight) / height);
+                            height = maxHeight;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve(reader.result as string);
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedBase64);
+                };
+                img.src = reader.result as string;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
     // Step 1: Handle Aadhaar Upload & Verification
     const handleAadhaarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
-            await triggerErrorHaptic();
-            setToastMsg('Image is too large. Please select a photo under 10MB.');
-            setShowToast(true);
-            return;
-        }
-
         setUploadingAadhaar(true);
         await triggerHaptic();
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64 = reader.result as string;
-            try {
-                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 20000);
+        try {
+            const base64 = await compressImageForUpload(file, 1600, 1600, 0.88);
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 35000);
 
-                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/process-aadhaar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_base64: base64 }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
+            const res = await fetch(`${apiBase}/api/check-in/${checkInId}/process-aadhaar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image_base64: base64 }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
 
-                const data = await res.json();
-                if (res.ok && data.maskedUrl && data.isAadhaar) {
-                    setMaskedAadhaarUrl(data.maskedUrl);
-                    setAadhaarLast4(data.last4 || 'XXXX');
-                    await triggerHaptic();
-                    setToastMsg(`Aadhaar verified! Now take a live selfie.`);
-                    setShowToast(true);
-                } else {
-                    throw new Error(data.error || 'Please upload a clear photo of your Aadhaar card.');
-                }
-            } catch (err: any) {
-                console.warn('Aadhaar verification error:', err);
-                setMaskedAadhaarUrl(null);
-                setAadhaarLast4(null);
-                await triggerErrorHaptic();
-                setToastMsg(err.message || 'Please upload a clear photo of your Aadhaar card.');
+            const data = await res.json();
+            if (res.ok && data.maskedUrl && data.isAadhaar) {
+                setMaskedAadhaarUrl(data.maskedUrl);
+                setAadhaarLast4(data.last4 || 'XXXX');
+                await triggerHaptic();
+                setToastMsg(`Aadhaar verified! Now take a live selfie.`);
                 setShowToast(true);
-            } finally {
-                setUploadingAadhaar(false);
+            } else {
+                throw new Error(data.error || 'Please upload a clear photo of your Aadhaar card.');
             }
-        };
-        reader.readAsDataURL(file);
+        } catch (err: any) {
+            console.warn('Aadhaar verification error:', err);
+            setMaskedAadhaarUrl(null);
+            setAadhaarLast4(null);
+            await triggerErrorHaptic();
+            setToastMsg(err.message || 'Please upload a clear photo of your Aadhaar card.');
+            setShowToast(true);
+        } finally {
+            setUploadingAadhaar(false);
+            // Reset input so same file can be re-selected if needed
+            e.target.value = '';
+        }
     };
 
     // Step 2: Handle Live Selfie Upload
@@ -494,85 +522,48 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
-            await triggerErrorHaptic();
-            setToastMsg('Image is too large. Please select a photo under 10MB.');
-            setShowToast(true);
-            return;
-        }
-
         setUploadingSelfie(true);
         await triggerHaptic();
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64 = reader.result as string;
-            try {
-                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+        try {
+            const base64 = await compressImageForUpload(file, 1200, 1200, 0.85);
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        image_base64: base64,
-                        aadhaar_data: {
-                            masked_url: maskedAadhaarUrl,
-                            last4: aadhaarLast4,
-                        }
-                    }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                const data = await res.json();
-                if (res.ok && (data.imageUrl || data.selfieUrl)) {
-                    setSelfieImageUrl(data.selfieUrl || data.imageUrl);
-                    setGuestImageUrl(data.imageUrl);
-                    await triggerHaptic();
-                    setToastMsg('Selfie verified! Slide below to complete check-in.');
-                    setShowToast(true);
-                } else {
-                    throw new Error(data.error || 'Failed to upload selfie');
-                }
-            } catch (err: any) {
-                console.warn('Backend selfie upload fallback:', err);
-                try {
-                    const fallbackObj = JSON.stringify({
-                        selfie: base64,
-                        aadhaar: maskedAadhaarUrl,
-                        last4: aadhaarLast4 || 'XXXX',
-                        uploaded_at: new Date().toISOString(),
-                    });
-                    const { error: dbErr } = await supabase
-                        .from('check_in_links')
-                        .update({
-                            guest_image_url: fallbackObj.length < 900000 ? fallbackObj : base64,
-                            image_uploaded_at: new Date().toISOString()
-                        })
-                        .eq('id', checkInId);
-
-                    if (!dbErr) {
-                        setSelfieImageUrl(base64);
-                        setGuestImageUrl(base64);
-                        await triggerHaptic();
-                        setToastMsg('Verification complete! Slide below to check in.');
-                        setShowToast(true);
-                        return;
+            const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_base64: base64,
+                    aadhaar_data: {
+                        masked_url: maskedAadhaarUrl,
+                        last4: aadhaarLast4,
                     }
-                } catch (fallbackErr) {
-                    console.error('Fallback error:', fallbackErr);
-                }
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
 
-                await triggerErrorHaptic();
-                setToastMsg(err.message || 'Selfie upload failed. Please try again.');
+            const data = await res.json();
+            if (res.ok && (data.imageUrl || data.selfieUrl)) {
+                setSelfieImageUrl(data.selfieUrl || data.imageUrl);
+                setGuestImageUrl(data.imageUrl);
+                await triggerHaptic();
+                setToastMsg('Selfie verified! Slide below to complete check-in.');
                 setShowToast(true);
-            } finally {
-                setUploadingSelfie(false);
+            } else {
+                throw new Error(data.error || 'Failed to upload selfie');
             }
-        };
-        reader.readAsDataURL(file);
+        } catch (err: any) {
+            console.warn('Selfie upload error:', err);
+            await triggerErrorHaptic();
+            setToastMsg(err.message || 'Selfie upload failed. Please try again.');
+            setShowToast(true);
+        } finally {
+            setUploadingSelfie(false);
+            e.target.value = '';
+        }
     };
 
     const isVerificationComplete = Boolean(
