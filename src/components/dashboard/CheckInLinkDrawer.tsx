@@ -447,14 +447,24 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                         </div>
                                     ) : (
                                         activeLinks.map((link) => {
+                                            const normalizePhotoUrl = (url: string | null) => {
+                                                if (!url) return '';
+                                                if (url.startsWith('data:image')) return url;
+                                                if (url.includes('assets.roovo.in/checkin-images/')) {
+                                                    const file = url.split('checkin-images/')[1];
+                                                    return `https://wzxqryjthklaeubcbzsx.supabase.co/storage/v1/object/public/checkin-images/${file}`;
+                                                }
+                                                return url;
+                                            };
+
                                             const parseGuestPhotos = (raw: string | null) => {
                                                 if (!raw) return null;
                                                 try {
                                                     if (raw.startsWith('{')) {
                                                         const parsed = JSON.parse(raw);
                                                         return {
-                                                            selfie: parsed.selfie || null,
-                                                            aadhaar: parsed.aadhaar || null,
+                                                            selfie: normalizePhotoUrl(parsed.selfie),
+                                                            aadhaar: normalizePhotoUrl(parsed.aadhaar),
                                                             last4: parsed.last4 || null,
                                                             uploaded_at: parsed.uploaded_at || null,
                                                         };
@@ -462,7 +472,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                 } catch {
                                                     // legacy fallback
                                                 }
-                                                return { selfie: raw, aadhaar: null, last4: null, uploaded_at: null };
+                                                return { selfie: normalizePhotoUrl(raw), aadhaar: null, last4: null, uploaded_at: null };
                                             };
 
                                             const photos = parseGuestPhotos(link.guest_image_url);
@@ -542,12 +552,15 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                                             activeTab: 'aadhaar',
                                                                         });
                                                                     }}
-                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-indigo-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900"
+                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-indigo-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900 flex items-center justify-center"
                                                                 >
                                                                     <img
                                                                         src={photos?.aadhaar || ''}
-                                                                        alt="Masked Aadhaar"
+                                                                        alt="Aadhaar"
                                                                         className="w-full h-full object-cover"
+                                                                        onError={(e) => {
+                                                                            (e.target as HTMLElement).style.display = 'none';
+                                                                        }}
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                                                         <Eye size={13} />
@@ -570,12 +583,15 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                                             activeTab: 'selfie',
                                                                         });
                                                                     }}
-                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-emerald-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900"
+                                                                    className="relative w-11 h-11 rounded-xl overflow-hidden border-2 border-emerald-500 shrink-0 cursor-pointer shadow-xs active:scale-95 group bg-slate-900 flex items-center justify-center"
                                                                 >
                                                                     <img
                                                                         src={photos?.selfie || ''}
                                                                         alt="Live Selfie"
                                                                         className="w-full h-full object-cover"
+                                                                        onError={(e) => {
+                                                                            (e.target as HTMLElement).style.display = 'none';
+                                                                        }}
                                                                     />
                                                                     <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                                                         <Eye size={13} />
@@ -603,7 +619,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                                 </p>
                                                                 <p className="text-[11px] text-slate-500 truncate">
                                                                     {hasPhoto ? (
-                                                                        link.image_uploaded_at ? `Uploaded ${new Date(link.image_uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Uploaded to Cloudflare R2'
+                                                                        link.image_uploaded_at ? `Uploaded ${new Date(link.image_uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Verified & Safe'
                                                                     ) : link.require_image_upload ? (
                                                                         'Guest must upload ID & selfie'
                                                                     ) : (
@@ -1037,7 +1053,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                     </div>
                                 )}
 
-                                <div className="relative aspect-4/3 bg-slate-900 flex items-center justify-center">
+                                <div className="relative min-h-[220px] max-h-[65vh] bg-slate-950 flex items-center justify-center overflow-hidden">
                                     <img
                                         src={
                                             selectedPhotoPreview.activeTab === 'selfie'
@@ -1045,11 +1061,11 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId, initialTab 
                                                 : (selectedPhotoPreview.aadhaar || selectedPhotoPreview.url || selectedPhotoPreview.selfie || '')
                                         }
                                         alt={selectedPhotoPreview.guestName}
-                                        className="w-full h-full object-contain"
+                                        className="w-full h-auto max-h-[65vh] object-contain"
                                     />
                                     <button
                                         onClick={() => setSelectedPhotoPreview(null)}
-                                        className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors"
+                                        className="absolute top-3 right-3 p-2 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors z-10"
                                     >
                                         <X size={18} />
                                     </button>
