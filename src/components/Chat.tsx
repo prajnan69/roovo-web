@@ -9,6 +9,7 @@ import { Plus, Sparkles, AlertCircle, ShieldCheck, AlertTriangle, Bell, Clock, C
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
 import { API_BASE_URL } from "../services/api";
 import { createPaytmOrder, initiatePaytmCheckout } from "../services/paytmService";
+import { triggerHaptic } from "@/lib/haptics";
 
 const formatNiceDate = (dateString: string) => {
   if (!dateString) return '';

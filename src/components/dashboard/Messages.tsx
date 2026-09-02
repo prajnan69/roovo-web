@@ -452,7 +452,10 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
       {/* --- Chat Detail View --- */}
       <AnimatePresence initial={false}>
         {selectedConversation && (() => {
-          const otherUser = (selectedContext === 'host' ? selectedConversation.guest : selectedConversation.host) || {};
+          const otherUser =
+            (selectedContext === 'host'
+              ? selectedConversation.guest || selectedConversation.host
+              : selectedConversation.host || selectedConversation.guest) || {};
           return (
             <motion.div
               key="chat"
@@ -492,9 +495,11 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
                       {otherUser.name || (selectedContext === 'host' ? 'Guest' : 'Host')}
                     </h2>
                     <span className="text-[11px] text-gray-500 font-medium truncate">
-                      {selectedContext === 'host' && unified && (
+                      {selectedContext === 'host' ? (
                         <span className="text-emerald-600 font-bold">Hosting · </span>
-                      )}
+                      ) : selectedConversation.__context === 'issues' ? (
+                        <span className="text-amber-600 font-bold">Stay Request · </span>
+                      ) : null}
                       {selectedConversation.listing?.title || selectedConversation.listing_title || 'Stay'}
                     </span>
                   </div>
@@ -505,7 +510,7 @@ const MessagesPage: React.FC<MessagesPageProps> = ({
               <div className="flex-1 relative bg-slate-50 overflow-hidden">
                 <Chat
                   conversationId={selectedConversation.id}
-                  otherUser={selectedContext === 'host' ? selectedConversation.guest : selectedConversation.host}
+                  otherUser={otherUser}
                   onShowOfferDrawer={selectedContext === 'host' ? () => setIsOfferDrawerOpen(true) : undefined}
                 />
               </div>
