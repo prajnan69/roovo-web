@@ -5,8 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import supabase from "../services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
-import { triggerHaptic } from "@/lib/haptics";
-import { Plus, Sparkles, AlertCircle, ShieldCheck } from "lucide-react";
+import { Plus, Sparkles, AlertCircle, ShieldCheck, AlertTriangle, Bell, Clock, Check } from "lucide-react";
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
 import { API_BASE_URL } from "../services/api";
 import { createPaytmOrder, initiatePaytmCheckout } from "../services/paytmService";
@@ -481,6 +480,82 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                             {subtitle}
                           </span>
                         )}
+                      </div>
+                    </motion.div>
+                  </Fragment>
+                );
+              }
+
+              if (msg.type === 'stay_issue' || msg.type === 'issue' || msg.type === 'cleaning' || msg.type === 'concierge') {
+                const meta = msg.metadata || {};
+                const isIssue = msg.type === 'issue' || meta.request_type === 'issue' || msg.content?.includes('Issue');
+                const isCleaning = msg.type === 'cleaning' || meta.request_type === 'cleaning' || msg.content?.includes('Cleaning');
+                const photo = meta.photo_url;
+                const status = meta.status || 'pending';
+                const category = meta.category || (isIssue ? 'Maintenance' : isCleaning ? 'Cleaning' : 'Concierge');
+
+                return (
+                  <Fragment key={msg.clientKey || msg.id}>
+                    {dateSeparator}
+                    <motion.div
+                      initial={skipEnterAnim ? false : { opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+                      className={`flex w-full mt-2 mb-6 relative group ${isMe ? "justify-end pl-12" : "justify-start pr-12"}`}
+                    >
+                      {!isMe && (
+                        <div className="w-8 mr-2 flex-shrink-0 flex flex-col justify-end">
+                          {showAvatar ? (
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white shadow-sm overflow-hidden">
+                              {otherUser?.avatar_url ? (
+                                <img src={otherUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                              ) : (
+                                <img src={`https://ui-avatars.com/api/?background=c7d2fe&color=3730a3&name=${encodeURIComponent(otherUser?.name || 'User')}`} alt="avatar" />
+                              )}
+                            </div>
+                          ) : <div className="w-8" />}
+                        </div>
+                      )}
+                      <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-md overflow-hidden max-w-sm w-full">
+                        {/* Banner */}
+                        <div className={`p-4 flex items-center justify-between text-white ${
+                          isIssue 
+                            ? 'bg-gradient-to-r from-rose-600 to-rose-500' 
+                            : isCleaning 
+                            ? 'bg-gradient-to-r from-indigo-600 to-indigo-500' 
+                            : 'bg-gradient-to-r from-amber-600 to-amber-500'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            {isIssue ? <AlertTriangle className="w-4 h-4 text-rose-100" /> : isCleaning ? <Sparkles className="w-4 h-4 text-indigo-100" /> : <Bell className="w-4 h-4 text-amber-100" />}
+                            <span className="font-bold text-xs uppercase tracking-wider">
+                              {isIssue ? `Guest Issue: ${category}` : isCleaning ? 'Cleaning Request' : 'Concierge Request'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-extrabold bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full uppercase">
+                            {status}
+                          </span>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 space-y-3 bg-white">
+                          <p className="text-sm text-slate-800 font-medium whitespace-pre-line leading-relaxed">
+                            {meta.description || msg.content}
+                          </p>
+
+                          {meta.time_slot && (
+                            <div className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl inline-block">
+                              Requested Slot: {meta.time_slot}
+                            </div>
+                          )}
+
+                          {photo && (
+                            <div className="rounded-2xl overflow-hidden border border-slate-200 w-full h-40 relative group">
+                              <a href={photo} target="_blank" rel="noreferrer">
+                                <img src={photo} alt="Issue evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </motion.div>
                   </Fragment>

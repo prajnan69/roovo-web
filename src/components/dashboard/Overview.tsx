@@ -548,6 +548,12 @@ const Overview = () => {
                                 >
                                   <MessageCircle size={12} /> WhatsApp
                                 </a>
+                                <button
+                                  onClick={() => navigate('hosting/messages')}
+                                  className="py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <MessageSquare size={12} /> Chat
+                                </button>
                               </>
                             )}
                           </div>
