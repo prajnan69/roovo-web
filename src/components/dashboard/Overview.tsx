@@ -189,6 +189,8 @@ const Overview = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showPaymentLinkDrawer, setShowPaymentLinkDrawer] = useState(false);
   const [showCheckInDrawer, setShowCheckInDrawer] = useState(false);
+  const [checkInDrawerTab, setCheckInDrawerTab] = useState<'create' | 'links'>('create');
+  const [checkInLinks, setCheckInLinks] = useState<any[]>([]);
   const { navigate } = useNavigation();
 
   useEffect(() => {
@@ -229,22 +231,22 @@ const Overview = () => {
         const data = await res.json();
         if (Array.isArray(data.requests)) {
           setStayRequests(data.requests);
-          return;
         }
       }
     } catch (e) {
       console.warn('Backend requests fetch warning:', e);
     }
 
-    // Direct Supabase Fallback
+    // Direct Supabase Fallback & Links Fetch
     try {
       const { data: links } = await supabase
         .from('check_in_links')
-        .select('id, guest_name, guest_phone, listing_id, status, requests, created_at, listings_new(title, place)')
+        .select('id, guest_name, guest_phone, listing_id, status, require_image_upload, guest_image_url, image_uploaded_at, checked_in_at, requests, created_at, listings_new(title, place)')
         .eq('host_id', profileData.id)
         .order('created_at', { ascending: false });
 
       if (links) {
+        setCheckInLinks(links);
         const reqs: any[] = [];
         links.forEach((link: any) => {
           (link.requests || []).forEach((r: any) => {
@@ -372,11 +374,28 @@ const Overview = () => {
         });
       }
 
+      // 2. Check-in Link & Verification Photo Activity
+      checkInLinks.slice(0, 3).forEach((link) => {
+        if (link.guest_image_url && link.status !== 'checked_out') {
+          list.push({
+            title: `📸 Photo Verified: ${link.guest_name || 'Guest'}`,
+            description: `${link.guest_name || 'Guest'} uploaded photo for ${link.listings_new?.title || 'your property'}.`,
+            buttonText: "View Photo",
+            icon: ShieldCheck,
+            action: () => {
+              setCheckInDrawerTab('links');
+              setShowCheckInDrawer(true);
+            },
+            priority: 'high',
+          });
+        }
+      });
+
     }
 
     console.log('[Overview] Generated notifications:', list);
     return list;
-  }, [hostState, navigate]);
+  }, [hostState, checkInLinks, navigate]);
 
   // Visual physics for the sheet
   const sheetBorderRadius = useTransform(scrollY, [0, 100], [32, 0]);
@@ -711,11 +730,14 @@ const Overview = () => {
               
               <ActionCard
                 index={notifications.length}
-                title="Generate Check-in Link"
-                description="Create a digital check-in & in-stay concierge hub for your upcoming guest with optional ID/photo verification."
-                buttonText="Create Link"
+                title="Check-in Links & Verification"
+                description="Create digital check-in links and view guest verification photos & active stays."
+                buttonText="Manage Links"
                 icon={KeyRound}
-                onButtonClick={() => setShowCheckInDrawer(true)}
+                onButtonClick={() => {
+                  setCheckInDrawerTab('create');
+                  setShowCheckInDrawer(true);
+                }}
                 priority="high"
               />
 
@@ -761,6 +783,7 @@ const Overview = () => {
             isOpen={showCheckInDrawer}
             onClose={() => setShowCheckInDrawer(false)}
             hostId={profileData?.id || ""}
+            initialTab={checkInDrawerTab}
           />
         )}
       </AnimatePresence>
