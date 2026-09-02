@@ -211,11 +211,11 @@ const Overview = () => {
         } catch (error) {
           console.error("[Overview] Failed to load request data:", error);
         }
-      } else {
-        console.log('[Overview] No profileData.id available, skipping fetch');
       }
     };
     loadHostState();
+  }, [profileData]);
+
   // Guest Stay Requests & Issues State
   const [stayRequests, setStayRequests] = useState<any[]>([]);
   const [updatingReqId, setUpdatingReqId] = useState<string | null>(null);
@@ -327,6 +327,8 @@ const Overview = () => {
   const resolvedStayRequests = useMemo(() => {
     return stayRequests.filter(r => r.status === 'resolved');
   }, [stayRequests]);
+
+  const notifications = useMemo(() => {
     const list: Notification[] = [];
 
     if (hostState) {
