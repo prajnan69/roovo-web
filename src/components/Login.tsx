@@ -30,6 +30,33 @@ const slideVariants = {
   exit: { y: "100%", opacity: 0.8 },
 };
 
+// Global module-level store so verification ID is NEVER lost across re-renders,
+// app backgrounding/resuming to check SMS, or component remounts.
+let globalNativeVerificationId: string | null = null;
+let globalConfirmationResult: ConfirmationResult | null = null;
+
+// Attach a permanent native listener at module load so phoneCodeSent is never missed
+if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+  try {
+    FirebaseAuthentication.addListener('phoneCodeSent', (event: any) => {
+      console.log('[Auth] Global phoneCodeSent received:', event?.verificationId);
+      if (event?.verificationId) {
+        globalNativeVerificationId = event.verificationId;
+        try {
+          sessionStorage.setItem('roovo_auth_vid', event.verificationId);
+          localStorage.setItem('roovo_auth_vid', event.verificationId);
+        } catch (e) {}
+      }
+    });
+
+    FirebaseAuthentication.addListener('phoneVerificationFailed', (event: any) => {
+      console.error('[Auth] Global phoneVerificationFailed:', event?.message);
+    });
+  } catch (e) {
+    console.warn('[Auth] Could not attach global Firebase listener:', e);
+  }
+}
+
 export default function Login({
   isOpen,
   onClose,
@@ -50,7 +77,13 @@ export default function Login({
   const [error, setError] = useState<string | null>(null);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const [nativeVerificationId, setNativeVerificationId] = useState<string | null>(null);
+  const [nativeVerificationId, setNativeVerificationId] = useState<string | null>(() => {
+    return (
+      globalNativeVerificationId ||
+      (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('roovo_auth_vid') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('roovo_auth_vid') : null)
+    );
+  });
 
   // UI State
   const [isVisible, setIsVisible] = useState(isOpen);
@@ -60,7 +93,7 @@ export default function Login({
 
   const { navigate } = useNavigation();
   const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
-  const confirmationResult = useRef<ConfirmationResult | null>(null);
+  const confirmationResult = useRef<ConfirmationResult | null>(globalConfirmationResult);
 
   useEffect(() => {
     setIsVisible(isOpen);
@@ -88,7 +121,15 @@ export default function Login({
 
     if (Capacitor.isNativePlatform()) {
       FirebaseAuthentication.addListener('phoneCodeSent', (event) => {
-        setNativeVerificationId(event.verificationId);
+        console.log('[Login] phoneCodeSent event received:', event?.verificationId);
+        if (event?.verificationId) {
+          globalNativeVerificationId = event.verificationId;
+          setNativeVerificationId(event.verificationId);
+          try {
+            sessionStorage.setItem('roovo_auth_vid', event.verificationId);
+            localStorage.setItem('roovo_auth_vid', event.verificationId);
+          } catch (e) {}
+        }
       }).then((res) => {
         codeSentListener = res;
       });
@@ -164,7 +205,6 @@ export default function Login({
     setLoading(false);
     setTimer(30);
     setCanResend(false);
-    setNativeVerificationId(null);
   };
 
   const handleClose = () => {
@@ -217,6 +257,7 @@ export default function Login({
         const verifier = getRecaptchaVerifier();
         const result = await signInWithPhoneNumber(auth, `+91${phoneNumber}`, verifier);
         confirmationResult.current = result;
+        globalConfirmationResult = result;
       }
 
       setStep('otp');
@@ -255,15 +296,23 @@ export default function Login({
       return;
     }
 
+    const activeVerificationId =
+      nativeVerificationId ||
+      globalNativeVerificationId ||
+      (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('roovo_auth_vid') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('roovo_auth_vid') : null);
+
+    const activeConfirmation = confirmationResult.current || globalConfirmationResult;
+
     if (Capacitor.isNativePlatform()) {
-      if (!nativeVerificationId) {
+      if (!activeVerificationId) {
         setError("Session expired. Please request OTP again.");
         setStep('phone');
         setLoading(false);
         return;
       }
     } else {
-      if (!confirmationResult.current) {
+      if (!activeConfirmation) {
         setError("Session expired. Please request OTP again.");
         setStep('phone');
         setLoading(false);
@@ -276,7 +325,7 @@ export default function Login({
 
       if (Capacitor.isNativePlatform()) {
         await FirebaseAuthentication.confirmVerificationCode({
-          verificationId: nativeVerificationId!,
+          verificationId: activeVerificationId!,
           verificationCode: otp,
         });
         const { token } = await FirebaseAuthentication.getIdToken();
@@ -285,7 +334,7 @@ export default function Login({
         }
         idToken = token;
       } else {
-        const credential = await confirmationResult.current.confirm(otp);
+        const credential = await activeConfirmation.confirm(otp);
         idToken = await credential.user.getIdToken();
       }
 
@@ -305,6 +354,14 @@ export default function Login({
         const { error: sessionError } = await supabase.auth.setSession(data.session);
         if (sessionError) console.error("Error setting session:", sessionError);
       }
+
+      // Clear saved auth IDs on success
+      globalNativeVerificationId = null;
+      globalConfirmationResult = null;
+      try {
+        sessionStorage.removeItem('roovo_auth_vid');
+        localStorage.removeItem('roovo_auth_vid');
+      } catch (e) {}
 
       setLoginStatus('success');
       triggerHapticFeedback('success');
@@ -328,7 +385,6 @@ export default function Login({
         : err.code === 'auth/code-expired'
           ? 'OTP expired. Please request a new one.'
           : err.message || 'Invalid OTP. Please try again.';
-      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -552,7 +608,17 @@ export default function Login({
                     )}
                     <div className="mt-4">
                       <button
-                        onClick={() => setStep('phone')}
+                        onClick={() => {
+                          globalNativeVerificationId = null;
+                          globalConfirmationResult = null;
+                          try {
+                            sessionStorage.removeItem('roovo_auth_vid');
+                            localStorage.removeItem('roovo_auth_vid');
+                          } catch (e) {}
+                          setNativeVerificationId(null);
+                          if (confirmationResult) confirmationResult.current = null;
+                          setStep('phone');
+                        }}
                         className="text-neutral-500 font-medium text-sm hover:text-neutral-700 transition-colors"
                       >
                         Change Phone Number
