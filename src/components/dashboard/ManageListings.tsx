@@ -395,8 +395,14 @@ export default function ManageListings() {
 
                       <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 truncate">
                         <MapPin size={12} className="text-indigo-500 flex-shrink-0" />
-                        <span>{listing.property_type || "Apartment"}</span>
-                        {listing.location && <span>• {listing.location}</span>}
+                        <span>{typeof listing.property_type === 'string' ? listing.property_type : "Apartment"}</span>
+                        {(() => {
+                          const loc = listing.location;
+                          const locStr = typeof loc === 'string'
+                            ? loc
+                            : loc?.city || loc?.address || (listing as any).place || (listing as any).city || '';
+                          return locStr ? <span>• {locStr}</span> : null;
+                        })()}
                       </p>
                     </div>
 
