@@ -494,8 +494,8 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             clearTimeout(timeoutId);
 
             const data = await res.json();
-            if (res.ok && data.maskedUrl && data.isAadhaar) {
-                setMaskedAadhaarUrl(data.maskedUrl);
+            if (res.ok && (data.maskedBase64 || data.maskedUrl) && data.isAadhaar) {
+                setMaskedAadhaarUrl(data.maskedBase64 || data.maskedUrl);
                 setAadhaarLast4(data.last4 || 'XXXX');
                 await triggerHaptic();
                 setToastMsg(`Aadhaar verified! Now take a live selfie.`);
@@ -1013,14 +1013,18 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                     </div>
 
                                     {maskedAadhaarUrl ? (
-                                        <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
-                                            <img src={maskedAadhaarUrl} alt="Aadhaar Card" className="w-full h-full object-cover opacity-90" />
-                                            <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent flex items-end justify-between p-2.5 text-white">
-                                                <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] font-mono font-bold">
-                                                    XXXX-XXXX-{aadhaarLast4 || 'XXXX'}
+                                        <div className="relative rounded-2xl overflow-hidden border border-emerald-300/80 bg-slate-950 flex items-center justify-center min-h-[160px] max-h-72 shadow-xs group">
+                                            <img 
+                                                src={maskedAadhaarUrl} 
+                                                alt="Aadhaar Card" 
+                                                className="w-full h-auto max-h-72 object-contain" 
+                                            />
+                                            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end justify-between p-3 text-white pointer-events-none">
+                                                <span className="px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-xs font-mono font-bold tracking-wider border border-white/10">
+                                                    •••• •••• {aadhaarLast4 || 'XXXX'}
                                                 </span>
-                                                <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-[10px] font-bold flex items-center gap-1">
-                                                    <Check size={11} strokeWidth={3} /> Verified
+                                                <span className="px-2.5 py-1 rounded-full bg-emerald-600/90 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                                                    <Check size={13} strokeWidth={3} /> Verified
                                                 </span>
                                             </div>
                                         </div>
@@ -1069,10 +1073,16 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                     </div>
 
                                     {selfieImageUrl ? (
-                                        <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
-                                            <img src={selfieImageUrl} alt="Live Selfie" className="w-full h-full object-cover" />
-                                            <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold flex items-center gap-1">
-                                                <Check size={11} strokeWidth={3} /> Selfie Verified
+                                        <div className="relative rounded-2xl overflow-hidden border border-emerald-300/80 bg-slate-950 flex items-center justify-center min-h-[160px] max-h-72 shadow-xs">
+                                            <img 
+                                                src={selfieImageUrl} 
+                                                alt="Live Selfie" 
+                                                className="w-full h-auto max-h-72 object-cover" 
+                                            />
+                                            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent flex items-end justify-between p-3 text-white pointer-events-none">
+                                                <span className="px-2.5 py-1 rounded-full bg-emerald-600/90 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                                                    <Check size={13} strokeWidth={3} /> Selfie Verified
+                                                </span>
                                             </div>
                                         </div>
                                     ) : (
