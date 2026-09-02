@@ -646,6 +646,31 @@ function AppContent() {
     };
   }, [getConversations]);
 
+  // Listen for concurrent login from another device/browser and automatically log out here
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const sessionChannel = supabase
+      .channel(`user_session_${currentUser.id}`)
+      .on('broadcast', { event: 'force_logout' }, async (payload) => {
+        console.warn('[Auth] Account logged in on another device. Revoking this session:', payload);
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {}
+        setIsUserHost(false);
+        setCurrentUser(null);
+        setCurrentHostId(null);
+        setHostConversations([]);
+        setGuestConversations([]);
+        window.dispatchEvent(new CustomEvent('roovo-force-logout'));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionChannel);
+    };
+  }, [currentUser?.id]);
+
   // Global Banner logic removed for now in favor of integrated Search UI
   useEffect(() => {
     const handleGlobalBannerEvent = (e: any) => {
