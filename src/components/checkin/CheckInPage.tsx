@@ -37,6 +37,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
 
     // Auth State
     const [sessionUser, setSessionUser] = useState<any>(null);
+    const [resolvedUserPhone, setResolvedUserPhone] = useState<string>('');
     const [isAuthChecking, setIsAuthChecking] = useState(true);
     const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -134,6 +135,44 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         }
     };
 
+    // Resolve Phone Number from all possible user sources
+    const resolvePhoneForUser = async (user: any) => {
+        if (!user) {
+            setResolvedUserPhone('');
+            return '';
+        }
+
+        let phone = user.phone || user.user_metadata?.phone || '';
+
+        // 1. If phone is in email (e.g. 9876543210@roovo.in from OTP login)
+        if (!phone && user.email && user.email.includes('@roovo.in')) {
+            const digits = user.email.split('@')[0].replace(/\D/g, '');
+            if (digits.length >= 10) {
+                phone = digits;
+            }
+        }
+
+        // 2. Query public.users table if phone is still empty
+        if (!phone && user.id) {
+            try {
+                const { data: userData } = await supabase
+                    .from('users')
+                    .select('phone')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                if (userData?.phone) {
+                    phone = userData.phone;
+                }
+            } catch (err) {
+                console.warn('[CheckIn] Could not fetch phone from users table:', err);
+            }
+        }
+
+        setResolvedUserPhone(phone);
+        return phone;
+    };
+
     // Check User Authentication
     const checkAuth = async () => {
         setIsAuthChecking(true);
@@ -141,8 +180,10 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 setSessionUser(session.user);
+                await resolvePhoneForUser(session.user);
             } else {
                 setSessionUser(null);
+                setResolvedUserPhone('');
             }
         } catch (e) {
             console.error('Auth check error:', e);
@@ -157,11 +198,13 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         }
         checkAuth();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session?.user) {
                 setSessionUser(session.user);
+                await resolvePhoneForUser(session.user);
             } else {
                 setSessionUser(null);
+                setResolvedUserPhone('');
             }
         });
 
@@ -169,10 +212,9 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     }, [checkInId]);
 
     // Handle Phone Verification Check
-    const userPhone = sessionUser?.phone || sessionUser?.user_metadata?.phone || '';
-    const cleanUserPhone = userPhone.replace(/\D/g, '').slice(-10);
+    const cleanUserPhone = resolvedUserPhone.replace(/\D/g, '').slice(-10);
     const cleanGuestPhone = (checkIn?.guest_phone || '').replace(/\D/g, '').slice(-10);
-    const isPhoneMatched = !cleanGuestPhone || cleanUserPhone === cleanGuestPhone;
+    const isPhoneMatched = !cleanGuestPhone || (cleanUserPhone.length === 10 && cleanUserPhone === cleanGuestPhone);
 
     // Handle Mandatory Guest Image Upload to Cloudflare R2
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
