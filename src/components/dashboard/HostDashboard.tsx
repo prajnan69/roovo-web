@@ -18,9 +18,10 @@ interface HostDashboardProps {
   conversations: any[];
   selectedConversation: any;
   onConversationSelect: (conversation: any) => void;
+  guestConversations?: any[];
 }
 
-const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedConversation, onConversationSelect }) => {
+const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedConversation, onConversationSelect, guestConversations = [] }) => {
   const { pathname, navigate } = useNavigation();
   const { profileData } = usePreloadedData();
 
@@ -47,7 +48,16 @@ const HostDashboard: React.FC<HostDashboardProps> = ({ conversations, selectedCo
       return <Calendar />;
     }
     if (pathname === "/hosting/messages") {
-      return <Messages conversations={conversations} selectedConversation={selectedConversation} onConversationSelect={onConversationSelect} userType="host" />;
+      return (
+        <Messages
+          conversations={guestConversations}
+          hostConversations={conversations}
+          selectedConversation={selectedConversation}
+          onConversationSelect={onConversationSelect}
+          userType="host"
+          isHost={true}
+        />
+      );
     }
     if (pathname === "/hosting/listings") {
       return <ManageListings />;

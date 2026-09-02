@@ -826,6 +826,7 @@ function AppContent() {
           render={() => (
             <HostDashboard
               conversations={hostConversations}
+              guestConversations={guestConversations}
               selectedConversation={selectedConversation}
               onConversationSelect={setSelectedConversation}
             />

@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import supabase from "../services/api";
 import { Spinner } from "./ui/shadcn-io/spinner";
-import { Plus, Sparkles, AlertCircle, ShieldCheck, AlertTriangle, Bell, Clock, Check } from "lucide-react";
+import { Plus, Sparkles, AlertCircle, ShieldCheck, AlertTriangle, Bell, Clock, Check, CheckCircle2 } from "lucide-react";
 import AcceptOfferDrawer from "./dashboard/AcceptOfferDrawer";
 import { API_BASE_URL } from "../services/api";
 import { createPaytmOrder, initiatePaytmCheckout } from "../services/paytmService";
@@ -59,8 +59,103 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
   const [selectedOffer, setSelectedOffer] = useState<{ id: string, startDate: string, endDate: string, price: number, listingId: string } | null>(null);
   const [isAcceptDrawerOpen, setIsAcceptDrawerOpen] = useState(false);
   const [convoDetails, setConvoDetails] = useState<{ listing_id: string; host_id: string } | null>(null);
+  const [resolvingIssueId, setResolvingIssueId] = useState<string | null>(null);
 
-  // --- Keyboard & Auth Setup ---
+  const handleResolveIssue = async (msg: any) => {
+    const meta = msg.metadata || {};
+    const req = meta.request || {};
+    const requestId = req.id || meta.requestId || meta.id;
+    const checkInId = meta.checkInId || meta.check_in_id;
+
+    setResolvingIssueId(msg.id);
+    await triggerHaptic();
+
+    // 1. Optimistic UI update on messages
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === msg.id) {
+          return {
+            ...m,
+            metadata: {
+              ...m.metadata,
+              status: 'resolved',
+              request: {
+                ...(m.metadata?.request || {}),
+                status: 'resolved',
+              },
+            },
+          };
+        }
+        return m;
+      })
+    );
+
+    try {
+      // 2. Update check_in_links if checkInId exists
+      if (checkInId) {
+        try {
+          const apiBase = API_BASE_URL || 'https://roovo-backend.fly.dev';
+          if (requestId) {
+            await fetch(`${apiBase}/api/check-in/${checkInId}/request/${requestId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'resolved' }),
+            }).catch(() => {});
+          }
+
+          // Direct fallback
+          const { data: record } = await supabase
+            .from('check_in_links')
+            .select('requests')
+            .eq('id', checkInId)
+            .single();
+
+          if (record && Array.isArray(record.requests)) {
+            const updated = record.requests.map((r: any) =>
+              r.id === requestId || (!requestId && r.status !== 'resolved')
+                ? { ...r, status: 'resolved' }
+                : r
+            );
+            await supabase
+              .from('check_in_links')
+              .update({ requests: updated })
+              .eq('id', checkInId);
+          }
+        } catch (e) {
+          console.warn('Failed to update check_in_links request:', e);
+        }
+      }
+
+      // 3. Update message record in Supabase
+      await supabase
+        .from('messages')
+        .update({
+          metadata: {
+            ...meta,
+            status: 'resolved',
+            request: {
+              ...(meta.request || {}),
+              status: 'resolved',
+            },
+          },
+        })
+        .eq('id', msg.id);
+
+      // 4. Send a system confirmation message in chat
+      if (session?.user?.id) {
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          sender_id: session.user.id,
+          content: '✅ [Resolved] This issue has been marked as resolved.',
+          type: 'text',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to resolve issue:', err);
+    } finally {
+      setResolvingIssueId(null);
+    }
+  };
   useEffect(() => {
     // Keyboard occlusion = how much of the layout viewport the keyboard
     // covers. Two independent signals, take whichever reports more:
@@ -488,11 +583,14 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
 
               if (msg.type === 'stay_issue' || msg.type === 'issue' || msg.type === 'cleaning' || msg.type === 'concierge') {
                 const meta = msg.metadata || {};
-                const isIssue = msg.type === 'issue' || meta.request_type === 'issue' || msg.content?.includes('Issue');
-                const isCleaning = msg.type === 'cleaning' || meta.request_type === 'cleaning' || msg.content?.includes('Cleaning');
-                const photo = meta.photo_url;
-                const status = meta.status || 'pending';
-                const category = meta.category || (isIssue ? 'Maintenance' : isCleaning ? 'Cleaning' : 'Concierge');
+                const req = meta.request || {};
+                const type = req.type || meta.type || meta.request_type || (msg.type === 'stay_issue' ? 'issue' : msg.type);
+                const isIssue = type === 'issue' || msg.content?.includes('Issue');
+                const isCleaning = type === 'cleaning' || msg.content?.includes('Cleaning');
+                const photo = req.photo_url || meta.photo_url;
+                const status = (req.status || meta.status || 'pending').toLowerCase();
+                const isResolved = status === 'resolved';
+                const category = req.category || meta.category || (isIssue ? 'Maintenance' : isCleaning ? 'Cleaning' : 'Concierge');
 
                 return (
                   <Fragment key={msg.clientKey || msg.id}>
@@ -519,27 +617,41 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                       <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-md overflow-hidden max-w-sm w-full">
                         {/* Banner */}
                         <div className={`p-4 flex items-center justify-between text-white ${
-                          isIssue 
+                          isResolved
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-600'
+                            : isIssue 
                             ? 'bg-gradient-to-r from-rose-600 to-rose-500' 
                             : isCleaning 
                             ? 'bg-gradient-to-r from-indigo-600 to-indigo-500' 
                             : 'bg-gradient-to-r from-amber-600 to-amber-500'
                         }`}>
                           <div className="flex items-center gap-2">
-                            {isIssue ? <AlertTriangle className="w-4 h-4 text-rose-100" /> : isCleaning ? <Sparkles className="w-4 h-4 text-indigo-100" /> : <Bell className="w-4 h-4 text-amber-100" />}
+                            {isResolved ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+                            ) : isIssue ? (
+                              <AlertTriangle className="w-4 h-4 text-rose-100" />
+                            ) : isCleaning ? (
+                              <Sparkles className="w-4 h-4 text-indigo-100" />
+                            ) : (
+                              <Bell className="w-4 h-4 text-amber-100" />
+                            )}
                             <span className="font-bold text-xs uppercase tracking-wider">
                               {isIssue ? `Guest Issue: ${category}` : isCleaning ? 'Cleaning Request' : 'Concierge Request'}
                             </span>
                           </div>
-                          <span className="text-[10px] font-extrabold bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full uppercase">
-                            {status}
+                          <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${
+                            isResolved
+                              ? 'bg-white text-emerald-700 shadow-xs'
+                              : 'bg-white/20 backdrop-blur-md text-white'
+                          }`}>
+                            {isResolved ? '✓ Resolved' : status}
                           </span>
                         </div>
 
                         {/* Content */}
                         <div className="p-4 space-y-3 bg-white">
                           <p className="text-sm text-slate-800 font-medium whitespace-pre-line leading-relaxed">
-                            {meta.description || msg.content}
+                            {meta.description || req.description || msg.content}
                           </p>
 
                           {meta.time_slot && (
@@ -555,6 +667,32 @@ const Chat = ({ conversationId, otherUser, onShowOfferDrawer }: ChatProps) => {
                               </a>
                             </div>
                           )}
+
+                          {/* Resolution Action / Status Pill */}
+                          <div className="pt-2 border-t border-slate-100">
+                            {isResolved ? (
+                              <div className="flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <span>Issue Marked as Resolved</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleResolveIssue(msg)}
+                                disabled={resolvingIssueId === msg.id}
+                                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                              >
+                                {resolvingIssueId === msg.id ? (
+                                  <Spinner size={16} className="text-white" />
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Mark as Resolved</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </motion.div>
