@@ -127,7 +127,7 @@ function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: Sli
                 }`}
             >
                 {isProcessing ? (
-                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <RoovoLoader className="w-10 h-auto" color="#4f46e5" />
                 ) : isSuccess ? (
                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5 }}>
                         <Check className="w-6 h-6 text-emerald-600" strokeWidth={3} />
@@ -694,20 +694,34 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             {/* Top Navigation */}
             <div className="sticky top-0 z-40 bg-[#FAF9F7]/90 backdrop-blur-md px-5 py-3.5 border-b border-slate-200/60 flex items-center justify-between">
                 <button
-                    onClick={() => navigate('/')}
-                    className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-xs"
+                    onClick={() => {
+                        triggerHaptic();
+                        if (window.history.length > 1) {
+                            window.history.back();
+                        } else {
+                            navigate('/');
+                        }
+                    }}
+                    className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 border border-slate-200 flex items-center justify-center text-slate-800 shadow-xs shrink-0 transition-all cursor-pointer"
+                    aria-label="Back"
                 >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={18} className="text-slate-800 stroke-[2.5]" />
                 </button>
                 <div className="text-center">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 block">Digital Check-in</span>
                     <span className="text-xs font-bold text-slate-900 truncate max-w-[180px] block">{listing?.title || 'Your Stay'}</span>
                 </div>
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    isAlreadyCheckedIn ? 'bg-emerald-100 text-emerald-700' : isCheckedOut ? 'bg-slate-200 text-slate-600' : 'bg-indigo-100 text-indigo-700'
-                }`}>
-                    {isAlreadyCheckedIn ? 'Active Stay' : isCheckedOut ? 'Checked Out' : 'Pre Check-in'}
-                </div>
+                {isAlreadyCheckedIn ? (
+                    <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                        Active Stay
+                    </div>
+                ) : isCheckedOut ? (
+                    <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600">
+                        Checked Out
+                    </div>
+                ) : (
+                    <div className="w-9 h-9" />
+                )}
             </div>
 
             {/* Main Body */}
@@ -770,21 +784,21 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                     <div className="relative rounded-2xl overflow-hidden border border-emerald-200 h-36 bg-slate-100">
                                         <img src={guestImageUrl} alt="Verified guest" className="w-full h-full object-cover" />
                                         <div className="absolute bottom-2 left-2 px-2.5 py-1 rounded-full bg-emerald-600/90 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
-                                            <Check size={12} /> Uploaded to Secure Cloud
+                                            <Check size={12} /> Photo Verified
                                         </div>
                                     </div>
                                 ) : (
                                     <label className="flex flex-col items-center justify-center border-2 border-dashed border-indigo-200 bg-indigo-50/40 rounded-2xl p-5 cursor-pointer hover:bg-indigo-50/70 transition-colors">
                                         {uploadingImage ? (
-                                            <div className="flex flex-col items-center gap-2 py-2">
-                                                <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                                                <span className="text-xs font-semibold text-indigo-600">Uploading to Cloudflare R2...</span>
+                                            <div className="flex flex-col items-center justify-center py-3 gap-2">
+                                                <RoovoLoader className="w-20 h-auto" color="#4f46e5" />
+                                                <span className="text-xs font-semibold text-slate-600">Uploading photo...</span>
                                             </div>
                                         ) : (
                                             <>
                                                 <Camera className="w-7 h-7 text-indigo-600 mb-1.5" />
                                                 <span className="text-xs font-bold text-indigo-950">Tap to Take Selfie or Upload ID</span>
-                                                <span className="text-[10px] text-indigo-600/80 mt-0.5">Secure, encrypted host storage</span>
+                                                <span className="text-[10px] text-indigo-600/80 mt-0.5">Secure host verification</span>
                                                 <input
                                                     type="file"
                                                     accept="image/*"

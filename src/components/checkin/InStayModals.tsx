@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, Sparkles, Bell, LogOut, Camera, Check, Clock, Star, Info, Upload } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
+import RoovoLoader from '@/components/RoovoLoader';
 
 interface BaseModalProps {
     isOpen: boolean;
@@ -183,7 +184,7 @@ export function RaiseIssueModal({ isOpen, onClose, checkInId, onSuccess }: BaseM
                                 className="w-full py-4 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-lg shadow-rose-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 {submitting ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <RoovoLoader className="w-8 h-auto" color="#ffffff" />
                                 ) : (
                                     'Submit Issue to Host'
                                 )}
@@ -321,7 +322,7 @@ export function RequestCleaningModal({ isOpen, onClose, checkInId, onSuccess }: 
                                 className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 {submitting ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <RoovoLoader className="w-8 h-auto" color="#ffffff" />
                                 ) : (
                                     'Confirm Cleaning Request'
                                 )}
@@ -459,7 +460,7 @@ export function ConciergeModal({ isOpen, onClose, checkInId, onSuccess }: BaseMo
                                 className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-lg shadow-amber-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 {submitting ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <RoovoLoader className="w-8 h-auto" color="#ffffff" />
                                 ) : (
                                     'Send Concierge Request'
                                 )}
@@ -604,7 +605,7 @@ export function CheckOutModal({ isOpen, onClose, checkInId, onSuccess }: BaseMod
                                 className="w-full py-4 rounded-2xl bg-slate-900 hover:bg-black text-white font-bold text-sm shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
                                 {submitting ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <RoovoLoader className="w-8 h-auto" color="#ffffff" />
                                 ) : (
                                     'Confirm & Complete Check-Out'
                                 )}
