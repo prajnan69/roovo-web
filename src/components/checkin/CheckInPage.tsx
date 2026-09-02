@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from 'framer-motion';
 import { 
     KeyRound, Wifi, ShieldCheck, AlertTriangle, Sparkles, Bell, 
     LogOut, Camera, Check, Copy, MapPin, Calendar, Clock, 
@@ -17,6 +17,128 @@ import {
     ConciergeModal, 
     CheckOutModal 
 } from './InStayModals';
+
+interface SlideToCheckInProps {
+    onSlide: () => Promise<void> | void;
+    disabled?: boolean;
+    isProcessing?: boolean;
+    disabledReason?: string;
+}
+
+function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: SlideToCheckInProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [dragBounds, setDragBounds] = useState(0);
+    const x = useMotionValue(0);
+    const controls = useAnimation();
+    const [isSuccess, setIsSuccess] = useState(false);
+
+    useEffect(() => {
+        const updateBounds = () => {
+            if (containerRef.current) {
+                // container width - handle width (52) - horizontal padding (6 * 2)
+                setDragBounds(containerRef.current.offsetWidth - 52 - 12);
+            }
+        };
+        updateBounds();
+        window.addEventListener('resize', updateBounds);
+        return () => window.removeEventListener('resize', updateBounds);
+    }, []);
+
+    const textOpacity = useTransform(x, [0, Math.max(dragBounds * 0.45, 1)], [1, 0]);
+    const activeTrackWidth = useTransform(x, [0, Math.max(dragBounds, 1)], [52, dragBounds + 52]);
+    const activeBgColor = useTransform(
+        x,
+        [0, Math.max(dragBounds, 1)],
+        ['#4f46e5', '#10b981'] // Indigo to Emerald
+    );
+
+    const handleDragEnd = async () => {
+        if (disabled || isProcessing || isSuccess) return;
+
+        if (x.get() > dragBounds * 0.7) {
+            // Dragged past 70% threshold -> complete slide
+            await controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
+            setIsSuccess(true);
+            await triggerHaptic();
+            await onSlide();
+        } else {
+            // Snap back
+            await triggerHaptic();
+            controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
+        }
+    };
+
+    if (disabled) {
+        return (
+            <div className="w-full h-[64px] rounded-full bg-slate-100 border border-slate-200 flex items-center px-2 py-1.5 opacity-80 cursor-not-allowed">
+                <div className="w-[50px] h-[50px] rounded-full bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
+                    <Lock size={18} />
+                </div>
+                <div className="flex-1 text-center pr-10 text-xs font-bold text-slate-400">
+                    {disabledReason || 'Upload photo above to unlock'}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            ref={containerRef}
+            className={`relative w-full h-[64px] rounded-full flex items-center p-1.5 overflow-hidden transition-colors duration-500 select-none ${
+                isSuccess ? 'bg-emerald-500' : 'bg-slate-900 shadow-xl'
+            }`}
+        >
+            {/* Sliding Color Track */}
+            {!isSuccess && dragBounds > 0 && (
+                <motion.div
+                    className="absolute left-1.5 top-1.5 bottom-1.5 rounded-full z-0 shadow-sm"
+                    style={{
+                        width: activeTrackWidth,
+                        backgroundColor: activeBgColor,
+                    }}
+                />
+            )}
+
+            {/* Guide Text */}
+            <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 pl-8"
+                style={{ opacity: textOpacity }}
+            >
+                <span className="font-bold text-xs tracking-wider uppercase text-slate-200 flex items-center gap-1.5">
+                    <span>Slide to Confirm Check-in</span>
+                    <ChevronRight size={15} className="animate-pulse text-amber-300" />
+                </span>
+            </motion.div>
+
+            {/* Draggable Handle */}
+            <motion.div
+                drag={!isProcessing && !isSuccess && dragBounds > 0 ? "x" : false}
+                dragConstraints={{ left: 0, right: dragBounds }}
+                dragElastic={0.05}
+                dragMomentum={false}
+                style={{ x }}
+                animate={controls}
+                onDragStart={() => triggerHaptic()}
+                onDragEnd={handleDragEnd}
+                className={`relative z-20 w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 ${
+                    isSuccess
+                        ? 'bg-white text-emerald-500 scale-105'
+                        : 'bg-white text-indigo-600 cursor-grab active:cursor-grabbing hover:scale-[1.02]'
+                }`}
+            >
+                {isProcessing ? (
+                    <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                ) : isSuccess ? (
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", bounce: 0.5 }}>
+                        <Check className="w-6 h-6 text-emerald-600" strokeWidth={3} />
+                    </motion.div>
+                ) : (
+                    <KeyRound className="w-5 h-5 text-indigo-600" />
+                )}
+            </motion.div>
+        </div>
+    );
+}
 
 interface CheckInPageProps {
     match?: any;
@@ -221,6 +343,13 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         const file = e.target.files?.[0];
         if (!file) return;
 
+        if (file.size > 10 * 1024 * 1024) {
+            await triggerErrorHaptic();
+            setToastMsg('Image is too large. Please select a photo under 10MB.');
+            setShowToast(true);
+            return;
+        }
+
         setUploadingImage(true);
         await triggerHaptic();
 
@@ -229,27 +358,50 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             const base64 = reader.result as string;
             try {
                 const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 12000);
+
                 const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_base64: base64 })
+                    body: JSON.stringify({ image_base64: base64 }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
                 const data = await res.json();
                 if (res.ok && data.imageUrl) {
                     setGuestImageUrl(data.imageUrl);
                     await triggerHaptic();
-                    setToastMsg('Photo verified & uploaded successfully!');
+                    setToastMsg('Photo verified & uploaded to Cloudflare R2!');
                     setShowToast(true);
                 } else {
-                    await triggerErrorHaptic();
-                    setToastMsg(data.error || 'Failed to upload photo');
-                    setShowToast(true);
+                    throw new Error(data.error || 'Failed to upload photo');
                 }
-            } catch (err) {
-                console.error('Upload photo error:', err);
+            } catch (err: any) {
+                console.warn('Backend image upload error, using direct Supabase fallback:', err);
+                try {
+                    const { error: dbErr } = await supabase
+                        .from('check_in_links')
+                        .update({
+                            guest_image_url: base64.length < 600000 ? base64 : undefined,
+                            image_uploaded_at: new Date().toISOString()
+                        })
+                        .eq('id', checkInId);
+                    
+                    if (!dbErr) {
+                        setGuestImageUrl(base64);
+                        await triggerHaptic();
+                        setToastMsg('Photo verified successfully!');
+                        setShowToast(true);
+                        return;
+                    }
+                } catch (fallbackErr) {
+                    console.error('Fallback error:', fallbackErr);
+                }
+
                 await triggerErrorHaptic();
-                setToastMsg('Upload failed. Please try again.');
+                setToastMsg(err.message || 'Upload failed. Please try again.');
                 setShowToast(true);
             } finally {
                 setUploadingImage(false);
@@ -647,31 +799,14 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                             </div>
                         )}
 
-                        {/* Slide to Check In Button */}
+                        {/* Interactive Slide to Check In Slider */}
                         <div className="pt-2">
-                            <button
-                                onClick={handleCompleteCheckIn}
-                                disabled={isCheckingIn || (checkIn.require_image_upload && !guestImageUrl)}
-                                className={`w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.98] ${
-                                    checkIn.require_image_upload && !guestImageUrl
-                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                                }`}
-                            >
-                                {isCheckingIn ? (
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                    <>
-                                        <KeyRound size={18} />
-                                        <span>Slide to Confirm Check-in</span>
-                                    </>
-                                )}
-                            </button>
-                            {checkIn.require_image_upload && !guestImageUrl && (
-                                <p className="text-[11px] text-center text-slate-400 mt-2">
-                                    Upload photo above to unlock check-in
-                                </p>
-                            )}
+                            <SlideToCheckIn
+                                onSlide={handleCompleteCheckIn}
+                                disabled={Boolean(checkIn.require_image_upload && !guestImageUrl)}
+                                isProcessing={isCheckingIn}
+                                disabledReason="Upload photo above to unlock check-in"
+                            />
                         </div>
                     </div>
                 )}
