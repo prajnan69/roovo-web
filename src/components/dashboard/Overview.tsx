@@ -241,7 +241,7 @@ const Overview = () => {
     try {
       const { data: links } = await supabase
         .from('check_in_links')
-        .select('id, guest_name, guest_phone, listing_id, status, require_image_upload, guest_image_url, image_uploaded_at, checked_in_at, requests, created_at, listings_new(title, place)')
+        .select('id, guest_name, guest_phone, listing_id, status, require_image_upload, guest_image_url, image_uploaded_at, checked_in_at, requests, created_at')
         .eq('host_id', profileData.id)
         .order('created_at', { ascending: false });
 
@@ -256,8 +256,8 @@ const Overview = () => {
               guest_name: link.guest_name,
               guest_phone: link.guest_phone,
               listing_id: link.listing_id,
-              listing_title: link.listings_new?.title || 'Your Property',
-              listing_place: link.listings_new?.place || '',
+              listing_title: link.listing_title || 'Your Property',
+              listing_place: link.listing_place || '',
             });
           });
         });
@@ -379,7 +379,7 @@ const Overview = () => {
         if (link.guest_image_url && link.status !== 'checked_out') {
           list.push({
             title: `📸 Photo Verified: ${link.guest_name || 'Guest'}`,
-            description: `${link.guest_name || 'Guest'} uploaded photo for ${link.listings_new?.title || 'your property'}.`,
+            description: `${link.guest_name || 'Guest'} uploaded verification photo.`,
             buttonText: "View Photo",
             icon: ShieldCheck,
             action: () => {

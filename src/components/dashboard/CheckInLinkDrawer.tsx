@@ -132,26 +132,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
             // 2. Direct Supabase fallback
             const { data: dbLinks } = await supabase
                 .from('check_in_links')
-                .select(`
-                    id,
-                    host_id,
-                    listing_id,
-                    guest_name,
-                    guest_phone,
-                    require_image_upload,
-                    guest_image_url,
-                    image_uploaded_at,
-                    start_date,
-                    end_date,
-                    status,
-                    checked_in_at,
-                    created_at,
-                    listings_new (
-                        id,
-                        title,
-                        place
-                    )
-                `)
+                .select('id, host_id, listing_id, guest_name, guest_phone, require_image_upload, guest_image_url, image_uploaded_at, start_date, end_date, status, checked_in_at, created_at')
                 .eq('host_id', hostId)
                 .order('created_at', { ascending: false });
 
@@ -460,7 +441,8 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                                         activeLinks.map((link) => {
                                             const isCheckedIn = link.status === 'checked_in';
                                             const hasPhoto = Boolean(link.guest_image_url);
-                                            const listingTitle = link.listings_new?.title || 'Your Property';
+                                            const matchedListing = listings.find(l => l.id === link.listing_id);
+                                            const listingTitle = link.listing_title || matchedListing?.title || matchedListing?.name || 'Your Property';
                                             const origin = typeof window !== 'undefined' ? (window.location.origin.includes('localhost') ? 'https://roovo.in' : window.location.origin) : 'https://roovo.in';
                                             const linkUrl = `${origin}/check-in/${link.id}`;
 
