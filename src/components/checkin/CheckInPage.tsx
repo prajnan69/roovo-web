@@ -434,7 +434,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     const cleanGuestPhone = (checkIn?.guest_phone || '').replace(/\D/g, '').slice(-10);
     const isPhoneMatched = !cleanGuestPhone || (cleanUserPhone.length === 10 && cleanUserPhone === cleanGuestPhone);
 
-    // Step 1: Handle Aadhaar Upload & Real-Time Masking (First 8 Digits Redacted)
+    // Step 1: Handle Aadhaar Upload & Verification
     const handleAadhaarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -455,7 +455,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             try {
                 const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 20000);
 
                 const res = await fetch(`${apiBase}/api/check-in/${checkInId}/process-aadhaar`, {
                     method: 'POST',
@@ -466,22 +466,21 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 clearTimeout(timeoutId);
 
                 const data = await res.json();
-                if (res.ok && data.maskedUrl) {
+                if (res.ok && data.maskedUrl && data.isAadhaar) {
                     setMaskedAadhaarUrl(data.maskedUrl);
                     setAadhaarLast4(data.last4 || 'XXXX');
                     await triggerHaptic();
-                    setToastMsg(`Aadhaar masked successfully (•••• •••• ${data.last4 || 'XXXX'})! Now take a live selfie.`);
+                    setToastMsg(`Aadhaar verified! Now take a live selfie.`);
                     setShowToast(true);
                 } else {
-                    throw new Error(data.error || 'Failed to process Aadhaar card');
+                    throw new Error(data.error || 'Please upload a clear photo of your Aadhaar card.');
                 }
             } catch (err: any) {
-                console.warn('Backend Aadhaar process warning:', err);
-                // Fallback: accept the image and proceed
-                setMaskedAadhaarUrl(base64);
-                setAadhaarLast4('XXXX');
-                await triggerHaptic();
-                setToastMsg('Aadhaar photo uploaded! Now take a live selfie.');
+                console.warn('Aadhaar verification error:', err);
+                setMaskedAadhaarUrl(null);
+                setAadhaarLast4(null);
+                await triggerErrorHaptic();
+                setToastMsg(err.message || 'Please upload a clear photo of your Aadhaar card.');
                 setShowToast(true);
             } finally {
                 setUploadingAadhaar(false);
@@ -992,14 +991,14 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                         </div>
                                         <div>
                                             <h3 className="text-sm font-bold text-slate-900">
-                                                {isVerificationComplete ? 'Verification Completed' : 'Guest Verification (2 Steps)'}
+                                                {isVerificationComplete ? 'Identity Verified' : 'Guest Verification'}
                                             </h3>
                                             <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                                                Aadhaar card (first 8 digits masked) + live selfie.
+                                                Upload your Aadhaar card and take a live selfie before check-in.
                                             </p>
                                         </div>
                                     </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700">
                                         {isVerificationComplete ? '✓ Verified' : maskedAadhaarUrl ? 'Step 2 of 2' : 'Step 1 of 2'}
                                     </span>
                                 </div>
@@ -1013,7 +1012,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                             }`}>
                                                 {maskedAadhaarUrl ? <Check size={13} strokeWidth={3} /> : '1'}
                                             </div>
-                                            <span className="text-xs font-bold text-slate-800">Aadhaar Card (First 8 Digits Masked)</span>
+                                            <span className="text-xs font-bold text-slate-800">Aadhaar Card</span>
                                         </div>
                                         {maskedAadhaarUrl && (
                                             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
@@ -1024,13 +1023,13 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
 
                                     {maskedAadhaarUrl ? (
                                         <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
-                                            <img src={maskedAadhaarUrl} alt="Masked Aadhaar" className="w-full h-full object-cover opacity-90" />
+                                            <img src={maskedAadhaarUrl} alt="Aadhaar Card" className="w-full h-full object-cover opacity-90" />
                                             <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent flex items-end justify-between p-2.5 text-white">
                                                 <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-[10px] font-mono font-bold">
                                                     XXXX-XXXX-{aadhaarLast4 || 'XXXX'}
                                                 </span>
                                                 <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-[10px] font-bold flex items-center gap-1">
-                                                    <Check size={11} strokeWidth={3} /> Masked & Safe
+                                                    <Check size={11} strokeWidth={3} /> Verified
                                                 </span>
                                             </div>
                                         </div>
@@ -1039,13 +1038,13 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                             {uploadingAadhaar ? (
                                                 <div className="flex flex-col items-center justify-center py-2 gap-1.5">
                                                     <RoovoLoader className="w-12 h-auto" color="#4f46e5" />
-                                                    <span className="text-[11px] font-semibold text-indigo-700">AI Masking First 8 Digits...</span>
+                                                    <span className="text-[11px] font-semibold text-indigo-700">Verifying Aadhaar Card...</span>
                                                 </div>
                                             ) : (
                                                 <>
                                                     <Camera className="w-6 h-6 text-indigo-600 mb-1" />
                                                     <span className="text-xs font-bold text-indigo-950">Upload or Snap Aadhaar Card</span>
-                                                    <span className="text-[10px] text-slate-500 mt-0.5">First 8 digits are masked in real time</span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">Front photo of your card</span>
                                                     <input
                                                         type="file"
                                                         accept="image/*"
@@ -1082,7 +1081,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                         <div className="relative rounded-xl overflow-hidden border border-emerald-200 h-28 bg-slate-900 flex items-center justify-center">
                                             <img src={selfieImageUrl} alt="Live Selfie" className="w-full h-full object-cover" />
                                             <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-bold flex items-center gap-1">
-                                                <Check size={11} strokeWidth={3} /> Live Selfie Verified
+                                                <Check size={11} strokeWidth={3} /> Selfie Verified
                                             </div>
                                         </div>
                                     ) : (
@@ -1096,7 +1095,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                                                 <>
                                                     <User className="w-6 h-6 text-indigo-600 mb-1" />
                                                     <span className="text-xs font-bold text-indigo-950">Take Live Selfie</span>
-                                                    <span className="text-[10px] text-slate-500 mt-0.5">Quick facial match verification</span>
+                                                    <span className="text-[10px] text-slate-500 mt-0.5">Quick photo for check-in</span>
                                                     <input
                                                         type="file"
                                                         accept="image/*"
