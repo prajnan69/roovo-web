@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } from 'framer-motion';
 import { 
     KeyRound, Wifi, ShieldCheck, AlertTriangle, Sparkles, Bell, 
@@ -19,7 +19,7 @@ import {
 } from './InStayModals';
 
 interface SlideToCheckInProps {
-    onSlide: () => Promise<void> | void;
+    onSlide: () => Promise<boolean | void> | boolean | void;
     disabled?: boolean;
     isProcessing?: boolean;
     disabledReason?: string;
@@ -27,42 +27,85 @@ interface SlideToCheckInProps {
 
 function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: SlideToCheckInProps) {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [dragBounds, setDragBounds] = useState(0);
+    const [dragBounds, setDragBounds] = useState<number>(() => {
+        if (typeof window !== 'undefined') {
+            return Math.max(window.innerWidth - 48 - 64, 180);
+        }
+        return 220;
+    });
     const x = useMotionValue(0);
     const controls = useAnimation();
     const [isSuccess, setIsSuccess] = useState(false);
 
-    useEffect(() => {
-        const updateBounds = () => {
-            if (containerRef.current) {
+    const updateBounds = useCallback(() => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const width = rect.width || containerRef.current.offsetWidth;
+            if (width > 64) {
                 // container width - handle width (52) - horizontal padding (6 * 2)
-                setDragBounds(containerRef.current.offsetWidth - 52 - 12);
+                setDragBounds(Math.max(width - 52 - 12, 100));
             }
-        };
-        updateBounds();
-        window.addEventListener('resize', updateBounds);
-        return () => window.removeEventListener('resize', updateBounds);
+        }
     }, []);
 
-    const textOpacity = useTransform(x, [0, Math.max(dragBounds * 0.45, 1)], [1, 0]);
-    const activeTrackWidth = useTransform(x, [0, Math.max(dragBounds, 1)], [52, dragBounds + 52]);
+    useEffect(() => {
+        updateBounds();
+        const el = containerRef.current;
+        let ro: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined' && el) {
+            ro = new ResizeObserver(() => updateBounds());
+            ro.observe(el);
+        }
+        window.addEventListener('resize', updateBounds);
+        window.addEventListener('orientationchange', updateBounds);
+
+        const t1 = setTimeout(updateBounds, 100);
+        const t2 = setTimeout(updateBounds, 400);
+
+        return () => {
+            if (ro && el) ro.unobserve(el);
+            window.removeEventListener('resize', updateBounds);
+            window.removeEventListener('orientationchange', updateBounds);
+            clearTimeout(t1);
+            clearTimeout(t2);
+        };
+    }, [updateBounds]);
+
+    const textOpacity = useTransform(x, [0, Math.max(dragBounds * 0.4, 1)], [1, 0]);
+    const activeTrackWidth = useTransform(x, (latest) => Math.max(latest + 52 + 12, 52 + 12));
     const activeBgColor = useTransform(
         x,
         [0, Math.max(dragBounds, 1)],
         ['#4f46e5', '#10b981'] // Indigo to Emerald
     );
 
-    const handleDragEnd = async () => {
+    const completeSlide = async () => {
+        if (disabled || isProcessing || isSuccess) return;
+        setIsSuccess(true);
+        await controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
+        await triggerHaptic();
+        try {
+            const result = await onSlide();
+            if (result === false) {
+                throw new Error('Check-in was not completed');
+            }
+        } catch (err) {
+            console.error('Check-in failed, resetting slider:', err);
+            setIsSuccess(false);
+            controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
+        }
+    };
+
+    const handleDragEnd = async (_: any, info: any) => {
         if (disabled || isProcessing || isSuccess) return;
 
-        if (x.get() > dragBounds * 0.7) {
-            // Dragged past 70% threshold -> complete slide
-            await controls.start({ x: dragBounds, transition: { type: "spring", stiffness: 350, damping: 25 } });
-            setIsSuccess(true);
-            await triggerHaptic();
-            await onSlide();
+        const currentX = x.get();
+        const offset = info?.offset?.x || 0;
+        const threshold = Math.max(dragBounds * 0.45, 50);
+
+        if (currentX > threshold || offset > threshold) {
+            await completeSlide();
         } else {
-            // Snap back
             await triggerHaptic();
             controls.start({ x: 0, transition: { type: "spring", stiffness: 450, damping: 25 } });
         }
@@ -70,7 +113,7 @@ function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: Sli
 
     if (disabled) {
         return (
-            <div className="w-full h-[64px] rounded-full bg-slate-100 border border-slate-200 flex items-center px-2 py-1.5 opacity-80 cursor-not-allowed">
+            <div className="w-full h-[64px] rounded-full bg-slate-100 border border-slate-200 flex items-center px-2 py-1.5 opacity-80 cursor-not-allowed select-none">
                 <div className="w-[50px] h-[50px] rounded-full bg-slate-200 text-slate-400 flex items-center justify-center shrink-0">
                     <Lock size={18} />
                 </div>
@@ -84,14 +127,20 @@ function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: Sli
     return (
         <div
             ref={containerRef}
-            className={`relative w-full h-[64px] rounded-full flex items-center p-1.5 overflow-hidden transition-colors duration-500 select-none ${
+            onClick={() => {
+                if (!disabled && !isProcessing && !isSuccess) {
+                    completeSlide();
+                }
+            }}
+            style={{ touchAction: 'none' }}
+            className={`relative w-full h-[64px] rounded-full flex items-center p-1.5 overflow-hidden transition-colors duration-500 select-none cursor-pointer touch-none ${
                 isSuccess ? 'bg-emerald-500' : 'bg-slate-900 shadow-xl'
             }`}
         >
             {/* Sliding Color Track */}
             {!isSuccess && dragBounds > 0 && (
                 <motion.div
-                    className="absolute left-1.5 top-1.5 bottom-1.5 rounded-full z-0 shadow-sm"
+                    className="absolute left-1.5 top-1.5 bottom-1.5 rounded-full z-0 shadow-sm pointer-events-none"
                     style={{
                         width: activeTrackWidth,
                         backgroundColor: activeBgColor,
@@ -112,15 +161,24 @@ function SlideToCheckIn({ onSlide, disabled, isProcessing, disabledReason }: Sli
 
             {/* Draggable Handle */}
             <motion.div
-                drag={!isProcessing && !isSuccess && dragBounds > 0 ? "x" : false}
+                drag={!isProcessing && !isSuccess ? "x" : false}
                 dragConstraints={{ left: 0, right: dragBounds }}
-                dragElastic={0.05}
+                dragElastic={0.08}
                 dragMomentum={false}
-                style={{ x }}
+                style={{ x, touchAction: 'none' }}
                 animate={controls}
-                onDragStart={() => triggerHaptic()}
+                onDragStart={() => {
+                    updateBounds();
+                    triggerHaptic();
+                }}
                 onDragEnd={handleDragEnd}
-                className={`relative z-20 w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 ${
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (!disabled && !isProcessing && !isSuccess) {
+                        completeSlide();
+                    }
+                }}
+                className={`relative z-20 w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 touch-none select-none ${
                     isSuccess
                         ? 'bg-white text-emerald-500 scale-105'
                         : 'bg-white text-indigo-600 cursor-grab active:cursor-grabbing hover:scale-[1.02]'
@@ -437,7 +495,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
             await triggerErrorHaptic();
             setToastMsg('Please upload your photo before checking in');
             setShowToast(true);
-            return;
+            return false;
         }
 
         setIsCheckingIn(true);
@@ -452,7 +510,7 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 const res = await fetch(`${apiBase}/api/check-in/${checkInId}/confirm`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guest_phone: cleanUserPhone })
+                    body: JSON.stringify({ guest_phone: cleanUserPhone || checkIn?.guest_phone })
                 });
 
                 if (res.ok) {
@@ -489,12 +547,15 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                 setTimeout(() => {
                     setShowWelcomeCelebration(false);
                 }, 4000);
+                return true;
             }
+            return false;
         } catch (err: any) {
             console.error('Check-in confirm error:', err);
             await triggerErrorHaptic();
             setToastMsg(err.message || 'Check-in error. Please try again.');
             setShowToast(true);
+            return false;
         } finally {
             setIsCheckingIn(false);
         }
