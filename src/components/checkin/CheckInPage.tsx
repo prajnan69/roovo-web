@@ -480,10 +480,10 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         await triggerHaptic();
 
         try {
-            const base64 = await compressImageForUpload(file, 1600, 1600, 0.88);
+            const base64 = await compressImageForUpload(file, 1400, 1400, 0.85);
             const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 35000);
+            const timeoutId = setTimeout(() => controller.abort(), 45000);
 
             const res = await fetch(`${apiBase}/api/check-in/${checkInId}/process-aadhaar`, {
                 method: 'POST',
@@ -526,10 +526,10 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
         await triggerHaptic();
 
         try {
-            const base64 = await compressImageForUpload(file, 1200, 1200, 0.85);
+            const base64 = await compressImageForUpload(file, 1000, 1000, 0.85);
             const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            const timeoutId = setTimeout(() => controller.abort(), 40000);
 
             const res = await fetch(`${apiBase}/api/check-in/${checkInId}/upload-image`, {
                 method: 'POST',
