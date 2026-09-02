@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform, useAnimation } f
 import { 
     KeyRound, Wifi, ShieldCheck, AlertTriangle, Sparkles, Bell, 
     LogOut, Camera, Check, Copy, MapPin, Calendar, Clock, 
-    User, ChevronRight, Lock, ArrowLeft, Phone, Share2, Info 
+    User, ChevronRight, Lock, ArrowLeft, Phone, Share2, Info, Key 
 } from 'lucide-react';
 import { triggerHaptic, triggerErrorHaptic } from '@/lib/haptics';
 import supabase from '@/services/api';
@@ -187,6 +187,27 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     const [showToast, setShowToast] = useState(false);
     const [toastMsg, setToastMsg] = useState('');
     const [wifiCopied, setWifiCopied] = useState(false);
+    const [accessCodeCopied, setAccessCodeCopied] = useState(false);
+
+    // Ensure body scroll is unblocked
+    useEffect(() => {
+        document.body.style.overflow = 'auto';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
+
+    const copyAccessCode = async () => {
+        if (!checkIn?.access_code) return;
+        try {
+            await navigator.clipboard.writeText(checkIn.access_code);
+            setAccessCodeCopied(true);
+            await triggerHaptic();
+            setTimeout(() => setAccessCodeCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy code:', err);
+        }
+    };
 
     // Fetch Check-In Details with resilient fallback
     const loadCheckInDetails = async () => {
@@ -690,9 +711,9 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
     const firstImage = listing?.images_data?.[0]?.url || listing?.all_image_urls?.[0]?.url || '/placeholder-listing.png';
 
     return (
-        <div className="min-h-screen bg-[#FAF9F7] text-slate-900 pb-32">
+        <div className="w-full h-full min-h-dvh overflow-y-auto -webkit-overflow-scrolling-touch bg-[#FAF9F7] text-slate-900 pb-36">
             {/* Top Navigation */}
-            <div className="sticky top-0 z-40 bg-[#FAF9F7]/90 backdrop-blur-md px-5 py-3.5 border-b border-slate-200/60 flex items-center justify-between">
+            <div className="sticky top-0 z-40 bg-[#FAF9F7]/95 backdrop-blur-md px-5 py-3.5 border-b border-slate-200/60 flex items-center justify-between">
                 <button
                     onClick={() => {
                         triggerHaptic();
@@ -702,71 +723,83 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
                             navigate('/');
                         }
                     }}
-                    className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 border border-slate-200 flex items-center justify-center text-slate-800 shadow-xs shrink-0 transition-all cursor-pointer"
+                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full bg-white hover:bg-slate-50 active:scale-95 border-2 border-slate-900 flex items-center justify-center text-slate-900 shadow-md shrink-0 transition-all cursor-pointer"
                     aria-label="Back"
                 >
-                    <ArrowLeft size={18} className="text-slate-800 stroke-[2.5]" />
+                    <ArrowLeft size={19} className="text-slate-900 stroke-[3]" />
                 </button>
-                <div className="text-center">
+                <div className="text-center px-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 block">Digital Check-in</span>
-                    <span className="text-xs font-bold text-slate-900 truncate max-w-[180px] block">{listing?.title || 'Your Stay'}</span>
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[200px] block">{listing?.title || 'Your Stay'}</span>
                 </div>
-                {isAlreadyCheckedIn ? (
-                    <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700">
-                        Active Stay
-                    </div>
-                ) : isCheckedOut ? (
-                    <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600">
-                        Checked Out
-                    </div>
-                ) : (
-                    <div className="w-9 h-9" />
-                )}
+                <div className="w-10 h-10" />
             </div>
 
             {/* Main Body */}
             <div className="px-5 pt-4 space-y-5 max-w-md mx-auto">
 
-                {/* Property Hero Banner */}
-                <div className="relative rounded-3xl overflow-hidden bg-slate-900 text-white shadow-xl shadow-slate-200">
-                    <div className="h-48 w-full relative">
-                        <img src={firstImage} alt={listing?.title} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
-                        
-                        <div className="absolute bottom-4 left-4 right-4">
-                            <h2 className="text-lg font-bold font-display leading-tight line-clamp-1">{listing?.title}</h2>
-                            <p className="text-xs text-slate-300 flex items-center gap-1 mt-1">
-                                <MapPin size={12} className="text-indigo-400 shrink-0" />
-                                <span>{listing?.place || listing?.location?.city || 'Karnataka, India'}</span>
+                {/* Property Hero Banner: Large only before check-in; compact after check-in */}
+                {!isAlreadyCheckedIn ? (
+                    <div className="relative rounded-3xl overflow-hidden bg-slate-900 text-white shadow-xl shadow-slate-200">
+                        <div className="h-44 w-full relative">
+                            <img src={firstImage} alt={listing?.title} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent" />
+                            
+                            <div className="absolute bottom-4 left-4 right-4">
+                                <h2 className="text-lg font-bold font-display leading-tight line-clamp-1">{listing?.title}</h2>
+                                <p className="text-xs text-slate-300 flex items-center gap-1 mt-1">
+                                    <MapPin size={12} className="text-indigo-400 shrink-0" />
+                                    <span>{listing?.place || listing?.location?.city || 'Karnataka, India'}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Stay Dates Bar */}
+                        <div className="bg-slate-950/95 px-4 py-3 flex justify-between items-center text-xs border-t border-white/10">
+                            <div className="flex items-center gap-2">
+                                <Calendar size={14} className="text-indigo-400" />
+                                <span className="font-semibold text-slate-200">
+                                    {checkIn.start_date ? new Date(checkIn.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'} 
+                                    {' — '}
+                                    {checkIn.end_date ? new Date(checkIn.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'}
+                                </span>
+                            </div>
+                            {host?.name && (
+                                <span className="text-[11px] text-slate-400">Host: <strong className="text-white">{host.name}</strong></span>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    /* Active In-Stay Compact Header */
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3.5">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-100">
+                            <img src={firstImage} alt={listing?.title} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-sm font-bold text-slate-900 truncate leading-snug">{listing?.title}</h2>
+                            <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <MapPin size={11} className="text-indigo-500 shrink-0" />
+                                <span className="truncate">{listing?.place || listing?.location?.city || 'India'}</span>
+                            </p>
+                            <p className="text-[10px] font-semibold text-slate-400 mt-1">
+                                {checkIn.start_date ? new Date(checkIn.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'}
+                                {' — '}
+                                {checkIn.end_date ? new Date(checkIn.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'}
+                                {host?.name ? ` · Host: ${host.name}` : ''}
                             </p>
                         </div>
                     </div>
-
-                    {/* Stay Dates Bar */}
-                    <div className="bg-slate-950/95 px-4 py-3 flex justify-between items-center text-xs border-t border-white/10">
-                        <div className="flex items-center gap-2">
-                            <Calendar size={14} className="text-indigo-400" />
-                            <span className="font-semibold text-slate-200">
-                                {checkIn.start_date ? new Date(checkIn.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'} 
-                                {' — '}
-                                {checkIn.end_date ? new Date(checkIn.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Flexible'}
-                            </span>
-                        </div>
-                        {host?.name && (
-                            <span className="text-[11px] text-slate-400">Host: <strong className="text-white">{host.name}</strong></span>
-                        )}
-                    </div>
-                </div>
+                )}
 
                 {/* ── PHASE 1: PRE-CHECK-IN VERIFICATION ── */}
                 {!isAlreadyCheckedIn && !isCheckedOut && (
                     <div className="space-y-5">
                         {/* Mandatory Image Upload Section */}
                         {checkIn.require_image_upload && (
-                            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3.5">
+                            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                                 <div className="flex items-start gap-3">
                                     <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
-                                        guestImageUrl ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'
+                                        guestImageUrl ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
                                     }`}>
                                         {guestImageUrl ? <Check size={20} /> : <Camera size={20} />}
                                     </div>
@@ -827,52 +860,109 @@ export default function CheckInPage({ match, id: propId, onOpenLogin }: CheckInP
 
                 {/* ── PHASE 2: ACTIVE IN-STAY CONCIERGE HUB ── */}
                 {isAlreadyCheckedIn && (
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                         {/* Access & Wi-Fi Cards */}
-                        <div className="grid grid-cols-2 gap-3">
-                            {/* Wi-Fi Card */}
-                            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
-                                <div>
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                        <Wifi size={14} className="text-indigo-600" /> Wi-Fi
-                                    </div>
-                                    <div className="text-xs font-bold text-slate-900 truncate">
-                                        {checkIn.wifi_ssid || 'Roovo-Guest'}
-                                    </div>
-                                    <div className="text-xs font-mono text-slate-500 truncate mt-0.5">
-                                        {checkIn.wifi_password || 'welcome2026'}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={copyWifi}
-                                    className="mt-3 py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors"
-                                >
-                                    {wifiCopied ? <Check size={13} /> : <Copy size={13} />}
-                                    <span>{wifiCopied ? 'Copied' : 'Copy Password'}</span>
-                                </button>
-                            </div>
+                        {(() => {
+                            const rawInst = checkIn.house_instructions || '';
+                            const match = rawInst.match(/^\[Method:\s*([a-z_]+)\]\s*([\s\S]*)$/i);
+                            const accessMethod = match ? match[1].toLowerCase() : (checkIn.access_code ? 'smart_lock' : 'caretaker');
+                            const cleanInstructions = match ? match[2].trim() : rawInst;
+                            const hasWifi = Boolean(checkIn.wifi_ssid || checkIn.wifi_password);
 
-                            {/* Door Access Card */}
-                            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
-                                <div>
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                        <KeyRound size={14} className="text-amber-500" /> Door Code
-                                    </div>
-                                    <div className="text-sm font-black text-slate-900 tracking-wider font-mono">
-                                        {checkIn.access_code || '4829'}
-                                    </div>
-                                    <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
-                                        {checkIn.house_instructions || 'Keypad / smart lock'}
-                                    </div>
-                                </div>
-                                <div className="mt-3 py-1.5 px-2 rounded-xl bg-slate-50 text-[10px] text-slate-500 text-center font-semibold">
-                                    Private Access
-                                </div>
-                            </div>
-                        </div>
+                            return (
+                                <div className={`grid ${hasWifi ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                                    {/* Wi-Fi Card - ONLY IF PROVIDED */}
+                                    {hasWifi && (
+                                        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                                    <Wifi size={14} className="text-indigo-600" /> Wi-Fi Network
+                                                </div>
+                                                {checkIn.wifi_ssid && (
+                                                    <div className="text-xs font-bold text-slate-900 truncate">
+                                                        {checkIn.wifi_ssid}
+                                                    </div>
+                                                )}
+                                                {checkIn.wifi_password && (
+                                                    <div className="text-xs font-mono text-slate-500 truncate mt-0.5">
+                                                        {checkIn.wifi_password}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {checkIn.wifi_password && (
+                                                <button
+                                                    onClick={copyWifi}
+                                                    className="mt-3 py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-600 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                                >
+                                                    {wifiCopied ? <Check size={13} /> : <Copy size={13} />}
+                                                    <span>{wifiCopied ? 'Copied' : 'Copy Password'}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
 
+                                    {/* Door Access Card */}
+                                    <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                                    {accessMethod === 'lockbox' ? (
+                                                        <KeyRound size={14} className="text-amber-500" />
+                                                    ) : accessMethod === 'caretaker' ? (
+                                                        <Key size={14} className="text-emerald-500" />
+                                                    ) : accessMethod === 'door_code' ? (
+                                                        <ShieldCheck size={14} className="text-indigo-600" />
+                                                    ) : (
+                                                        <Lock size={14} className="text-indigo-600" />
+                                                    )}
+                                                    <span>
+                                                        {accessMethod === 'lockbox'
+                                                            ? 'Lockbox Safe'
+                                                            : accessMethod === 'caretaker'
+                                                            ? 'Key Handover'
+                                                            : accessMethod === 'door_code'
+                                                            ? 'Door PIN'
+                                                            : 'Smart Lock'}
+                                                    </span>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                    Access
+                                                </span>
+                                            </div>
+
+                                            {checkIn.access_code ? (
+                                                <div className="text-base font-black text-slate-900 tracking-wider font-mono bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1.5 inline-block select-all">
+                                                    {checkIn.access_code}
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs font-bold text-slate-700">
+                                                    {accessMethod === 'caretaker' ? 'Key with Caretaker' : 'Direct Entry'}
+                                                </div>
+                                            )}
+
+                                            {cleanInstructions && (
+                                                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                                                    {cleanInstructions}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {checkIn.access_code && (
+                                            <button
+                                                onClick={copyAccessCode}
+                                                className="mt-3 py-1.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                            >
+                                                {accessCodeCopied ? <Check size={13} /> : <Copy size={13} />}
+                                                <span>{accessCodeCopied ? 'Code Copied' : 'Copy Code'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        
                         {/* 4 Core In-Stay Guest Action Buttons */}
-                        <div className="space-y-2.5">
+                        <div className="space-y-2.5 pt-2">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
                                 In-Stay Services & Requests
                             </h3>

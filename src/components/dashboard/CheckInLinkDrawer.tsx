@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, KeyRound, Wifi, Phone, ShieldCheck, Share2, Copy, Check, Info, Sparkles, Home, User, Calendar as CalendarIcon } from 'lucide-react';
+import { X, KeyRound, Wifi, Phone, ShieldCheck, Share2, Copy, Check, Info, Sparkles, Home, User, Calendar as CalendarIcon, Lock, Key } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import supabase, { getListingsByHostId } from '@/services/api';
 import { Share as CapShare } from '@capacitor/share';
 import { useBackCloseable } from '@/hooks/useBackCloseable';
+import RoovoLoader from '@/components/RoovoLoader';
 
 interface CheckInLinkDrawerProps {
     isOpen: boolean;
@@ -27,6 +28,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
     const [requireImageUpload, setRequireImageUpload] = useState(true);
     const [wifiSsid, setWifiSsid] = useState('');
     const [wifiPassword, setWifiPassword] = useState('');
+    const [accessMethod, setAccessMethod] = useState<'smart_lock' | 'lockbox' | 'caretaker' | 'door_code'>('smart_lock');
     const [accessCode, setAccessCode] = useState('');
     const [houseInstructions, setHouseInstructions] = useState('');
 
@@ -36,6 +38,63 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
     const [createdCheckIn, setCreatedCheckIn] = useState<any>(null);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState('');
+
+    // Load saved preferences for this property (Wi-Fi, access code, method, instructions)
+    const loadListingPreferences = async (listingId: string) => {
+        if (!listingId) return;
+
+        // 1. Instant check from localStorage
+        try {
+            const cached = localStorage.getItem(`roovo_checkin_pref_${listingId}`);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.wifiSsid !== undefined) setWifiSsid(parsed.wifiSsid);
+                if (parsed.wifiPassword !== undefined) setWifiPassword(parsed.wifiPassword);
+                if (parsed.accessMethod) setAccessMethod(parsed.accessMethod);
+                if (parsed.accessCode !== undefined) setAccessCode(parsed.accessCode);
+                if (parsed.houseInstructions !== undefined) setHouseInstructions(parsed.houseInstructions);
+                if (parsed.requireImageUpload !== undefined) setRequireImageUpload(parsed.requireImageUpload);
+            }
+        } catch (e) {
+            console.warn('Error reading cached preferences:', e);
+        }
+
+        // 2. Fetch the most recent check_in_link for this listing from Supabase
+        try {
+            const { data: latestLink } = await supabase
+                .from('check_in_links')
+                .select('wifi_ssid, wifi_password, access_code, house_instructions, require_image_upload')
+                .eq('listing_id', listingId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (latestLink) {
+                if (latestLink.wifi_ssid) setWifiSsid(latestLink.wifi_ssid);
+                if (latestLink.wifi_password) setWifiPassword(latestLink.wifi_password);
+                if (latestLink.access_code) setAccessCode(latestLink.access_code);
+                if (latestLink.require_image_upload !== undefined) setRequireImageUpload(latestLink.require_image_upload);
+
+                if (latestLink.house_instructions) {
+                    const match = latestLink.house_instructions.match(/^\[Method:\s*([a-z_]+)\]\s*([\s\S]*)$/i);
+                    if (match) {
+                        setAccessMethod(match[1].toLowerCase() as any);
+                        setHouseInstructions(match[2].trim());
+                    } else {
+                        setHouseInstructions(latestLink.house_instructions);
+                    }
+                }
+            }
+        } catch (dbErr) {
+            console.warn('Error fetching latest link config:', dbErr);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedListingId) {
+            loadListingPreferences(selectedListingId);
+        }
+    }, [selectedListingId]);
 
     useEffect(() => {
         if (isOpen && hostId) {
@@ -84,6 +143,8 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
         try {
             let record: any = null;
 
+            const formattedInstructions = `[Method: ${accessMethod}] ${houseInstructions.trim()}`;
+
             // 1. Try backend API first
             try {
                 const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
@@ -100,7 +161,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                         wifi_ssid: wifiSsid.trim(),
                         wifi_password: wifiPassword.trim(),
                         access_code: accessCode.trim(),
-                        house_instructions: houseInstructions.trim(),
+                        house_instructions: formattedInstructions,
                     })
                 });
 
@@ -129,7 +190,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                         wifi_ssid: wifiSsid.trim(),
                         wifi_password: wifiPassword.trim(),
                         access_code: accessCode.trim(),
-                        house_instructions: houseInstructions.trim(),
+                        house_instructions: formattedInstructions,
                         status: 'pending_verification',
                         requests: []
                     })
@@ -141,6 +202,20 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                     throw dbError;
                 }
                 record = directInsert;
+            }
+
+            // Persist property preferences for subsequent links
+            try {
+                localStorage.setItem(`roovo_checkin_pref_${selectedListingId}`, JSON.stringify({
+                    wifiSsid: wifiSsid.trim(),
+                    wifiPassword: wifiPassword.trim(),
+                    accessMethod,
+                    accessCode: accessCode.trim(),
+                    houseInstructions: houseInstructions.trim(),
+                    requireImageUpload,
+                }));
+            } catch (saveErr) {
+                console.warn('Could not cache property preferences:', saveErr);
             }
 
             if (record && record.id) {
@@ -379,18 +454,21 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                                         </div>
                                     </div>
 
-                                    {/* 5. Wi-Fi & Door Access */}
+                                    {/* 5. Wi-Fi Details */}
                                     <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100 space-y-3">
-                                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                            <Wifi size={14} className="text-indigo-600" /> Wi-Fi & Access Details
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                                <Wifi size={14} className="text-indigo-600" /> Wi-Fi Network
+                                            </div>
+                                            <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full">Auto-saved for house</span>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-2.5">
                                             <div>
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase">Wi-Fi Name</label>
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase">Network Name (SSID)</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="Home-5G"
+                                                    placeholder="e.g. Villa-5G"
                                                     value={wifiSsid}
                                                     onChange={(e) => setWifiSsid(e.target.value)}
                                                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -400,22 +478,88 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Wi-Fi Password</label>
                                                 <input
                                                     type="text"
-                                                    placeholder="welcome123"
+                                                    placeholder="e.g. guest2026"
                                                     value={wifiPassword}
                                                     onChange={(e) => setWifiPassword(e.target.value)}
                                                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* 6. Door Access Method & Instructions */}
+                                    <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                                <KeyRound size={14} className="text-indigo-600" /> Access Type
+                                            </div>
+                                            <span className="text-[10px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full">Auto-saved for house</span>
+                                        </div>
+
+                                        {/* Method Selector Pills */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                { id: 'smart_lock', label: 'Smart Lock', icon: Lock },
+                                                { id: 'lockbox', label: 'Lockbox Safe', icon: KeyRound },
+                                                { id: 'door_code', label: 'Door PIN Code', icon: ShieldCheck },
+                                                { id: 'caretaker', label: 'Key Handover', icon: Key },
+                                            ].map((m) => {
+                                                const Icon = m.icon;
+                                                const active = accessMethod === m.id;
+                                                return (
+                                                    <button
+                                                        key={m.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            triggerHaptic();
+                                                            setAccessMethod(m.id as any);
+                                                        }}
+                                                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
+                                                            active
+                                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                                                        }`}
+                                                    >
+                                                        <Icon size={14} />
+                                                        <span>{m.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {accessMethod !== 'caretaker' && (
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                    {accessMethod === 'lockbox' ? 'Lockbox Code / Combination' : accessMethod === 'smart_lock' ? 'Smart Lock PIN / Code' : 'Access Code'}
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    placeholder={accessMethod === 'lockbox' ? 'e.g. 4829' : 'e.g. 1234#'}
+                                                    value={accessCode}
+                                                    onChange={(e) => setAccessCode(e.target.value)}
+                                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 mt-1"
+                                                />
+                                            </div>
+                                        )}
 
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Door / Lockbox Access Code</label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. 4829 or 'Key under flowerpot'"
-                                                value={accessCode}
-                                                onChange={(e) => setAccessCode(e.target.value)}
-                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                                Instructions for Guest
+                                            </label>
+                                            <textarea
+                                                rows={2}
+                                                placeholder={
+                                                    accessMethod === 'lockbox'
+                                                        ? 'e.g. Lockbox is to the left of the door. Enter code and pull down black lever.'
+                                                        : accessMethod === 'smart_lock'
+                                                        ? 'e.g. Touch keypad to wake, enter PIN, then turn knob.'
+                                                        : accessMethod === 'caretaker'
+                                                        ? 'e.g. Caretaker Ramesh (+91 9876543210) will meet you at the gate.'
+                                                        : 'e.g. Enter door code at intercom.'
+                                                }
+                                                value={houseInstructions}
+                                                onChange={(e) => setHouseInstructions(e.target.value)}
+                                                className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 mt-1 resize-none"
                                             />
                                         </div>
                                     </div>
@@ -435,7 +579,7 @@ export default function CheckInLinkDrawer({ isOpen, onClose, hostId }: CheckInLi
                                         className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg shadow-indigo-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                     >
                                         {generating ? (
-                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                            <RoovoLoader className="w-8 h-auto" color="#ffffff" />
                                         ) : (
                                             <>
                                                 <Sparkles size={18} />
