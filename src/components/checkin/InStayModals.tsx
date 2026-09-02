@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, Sparkles, Bell, LogOut, Camera, Check, Clock, Star, Info, Upload } from 'lucide-react';
 import { triggerHaptic } from '@/lib/haptics';
 import RoovoLoader from '@/components/RoovoLoader';
+import supabase from '@/services/api';
 
 interface BaseModalProps {
     isOpen: boolean;
     onClose: () => void;
     checkInId: string;
-    onSuccess: (type: string, message: string) => void;
+    onSuccess: (type: string, message: string, requestData?: any) => void;
 }
 
 // ── 1. Raise Issue Modal ──
@@ -55,29 +56,50 @@ export function RaiseIssueModal({ isOpen, onClose, checkInId, onSuccess }: BaseM
         await triggerHaptic();
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
-            const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            let reqObj: any = null;
+            try {
+                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'issue',
+                        category,
+                        description: description.trim(),
+                        image_base64: imageBase64,
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    reqObj = data.request;
+                }
+            } catch (apiErr) {
+                console.warn('Backend issue endpoint error, using direct Supabase write:', apiErr);
+            }
+
+            if (!reqObj) {
+                const fallbackReq = {
+                    id: `req_${Date.now()}`,
                     type: 'issue',
                     category,
                     description: description.trim(),
-                    image_base64: imageBase64,
-                })
-            });
-
-            if (res.ok) {
-                await triggerHaptic();
-                onSuccess('issue', 'Issue reported to host. They will attend to it shortly!');
-                onClose();
-                setDescription('');
-                setImagePreview(null);
-                setImageBase64(null);
-            } else {
-                const data = await res.json();
-                setError(data.error || 'Failed to submit issue');
+                    photo_url: imagePreview || null,
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                };
+                const { data: current } = await supabase.from('check_in_links').select('requests').eq('id', checkInId).single();
+                const updated = [fallbackReq, ...(current?.requests || [])];
+                await supabase.from('check_in_links').update({ requests: updated }).eq('id', checkInId);
+                reqObj = fallbackReq;
             }
+
+            await triggerHaptic();
+            onSuccess('issue', 'Issue reported to host. They will attend to it shortly!', reqObj);
+            onClose();
+            setDescription('');
+            setImagePreview(null);
+            setImageBase64(null);
         } catch (err) {
             console.error('Submit issue error:', err);
             setError('Connection error. Please try again.');
@@ -216,26 +238,47 @@ export function RequestCleaningModal({ isOpen, onClose, checkInId, onSuccess }: 
         await triggerHaptic();
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
-            const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            let reqObj: any = null;
+            try {
+                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'cleaning',
+                        time_slot: timeSlot,
+                        description: notes.trim(),
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    reqObj = data.request;
+                }
+            } catch (apiErr) {
+                console.warn('Backend cleaning request error, using direct Supabase write:', apiErr);
+            }
+
+            if (!reqObj) {
+                const fallbackReq = {
+                    id: `req_${Date.now()}`,
                     type: 'cleaning',
+                    category: 'Cleaning',
                     time_slot: timeSlot,
                     description: notes.trim(),
-                })
-            });
-
-            if (res.ok) {
-                await triggerHaptic();
-                onSuccess('cleaning', 'Cleaning service requested. The housekeeping team will arrive in your requested slot!');
-                onClose();
-                setNotes('');
-            } else {
-                const data = await res.json();
-                setError(data.error || 'Failed to submit request');
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                };
+                const { data: current } = await supabase.from('check_in_links').select('requests').eq('id', checkInId).single();
+                const updated = [fallbackReq, ...(current?.requests || [])];
+                await supabase.from('check_in_links').update({ requests: updated }).eq('id', checkInId);
+                reqObj = fallbackReq;
             }
+
+            await triggerHaptic();
+            onSuccess('cleaning', 'Cleaning service requested. The housekeeping team will arrive in your requested slot!', reqObj);
+            onClose();
+            setNotes('');
         } catch (err) {
             console.error('Cleaning error:', err);
             setError('Connection error. Please try again.');
@@ -358,26 +401,46 @@ export function ConciergeModal({ isOpen, onClose, checkInId, onSuccess }: BaseMo
         await triggerHaptic();
 
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
-            const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            let reqObj: any = null;
+            try {
+                const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+                const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'concierge',
+                        category: selectedTag,
+                        description: customRequest.trim() || selectedTag,
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    reqObj = data.request;
+                }
+            } catch (apiErr) {
+                console.warn('Backend concierge request error, using direct Supabase write:', apiErr);
+            }
+
+            if (!reqObj) {
+                const fallbackReq = {
+                    id: `req_${Date.now()}`,
                     type: 'concierge',
                     category: selectedTag,
                     description: customRequest.trim() || selectedTag,
-                })
-            });
-
-            if (res.ok) {
-                await triggerHaptic();
-                onSuccess('concierge', 'Concierge request sent to host!');
-                onClose();
-                setCustomRequest('');
-            } else {
-                const data = await res.json();
-                setError(data.error || 'Failed to submit request');
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                };
+                const { data: current } = await supabase.from('check_in_links').select('requests').eq('id', checkInId).single();
+                const updated = [fallbackReq, ...(current?.requests || [])];
+                await supabase.from('check_in_links').update({ requests: updated }).eq('id', checkInId);
+                reqObj = fallbackReq;
             }
+
+            await triggerHaptic();
+            onSuccess('concierge', 'Concierge request sent to host!', reqObj);
+            onClose();
+            setCustomRequest('');
         } catch (err) {
             console.error('Concierge error:', err);
             setError('Connection error. Please try again.');

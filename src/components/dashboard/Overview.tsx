@@ -1,13 +1,14 @@
-"use client";
-
 import { useState, useEffect, useMemo } from "react";
 import { motion, useScroll, useTransform, AnimatePresence, MotionValue } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { SlidingNumber } from "@/components/ui/shadcn-io/sliding-number";
-import { ChevronRight, CreditCard, ShieldCheck, MessageSquare, CheckCircle2, Sparkles, KeyRound } from "lucide-react";
+import { 
+  ChevronRight, CreditCard, ShieldCheck, MessageSquare, CheckCircle2, 
+  Sparkles, KeyRound, AlertTriangle, Phone, Check, Clock, Bell, MessageCircle 
+} from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { usePreloadedData } from "@/context/PreloadContext";
-import { fetchHostState, fetchHostDrafts } from "@/services/api";
+import supabase, { fetchHostState, fetchHostDrafts } from "@/services/api";
 import { useNavigation } from "@/hooks/useNavigation";
 import ImportListingPage from "../import/ImportListingPage";
 import PaymentLinkDrawer from "./PaymentLinkDrawer";
@@ -215,10 +216,117 @@ const Overview = () => {
       }
     };
     loadHostState();
-  }, [profileData]);
+  // Guest Stay Requests & Issues State
+  const [stayRequests, setStayRequests] = useState<any[]>([]);
+  const [updatingReqId, setUpdatingReqId] = useState<string | null>(null);
 
+  const loadHostRequests = async () => {
+    if (!profileData?.id) return;
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+      const res = await fetch(`${apiBase}/api/check-in/host/${profileData.id}/requests`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.requests)) {
+          setStayRequests(data.requests);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Backend requests fetch warning:', e);
+    }
 
-  const notifications = useMemo(() => {
+    // Direct Supabase Fallback
+    try {
+      const { data: links } = await supabase
+        .from('check_in_links')
+        .select('id, guest_name, guest_phone, listing_id, status, requests, created_at, listings_new(title, place)')
+        .eq('host_id', profileData.id)
+        .order('created_at', { ascending: false });
+
+      if (links) {
+        const reqs: any[] = [];
+        links.forEach((link: any) => {
+          (link.requests || []).forEach((r: any) => {
+            reqs.push({
+              ...r,
+              check_in_id: link.id,
+              guest_name: link.guest_name,
+              guest_phone: link.guest_phone,
+              listing_id: link.listing_id,
+              listing_title: link.listings_new?.title || 'Your Property',
+              listing_place: link.listings_new?.place || '',
+            });
+          });
+        });
+        reqs.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        setStayRequests(reqs);
+      }
+    } catch (dbErr) {
+      console.error('Error fetching stay requests from Supabase:', dbErr);
+    }
+  };
+
+  useEffect(() => {
+    if (!profileData?.id) return;
+    loadHostRequests();
+
+    // Live realtime updates for host: instantly receives new guest issues
+    const channel = supabase
+      .channel(`host_requests_live_${profileData.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'check_in_links', filter: `host_id=eq.${profileData.id}` },
+        () => {
+          loadHostRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileData?.id]);
+
+  const handleUpdateStatus = async (checkInId: string, requestId: string, newStatus: string) => {
+    setUpdatingReqId(requestId);
+    await triggerHaptic();
+
+    // Optimistic UI update
+    setStayRequests(prev => prev.map(r => (r.id === requestId && r.check_in_id === checkInId ? { ...r, status: newStatus } : r)));
+
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://roovo-backend.fly.dev';
+      const res = await fetch(`${apiBase}/api/check-in/${checkInId}/request/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) {
+        // Direct Supabase Fallback
+        const { data: record } = await supabase.from('check_in_links').select('requests').eq('id', checkInId).single();
+        if (record && Array.isArray(record.requests)) {
+          const updated = record.requests.map((r: any) => r.id === requestId ? { ...r, status: newStatus } : r);
+          await supabase.from('check_in_links').update({ requests: updated }).eq('id', checkInId);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update request status:', err);
+    } finally {
+      setUpdatingReqId(null);
+    }
+  };
+
+  const [showResolved, setShowResolved] = useState(false);
+
+  const activeStayRequests = useMemo(() => {
+    return stayRequests.filter(r => r.status === 'pending' || r.status === 'in_progress');
+  }, [stayRequests]);
+
+  const resolvedStayRequests = useMemo(() => {
+    return stayRequests.filter(r => r.status === 'resolved');
+  }, [stayRequests]);
     const list: Notification[] = [];
 
     if (hostState) {
@@ -297,19 +405,229 @@ const Overview = () => {
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               Action Center
             </h2>
-            {notifications.length > 0 ? (
-              <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md shadow-indigo-200">
-                {notifications.length} NEW
-              </span>
-            ) : (
-              <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> ALL SET
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {activeStayRequests.length > 0 && (
+                <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs animate-pulse flex items-center gap-1">
+                  <AlertTriangle size={10} /> {activeStayRequests.length} {activeStayRequests.length === 1 ? 'ISSUE' : 'ISSUES'}
+                </span>
+              )}
+              {notifications.length > 0 ? (
+                <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md shadow-indigo-200">
+                  {notifications.length} NEW
+                </span>
+              ) : (
+                activeStayRequests.length === 0 && (
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> ALL SET
+                  </span>
+                )
+              )}
+            </div>
           </div>
 
           {/* Content List */}
           <div className="px-4 py-6">
+
+            {/* 🚨 Active Guest In-Stay Issues & Requests Section */}
+            {activeStayRequests.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-8"
+              >
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                    </span>
+                    <h3 className="text-sm font-bold text-rose-600 uppercase tracking-wider">
+                      Guest Issues & Requests
+                    </h3>
+                  </div>
+                  <span className="text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-full shadow-xs">
+                    {activeStayRequests.length} Active
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {activeStayRequests.map((req: any) => {
+                    const isIssue = req.type === 'issue';
+                    const isCleaning = req.type === 'cleaning';
+                    const isPending = req.status === 'pending';
+                    const isUpdating = updatingReqId === req.id;
+
+                    const formattedTime = req.created_at
+                      ? new Date(req.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                      : 'Recently';
+
+                    return (
+                      <div
+                        key={req.id}
+                        className="bg-white rounded-3xl p-4 border border-rose-100 shadow-[0_4px_20px_rgb(244,63,94,0.08)] space-y-3"
+                      >
+                        {/* Header: Guest Name & Property */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2.5">
+                            <div className={`p-2.5 rounded-2xl shrink-0 ${
+                              isIssue ? 'bg-rose-50 text-rose-600' : isCleaning ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'
+                            }`}>
+                              {isIssue ? <AlertTriangle size={18} /> : isCleaning ? <Sparkles size={18} /> : <Bell size={18} />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-sm text-slate-900">{req.guest_name || 'Guest'}</span>
+                                {req.listing_title && (
+                                  <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">
+                                    · {req.listing_title}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs font-semibold text-rose-600 mt-0.5">
+                                {isIssue ? `Issue: ${req.category || 'Maintenance'}` : isCleaning ? `Cleaning Requested` : 'Concierge Request'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              req.status === 'in_progress'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {req.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{formattedTime}</span>
+                          </div>
+                        </div>
+
+                        {/* Request Description */}
+                        {req.description && (
+                          <div className="bg-slate-50/80 rounded-2xl p-3 text-xs text-slate-700 leading-relaxed">
+                            {req.description}
+                          </div>
+                        )}
+
+                        {req.time_slot && (
+                          <div className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl inline-block">
+                            Preferred Slot: {req.time_slot}
+                          </div>
+                        )}
+
+                        {/* Attached Image Preview */}
+                        {req.photo_url && (
+                          <div>
+                            <a href={req.photo_url} target="_blank" rel="noreferrer" className="inline-block relative rounded-2xl overflow-hidden border border-slate-200 w-32 h-20 group">
+                              <img src={req.photo_url} alt="Guest uploaded photo" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              <div className="absolute inset-0 bg-slate-950/20 group-hover:bg-slate-950/40 transition-colors flex items-center justify-center">
+                                <span className="text-[10px] text-white font-bold bg-slate-900/70 px-2 py-0.5 rounded-full">View Photo</span>
+                              </div>
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Actions for Host */}
+                        <div className="pt-1 flex items-center justify-between gap-2 border-t border-slate-100 flex-wrap">
+                          {/* Call & WhatsApp Buttons */}
+                          <div className="flex items-center gap-1.5">
+                            {req.guest_phone && (
+                              <>
+                                <a
+                                  href={`tel:${req.guest_phone}`}
+                                  className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-semibold flex items-center gap-1 transition-all"
+                                >
+                                  <Phone size={12} /> Call
+                                </a>
+                                <a
+                                  href={`https://wa.me/91${req.guest_phone.replace(/\D/g, '').slice(-10)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 text-xs font-semibold flex items-center gap-1 transition-all"
+                                >
+                                  <MessageCircle size={12} /> WhatsApp
+                                </a>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Status Buttons */}
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            {isPending && (
+                              <button
+                                disabled={isUpdating}
+                                onClick={() => handleUpdateStatus(req.check_in_id, req.id, 'in_progress')}
+                                className="py-1.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 text-xs font-bold transition-all disabled:opacity-50"
+                              >
+                                {isUpdating ? 'Updating...' : 'Set In Progress'}
+                              </button>
+                            )}
+                            <button
+                              disabled={isUpdating}
+                              onClick={() => handleUpdateStatus(req.check_in_id, req.id, 'resolved')}
+                              className="py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1 transition-all shadow-xs disabled:opacity-50"
+                            >
+                              <Check size={12} /> {isUpdating ? 'Updating...' : 'Resolve'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {resolvedStayRequests.length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => setShowResolved(!showResolved)}
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1 cursor-pointer px-1"
+                    >
+                      <span>{showResolved ? 'Hide' : 'Show'} Resolved Requests ({resolvedStayRequests.length})</span>
+                      <ChevronRight size={12} className={`transition-transform ${showResolved ? 'rotate-90' : ''}`} />
+                    </button>
+                    {showResolved && (
+                      <div className="mt-2 space-y-2">
+                        {resolvedStayRequests.map((req: any) => (
+                          <div key={req.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-xs flex justify-between items-center text-slate-600">
+                            <div>
+                              <span className="font-bold text-slate-800">{req.guest_name || 'Guest'}: {req.category || req.type}</span>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{req.description}</p>
+                            </div>
+                            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Resolved</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Resolved section when no active requests */}
+            {activeStayRequests.length === 0 && resolvedStayRequests.length > 0 && (
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowResolved(!showResolved)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1 cursor-pointer px-1"
+                >
+                  <Clock size={12} />
+                  <span>Past In-Stay Requests ({resolvedStayRequests.length})</span>
+                  <ChevronRight size={12} className={`transition-transform ${showResolved ? 'rotate-90' : ''}`} />
+                </button>
+                {showResolved && (
+                  <div className="mt-2 space-y-2">
+                    {resolvedStayRequests.map((req: any) => (
+                      <div key={req.id} className="bg-white border border-slate-200/80 rounded-2xl p-3 text-xs flex justify-between items-center text-slate-600 shadow-xs">
+                        <div>
+                          <span className="font-bold text-slate-800">{req.guest_name || 'Guest'}: {req.category || req.type}</span>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{req.description}</p>
+                        </div>
+                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Resolved</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Drafts Section */}
             {drafts.length > 0 && (
